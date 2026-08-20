@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background-color: #0a0e17;
+  color: #eef1f8;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.card {
+  @apply bg-surface border border-border rounded-xl p-4;
+}
+
+.btn {
+  @apply rounded-lg px-4 py-2 text-sm font-bold transition;
+}
+
+.btn-primary {
+  @apply text-white;
+  background: linear-gradient(135deg, #5b7cfa, #22d3ee);
+}
+
+.btn-ghost {
+  @apply bg-surface2 text-text border border-border hover:bg-surface3;
+}

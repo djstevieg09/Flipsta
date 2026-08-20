@@ -1,0 +1,48 @@
+# Render Blueprint — see https://render.com/docs/blueprint-spec
+# Deploy: connect this repo in the Render dashboard, it will detect this file
+# and propose both services below. Fill in the `sync: false` env vars in the
+# dashboard afterward (see INFRASTRUCTURE_TODO.md for where each one comes from).
+
+services:
+  - type: web
+    name: flipsta-web
+    runtime: node
+    plan: starter # bump as traffic grows — see INFRASTRUCTURE_TODO.md scaling notes
+    buildCommand: npm install && npm run build --workspace=packages/shared && npm run build --workspace=apps/web
+    startCommand: npm run start --workspace=apps/web
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: NOTIFICATIONS_FROM_EMAIL
+        sync: false
+
+  - type: worker
+    name: flipsta-worker
+    runtime: node
+    plan: starter
+    buildCommand: npm install && npm run build --workspace=packages/shared
+    startCommand: npm run start --workspace=apps/worker
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: KEEPA_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false

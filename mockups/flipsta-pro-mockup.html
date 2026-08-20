@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Flipsta — Pro Dashboard (Mockup)</title>
+<style>
+  :root{
+    --bg:#0a0e17;
+    --surface:#121729;
+    --surface-2:#1a2138;
+    --surface-3:#212a45;
+    --border:#262f4a;
+    --text:#eef1f8;
+    --text-dim:#8891ab;
+    --text-faint:#5b6a8f;
+    --brand:#5b7cfa;
+    --brand-2:#22d3ee;
+    --gold:#f2b545;
+    --gold-2:#f59e0b;
+    --green:#2fd77a;
+    --red:#f2495c;
+    --amber:#f2b545;
+    --radius:12px;
+    --radius-sm:8px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; background:var(--bg); color:var(--text); }
+  body{ font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased; }
+  a{ color:inherit; text-decoration:none; }
+  button{ font-family:inherit; cursor:pointer; }
+  ::selection{ background:var(--brand); color:#fff; }
+
+  /* ---------- Top bar ---------- */
+  header.topbar{
+    position:sticky; top:0; z-index:50;
+    display:flex; flex-direction:column;
+    background:rgba(10,14,23,0.92); backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--border);
+  }
+  .topbar-main{ display:flex; align-items:center; gap:20px; height:60px; padding:0 24px; }
+  .topbar-search{ flex:1; display:flex; justify-content:center; }
+  .topbar-search-wrap{ position:relative; width:100%; max-width:440px; }
+  .topbar-search-wrap svg{ position:absolute; left:13px; top:50%; transform:translateY(-50%); opacity:.5; pointer-events:none; }
+  .topbar-search-wrap input{ width:100%; background:var(--surface-2); border:1px solid var(--border); border-radius:999px; padding:9px 16px 9px 36px; color:var(--text); font-size:13px; font-family:inherit; }
+  .topbar-search-wrap input::placeholder{ color:var(--text-faint); }
+  .topbar-search-wrap input:focus{ outline:none; border-color:var(--brand-2); }
+  .topbar-tabs-row{ display:flex; justify-content:center; padding:0 24px; border-top:1px solid var(--border); }
+  .brand{ display:flex; align-items:center; gap:9px; font-weight:800; font-size:18px; letter-spacing:-0.02em; white-space:nowrap; }
+  .brand .mark{
+    width:26px; height:26px; border-radius:7px;
+    background:linear-gradient(135deg, var(--brand), var(--brand-2));
+    display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:900; color:#fff;
+  }
+  nav.tabs{ display:flex; gap:4px; overflow-x:auto; }
+  nav.tabs button{
+    background:none; border:none; color:var(--text-dim); font-size:13.5px; font-weight:600;
+    padding:10px 14px; border-radius:8px; white-space:nowrap; transition:.15s;
+  }
+  nav.tabs button:hover{ color:var(--text); background:var(--surface-2); }
+  nav.tabs button.active{ color:var(--text); background:var(--surface-2); }
+  nav.tabs button.active::after{ content:""; }
+  .topbar-right{ display:flex; align-items:center; gap:14px; }
+  .icon-btn{ position:relative; width:34px; height:34px; border-radius:9px; border:1px solid var(--border); background:var(--surface); display:flex; align-items:center; justify-content:center; color:var(--text-dim); }
+  .icon-btn:hover{ color:var(--text); border-color:var(--surface-3); }
+  .dot-badge{ position:absolute; top:-3px; right:-3px; width:14px; height:14px; border-radius:50%; background:var(--red); color:#fff; font-size:9px; display:flex; align-items:center; justify-content:center; border:2px solid var(--bg); font-weight:700; }
+  .user-chip{ display:flex; align-items:center; gap:8px; padding:5px 10px 5px 5px; border:1px solid var(--border); border-radius:999px; background:var(--surface); }
+  .avatar{ width:26px; height:26px; border-radius:50%; background:linear-gradient(135deg,#7c8fff,#22d3ee); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; color:#0a0e17; }
+  .tier-pill{ font-size:10px; font-weight:800; letter-spacing:.05em; padding:2px 7px; border-radius:999px; background:linear-gradient(135deg,var(--gold),var(--gold-2)); color:#2b1a00; }
+
+  /* ---------- Layout ---------- */
+  main{ max-width:1320px; margin:0 auto; padding:28px 24px 80px; }
+  .page{ display:none; animation:fade .25s ease; }
+  .page.active{ display:block; }
+  @keyframes fade{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);} }
+
+  h1.page-title{ font-size:22px; margin:0 0 4px; letter-spacing:-0.02em; }
+  p.page-sub{ color:var(--text-dim); margin:0 0 22px; font-size:13.5px; }
+
+  .grid{ display:grid; gap:16px; }
+  .grid-4{ grid-template-columns:repeat(4,1fr); }
+  .grid-3{ grid-template-columns:2fr 1fr; }
+  .grid-2{ grid-template-columns:1fr 1fr; }
+  @media(max-width:980px){ .grid-4{grid-template-columns:repeat(2,1fr);} .grid-3{grid-template-columns:1fr;} .grid-2{grid-template-columns:1fr;} }
+
+  .card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:18px; }
+  .card h3{ margin:0 0 4px; font-size:14px; }
+  .card .hint{ color:var(--text-dim); font-size:12px; }
+
+  /* stat tiles */
+  .stat-tile{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px 18px; }
+  .stat-tile .label{ color:var(--text-dim); font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; margin-bottom:8px; }
+  .stat-tile .value{ font-size:24px; font-weight:800; letter-spacing:-0.02em; }
+  .stat-tile .delta{ font-size:12px; font-weight:700; margin-top:4px; }
+  .up{ color:var(--green); } .down{ color:var(--red); }
+
+  /* buttons */
+  .btn{ border-radius:9px; padding:9px 16px; font-size:13px; font-weight:700; border:1px solid transparent; transition:.15s; }
+  .btn-primary{ background:linear-gradient(135deg,var(--brand),var(--brand-2)); color:#fff; }
+  .btn-primary:hover{ filter:brightness(1.1); }
+  .btn-ghost{ background:var(--surface-2); color:var(--text); border-color:var(--border); }
+  .btn-ghost:hover{ background:var(--surface-3); }
+  .btn-gold{ background:linear-gradient(135deg,var(--gold),var(--gold-2)); color:#2b1a00; }
+  .btn-sm{ padding:6px 11px; font-size:12px; border-radius:7px; }
+  .btn-block{ width:100%; }
+  .btn:disabled{ opacity:.45; cursor:not-allowed; }
+
+  /* badges/pills */
+  .pill{ display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:800; padding:3px 9px; border-radius:999px; letter-spacing:.02em; }
+  .pill-buy{ background:rgba(47,215,122,.15); color:var(--green); }
+  .pill-hold{ background:rgba(242,181,69,.15); color:var(--amber); }
+  .pill-avoid{ background:rgba(242,73,92,.15); color:var(--red); }
+  .pill-hot{ background:rgba(242,73,92,.15); color:var(--red); }
+  .pill-standard{ background:rgba(91,124,250,.18); color:#9db0ff; }
+  .pill-stable{ background:rgba(34,211,238,.15); color:var(--brand-2); }
+  .pill-muted{ background:var(--surface-3); color:var(--text-dim); }
+  .pulse{ width:6px; height:6px; border-radius:50%; background:var(--red); animation:pulse 1.4s infinite; }
+  @keyframes pulse{ 0%{opacity:1;} 50%{opacity:.3;} 100%{opacity:1;} }
+
+  /* opportunity cards */
+  .opp-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+  @media(max-width:1100px){ .opp-grid{ grid-template-columns:repeat(2,1fr);} }
+  @media(max-width:700px){ .opp-grid{ grid-template-columns:1fr;} }
+  .opp-card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px; position:relative; display:flex; flex-direction:column; gap:10px; cursor:pointer; transition:.15s; }
+  .opp-card:hover{ border-color:var(--brand); transform:translateY(-2px); }
+  .opp-thumb{ height:90px; border-radius:9px; background:repeating-linear-gradient(135deg,var(--surface-3),var(--surface-3) 10px,var(--surface-2) 10px,var(--surface-2) 20px); display:flex; align-items:center; justify-content:center; color:var(--text-faint); font-size:11px; font-weight:700; letter-spacing:.04em; }
+  .opp-cat{ font-weight:700; font-size:13.5px; }
+  .opp-source{ color:var(--text-dim); font-size:11.5px; }
+  .ribbon{ position:absolute; top:10px; right:10px; font-size:9.5px; font-weight:800; letter-spacing:.04em; padding:3px 8px; border-radius:999px; background:linear-gradient(135deg,var(--gold),var(--gold-2)); color:#2b1a00; }
+  .opp-row{ display:flex; justify-content:space-between; align-items:center; font-size:12px; color:var(--text-dim); }
+  .conf-ring{ width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; color:var(--text); flex-shrink:0; }
+  .clock{ font-variant-numeric:tabular-nums; font-weight:800; font-size:13px; }
+  .clock.hot{ color:var(--red); }
+  .clock.standard{ color:#9db0ff; }
+  .clock.stable{ color:var(--brand-2); }
+  .opp-bidrow{ display:flex; align-items:center; justify-content:space-between; padding-top:8px; border-top:1px dashed var(--border); }
+  .opp-bidrow .bidval{ font-size:16px; font-weight:800; }
+  .opp-actions{ display:flex; gap:8px; }
+  .sniper-btn{ width:34px; height:34px; border-radius:8px; border:1px solid var(--border); background:var(--surface-2); display:flex; align-items:center; justify-content:center; color:var(--text-dim); flex-shrink:0; }
+  .sniper-btn.active{ background:rgba(91,124,250,.18); border-color:var(--brand); color:#9db0ff; }
+
+  /* live feed */
+  .feed{ display:flex; flex-direction:column; gap:8px; max-height:520px; overflow:hidden; }
+  .feed-item{ font-size:12px; background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:8px 10px; animation:slidein .35s ease; }
+  .feed-item b{ color:var(--brand-2); }
+  @keyframes slidein{ from{opacity:0; transform:translateY(-6px);} to{opacity:1; transform:translateY(0);} }
+
+  /* modal */
+  .modal-backdrop{ position:fixed; inset:0; background:rgba(5,7,13,.7); backdrop-filter:blur(2px); display:none; align-items:center; justify-content:center; z-index:100; padding:20px; }
+  .modal-backdrop.open{ display:flex; }
+  .modal{ background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:24px; width:100%; max-width:460px; max-height:88vh; overflow-y:auto; }
+  .modal-close{ float:right; background:none; border:none; color:var(--text-dim); font-size:20px; line-height:1; }
+  .field{ margin-bottom:14px; }
+  .field label{ display:block; font-size:12px; color:var(--text-dim); margin-bottom:6px; font-weight:600; }
+  .field input, .field select{ width:100%; background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:9px 11px; color:var(--text); font-size:13.5px; }
+
+  /* table */
+  table{ width:100%; border-collapse:collapse; font-size:13px; }
+  th{ text-align:left; color:var(--text-dim); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:.03em; padding:8px 10px; border-bottom:1px solid var(--border); }
+  td{ padding:11px 10px; border-bottom:1px solid var(--border); }
+  tr:last-child td{ border-bottom:none; }
+  tr:hover td{ background:var(--surface-2); }
+
+  /* toggle switch */
+  .switch{ position:relative; width:42px; height:24px; flex-shrink:0; }
+  .switch input{ opacity:0; width:0; height:0; }
+  .slider-toggle{ position:absolute; cursor:pointer; inset:0; background:var(--surface-3); border-radius:999px; transition:.2s; border:1px solid var(--border); }
+  .slider-toggle::before{ content:""; position:absolute; width:18px; height:18px; left:2px; top:2px; background:#fff; border-radius:50%; transition:.2s; }
+  .switch input:checked + .slider-toggle{ background:linear-gradient(135deg,var(--brand),var(--brand-2)); }
+  .switch input:checked + .slider-toggle::before{ transform:translateX(18px); }
+
+  .toast{ position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--surface-3); border:1px solid var(--brand); color:var(--text); padding:11px 18px; border-radius:9px; font-size:13px; font-weight:600; opacity:0; transition:.25s; z-index:200; }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+  .section-title{ display:flex; align-items:center; justify-content:space-between; margin:30px 0 14px; }
+  .section-title h2{ font-size:15px; margin:0; }
+
+  .locked{ opacity:.55; position:relative; }
+  .lock-badge{ display:inline-flex; align-items:center; gap:4px; font-size:10px; font-weight:800; background:var(--surface-3); color:var(--text-dim); padding:3px 8px; border-radius:999px; }
+
+  .range{ width:100%; accent-color:var(--brand); }
+  .flip-index-row{ display:flex; align-items:center; gap:10px; margin-bottom:10px; font-size:12.5px; }
+  .flip-index-row .label{ width:150px; color:var(--text-dim); flex-shrink:0; }
+  .flip-index-bar{ flex:1; height:8px; border-radius:999px; background:var(--surface-3); overflow:hidden; }
+  .flip-index-fill{ height:100%; border-radius:999px; background:linear-gradient(90deg,var(--brand),var(--brand-2)); }
+  .flip-index-val{ width:28px; text-align:right; font-weight:700; color:var(--text-dim); }
+
+  .offer-row{ display:flex; justify-content:space-between; font-size:12.5px; padding:6px 0; border-bottom:1px dashed var(--border); }
+  .offer-row:last-child{ border-bottom:none; }
+  .offer-row.lowest{ color:var(--green); font-weight:700; }
+  .offer-row.beaten{ color:var(--text-faint); text-decoration:line-through; }
+
+  code.copybox{ display:block; background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:9px 11px; font-size:12.5px; color:var(--brand-2); }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-main">
+    <div class="brand"><div class="mark">F</div>Flipsta</div>
+    <div class="topbar-search">
+      <div class="topbar-search-wrap">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" placeholder="Search opportunities, products, sellers…" />
+      </div>
+    </div>
+    <div class="topbar-right">
+      <button class="icon-btn" title="Notifications">🔔<span class="dot-badge">3</span></button>
+      <div class="user-chip">
+        <div class="avatar">S</div>
+        <span style="font-weight:700;">Steven</span>
+        <span class="tier-pill">PRO</span>
+      </div>
+    </div>
+  </div>
+  <div class="topbar-tabs-row">
+    <nav class="tabs" id="tabs">
+      <button class="active" data-page="dashboard">Dashboard</button>
+      <button data-page="opportunities">Live Opportunities</button>
+      <button data-page="wants">Buyer Wants</button>
+      <button data-page="marketplace">Marketplace</button>
+      <button data-page="portfolio">My Portfolio</button>
+      <button data-page="wallet">Wallet &amp; Shipping</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+  <!-- ===================== DASHBOARD ===================== -->
+  <section class="page active" id="page-dashboard">
+    <h1 class="page-title">Welcome back, Steven</h1>
+    <p class="page-sub">Your early-access window opens in <b id="earlyAccessClock" style="color:var(--brand-2);">04:12</b> — Pro subscribers see new opportunities before Standard.</p>
+
+    <div class="grid grid-4">
+      <div class="stat-tile"><div class="label">Profit this month</div><div class="value">£2,340</div><div class="delta up">▲ 18% vs last month</div></div>
+      <div class="stat-tile"><div class="label">Win rate</div><div class="value">64%</div><div class="delta up">▲ 4pts</div></div>
+      <div class="stat-tile"><div class="label">Best category</div><div class="value" style="font-size:18px;">Collectibles</div><div class="delta" style="color:var(--text-dim);">32% avg margin</div></div>
+      <div class="stat-tile"><div class="label">Current streak</div><div class="value">7 wins</div><div class="delta" style="color:var(--text-dim);">Personal best: 11</div></div>
+    </div>
+
+    <div class="grid grid-3" style="margin-top:16px;">
+      <div class="card">
+        <h3>This week's Flip Index</h3>
+        <div class="hint">Hottest categories for arbitrage margin right now — public, updated weekly.</div>
+        <div style="margin-top:16px;">
+          <div class="flip-index-row"><span class="label">Lego &amp; Collectibles</span><div class="flip-index-bar"><div class="flip-index-fill" style="width:92%;"></div></div><span class="flip-index-val">92</span></div>
+          <div class="flip-index-row"><span class="label">Trainers &amp; Footwear</span><div class="flip-index-bar"><div class="flip-index-fill" style="width:85%;"></div></div><span class="flip-index-val">85</span></div>
+          <div class="flip-index-row"><span class="label">Tech Accessories</span><div class="flip-index-bar"><div class="flip-index-fill" style="width:71%;"></div></div><span class="flip-index-val">71</span></div>
+          <div class="flip-index-row"><span class="label">Home &amp; Kitchen</span><div class="flip-index-bar"><div class="flip-index-fill" style="width:58%;"></div></div><span class="flip-index-val">58</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>AI accuracy (90 days)</h3>
+        <div style="display:flex; align-items:center; gap:14px; margin-top:10px;">
+          <div class="conf-ring" style="width:64px;height:64px;font-size:16px;background:conic-gradient(var(--green) 0% 87%, var(--surface-3) 87% 100%);">
+            <div style="background:var(--surface); width:48px; height:48px; border-radius:50%; display:flex; align-items:center; justify-content:center;">87%</div>
+          </div>
+          <div class="hint">Predicted-vs-actual resale outcomes across all completed opportunities. Public track record — see Section 6.1.</div>
+        </div>
+        <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--border);">
+          <h3 style="margin-bottom:6px;">Invite a friend</h3>
+          <div class="hint" style="margin-bottom:8px;">You both get £10 credit once they complete their first flip.</div>
+          <code class="copybox" id="refLink">flipsta.co.uk/r/steven-482</code>
+          <button class="btn btn-ghost btn-block btn-sm" style="margin-top:8px;" onclick="copyRef()">Copy invite link</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title"><h2>Syndicates</h2></div>
+    <div class="card locked">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <h3>Pool capital on higher-value opportunities</h3>
+          <div class="hint">Chip in with other members and split the profit proportionally on deals above your solo budget.</div>
+        </div>
+        <span class="lock-badge">🔒 Elite feature</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== LIVE OPPORTUNITIES ===================== -->
+  <section class="page" id="page-opportunities">
+    <h1 class="page-title">Live Opportunities</h1>
+    <p class="page-sub">Redacted teasers — exact retailer, price and photo unlock the instant you win. <span style="color:var(--gold);">★ Pro early access active</span> on new listings.</p>
+
+    <div class="grid" style="grid-template-columns:1fr 300px; gap:20px; align-items:start;">
+      <div class="opp-grid" id="oppGrid"></div>
+
+      <div class="card">
+        <h3>Live activity</h3>
+        <div class="hint" style="margin-bottom:10px;">Real-time bidding across the platform</div>
+        <div class="feed" id="feed"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== BUYER WANTS ===================== -->
+  <section class="page" id="page-wants">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+      <div>
+        <h1 class="page-title">Buyer Wants</h1>
+        <p class="page-sub">Post exactly what you're after — sellers compete downward for the sale. Lowest genuine offer wins.</p>
+      </div>
+      <button class="btn btn-primary" onclick="openModal('postWantModal')">+ Post a Want</button>
+    </div>
+
+    <div class="grid grid-2" id="wantsGrid"></div>
+  </section>
+
+  <!-- ===================== MARKETPLACE ===================== -->
+  <section class="page" id="page-marketplace">
+    <h1 class="page-title">Marketplace</h1>
+    <p class="page-sub">Pooled stock across every seller, lowest ask first — price-time priority, like a real order book. <span style="color:var(--brand-2);">Your commission: 8% (Pro)</span></p>
+
+    <div class="card" style="margin-bottom:20px;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
+        <div>
+          <h3>LEGO Technic 42211 — Lunar Outpost Moon Rover</h3>
+          <div class="hint">6 available from 4 sellers</div>
+        </div>
+        <span class="pill pill-buy">BUY · 91% confidence</span>
+      </div>
+      <table style="margin-top:14px;">
+        <thead><tr><th>Ask</th><th>Seller</th><th>Listed</th><th></th></tr></thead>
+        <tbody>
+          <tr><td style="font-weight:800; color:var(--green);">£74.50</td><td>MinifigMargins</td><td>2h ago</td><td><span class="pill pill-buy">LOWEST</span></td></tr>
+          <tr><td>£76.00</td><td>BrickFlip_UK</td><td>5h ago</td><td><button class="btn btn-ghost btn-sm">Buy</button></td></tr>
+          <tr><td>£78.00 <span class="hint">(×2)</span></td><td><b>steven_resells (you)</b></td><td>1d ago</td><td><button class="btn btn-ghost btn-sm" disabled>Your listing</button></td></tr>
+          <tr><td>£81.99</td><td>ClearanceQueen</td><td>3d ago</td><td><button class="btn btn-ghost btn-sm">Buy</button></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="grid grid-2">
+      <div class="card">
+        <h3>List an item</h3>
+        <div class="field">
+          <label>Sale type</label>
+          <div style="display:flex; gap:8px;">
+            <button class="btn btn-ghost btn-sm" id="marketSellBtn" onclick="setSellType('market')">Market Sell</button>
+            <button class="btn btn-ghost btn-sm" id="limitSellBtn" onclick="setSellType('limit')">Limit Sell</button>
+          </div>
+        </div>
+        <div id="limitSellPanel" style="display:none;">
+          <div class="field">
+            <label>Minimum acceptable margin: <b id="marginVal" style="color:var(--brand-2);">15%</b></label>
+            <input type="range" class="range" min="5" max="40" value="15" oninput="updateMargin(this.value)">
+          </div>
+          <div class="hint">Item stays live until a buyer meets <b id="releasePrice" style="color:var(--text);">£61.20</b> or you cancel.</div>
+        </div>
+        <button class="btn btn-primary btn-block" style="margin-top:14px;" onclick="showToast('Listing published to Marketplace')">Publish listing</button>
+      </div>
+      <div class="card">
+        <h3>Why sell here vs eBay/Vinted?</h3>
+        <table>
+          <tr><td>Flipsta (Pro)</td><td style="text-align:right; font-weight:800; color:var(--green);">8%</td></tr>
+          <tr><td>eBay (all-in)</td><td style="text-align:right; color:var(--text-dim);">~13–16%</td></tr>
+          <tr><td>Depop (all-in)</td><td style="text-align:right; color:var(--text-dim);">~13–15%</td></tr>
+        </table>
+        <div class="hint" style="margin-top:10px;">Elite members pay just 5% — <a href="#" style="color:var(--brand-2);">see plans</a>.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== PORTFOLIO ===================== -->
+  <section class="page" id="page-portfolio">
+    <h1 class="page-title">My Portfolio</h1>
+    <p class="page-sub">Every opportunity you've won, from sourcing through to sale.</p>
+
+    <div class="grid grid-3" style="align-items:start;">
+      <div class="card">
+        <h3>Profit — last 8 weeks</h3>
+        <svg id="pnlChart" width="100%" height="150" viewBox="0 0 480 150" style="margin-top:10px;"></svg>
+      </div>
+      <div class="card">
+        <h3>AI listing draft — ready</h3>
+        <div class="hint" style="margin-bottom:10px;">Auto-generated the moment you won this opportunity.</div>
+        <div style="background:var(--surface-2); border:1px solid var(--border); border-radius:9px; padding:12px; font-size:12.5px;">
+          <b>LEGO Technic 42211 — Lunar Outpost Moon Rover, New &amp; Sealed</b>
+          <p class="hint" style="margin:8px 0 0;">"Brand new, factory sealed. Retiring set — hard to find at this price. Fast tracked dispatch, smoke-free home..."</p>
+          <div class="hint" style="margin-top:8px;">Suggested price: <b style="color:var(--text);">£78.00</b> · Best time to post: <b style="color:var(--text);">Thu 6–8pm</b></div>
+        </div>
+        <div style="display:flex; gap:8px; margin-top:10px;">
+          <button class="btn btn-ghost btn-sm" onclick="showToast('Draft copied')">Copy</button>
+          <button class="btn btn-ghost btn-sm" onclick="showToast('Opening editor…')">Edit</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title"><h2>Held opportunities</h2></div>
+    <div class="card" style="padding:0;">
+      <table>
+        <thead><tr><th>Item</th><th>Status</th><th>Buy</th><th>Sale / est.</th><th>Profit</th><th>Protected</th></tr></thead>
+        <tbody>
+          <tr><td>LEGO Technic 42211</td><td><span class="pill pill-standard">Listed</span></td><td>£53.99</td><td>£78.00</td><td style="color:var(--green); font-weight:700;">£24.01</td><td>🛡️</td></tr>
+          <tr><td>Nike Air Max clearance pair</td><td><span class="pill pill-buy">Sold</span></td><td>£61.00</td><td>£96.00</td><td style="color:var(--green); font-weight:700;">£35.00</td><td>—</td></tr>
+          <tr><td>JBL Flip 6 Speaker</td><td><span class="pill pill-hot">Sourcing · 00:12:40</span></td><td>£29.50</td><td>est. £46</td><td style="color:var(--text-dim);">est. £16.50</td><td>🛡️</td></tr>
+          <tr><td>Ninja Foodi Mini</td><td><span class="pill pill-standard">Listed</span></td><td>£34.00</td><td>£52.00</td><td style="color:var(--green); font-weight:700;">£18.00</td><td>—</td></tr>
+          <tr><td>Sealed trading card box</td><td><span class="pill pill-hold">Buyback pending · day 9/14</span></td><td>£42.00</td><td>—</td><td style="color:var(--text-dim);">at risk</td><td>🛡️</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===================== WALLET ===================== -->
+  <section class="page" id="page-wallet">
+    <h1 class="page-title">Wallet &amp; Shipping</h1>
+    <p class="page-sub">Funds held via Stripe Connect until delivery is confirmed.</p>
+
+    <div class="grid grid-4">
+      <div class="stat-tile"><div class="label">Available</div><div class="value">£412.60</div></div>
+      <div class="stat-tile"><div class="label">Pending (escrow)</div><div class="value">£186.20</div></div>
+      <div class="stat-tile"><div class="label">Next payout</div><div class="value" style="font-size:18px;">3 days</div></div>
+      <div class="stat-tile"><div class="label">Insurance premiums paid (MTD)</div><div class="value">£38.40</div></div>
+    </div>
+
+    <div class="grid grid-2" style="margin-top:16px;">
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <h3>Extended hold period</h3>
+            <div class="hint">Hold funds for 2 weeks after delivery instead of the standard window, for extra return-issue protection.</div>
+          </div>
+          <label class="switch"><input type="checkbox" id="holdToggle" onchange="toggleHold()"><span class="slider-toggle"></span></label>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Transaction history</h3>
+        <table>
+          <tr><td>Payout</td><td style="text-align:right; color:var(--green);">+£96.00</td></tr>
+          <tr><td>Marketplace commission (8%)</td><td style="text-align:right; color:var(--red);">-£6.24</td></tr>
+          <tr><td>Buyback insurance premium</td><td style="text-align:right; color:var(--red);">-£6.10</td></tr>
+          <tr><td>Auction fee — Opportunity #482</td><td style="text-align:right; color:var(--red);">-£14.50</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="section-title"><h2>Courier accounts</h2></div>
+    <div class="grid grid-2">
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+          <div>
+            <h3>DPD <span class="hint">Recommended default</span></h3>
+            <div class="hint">4.1/5 reliability, best-in-class tracking. Used automatically for higher-value items.</div>
+          </div>
+          <span class="pill pill-buy">Connected</span>
+        </div>
+      </div>
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+          <div>
+            <h3>Evri</h3>
+            <div class="hint">Lower cost — suggested for low-value items where the saving outweighs the risk.</div>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="showToast('Evri account connected')">Connect</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ===================== MODALS ===================== -->
+<div class="modal-backdrop" id="oppModalBackdrop" onclick="if(event.target===this) closeModal('oppModalBackdrop')">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('oppModalBackdrop')">×</button>
+    <div id="oppModalBody"></div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="postWantModal" onclick="if(event.target===this) closeModal('postWantModal')">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('postWantModal')">×</button>
+    <h3>Post a Want</h3>
+    <div class="hint" style="margin-bottom:14px;">Sellers who hold this item can offer directly — others compete by undercutting.</div>
+    <div class="field"><label>Item</label><input type="text" placeholder="e.g. Sony WH-1000XM5, black, sealed"></div>
+    <div class="field"><label>Size / condition</label><input type="text" placeholder="e.g. New, sealed"></div>
+    <div class="field"><label>Maximum price you'll pay</label><input type="text" placeholder="£"></div>
+    <button class="btn btn-primary btn-block" onclick="closeModal('postWantModal'); showToast('Want posted — sourcing started')">Post want</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  /* ---------------- Tab navigation ---------------- */
+  document.getElementById('tabs').addEventListener('click', e=>{
+    const btn = e.target.closest('button[data-page]');
+    if(!btn) return;
+    document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    document.getElementById('page-'+btn.dataset.page).classList.add('active');
+  });
+
+  function openModal(id){ document.getElementById(id).classList.add('open'); }
+  function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+
+  function showToast(msg){
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(window._toastTimer);
+    window._toastTimer = setTimeout(()=>t.classList.remove('show'), 2200);
+  }
+
+  function copyRef(){
+    const text = document.getElementById('refLink').textContent;
+    if(navigator.clipboard){ navigator.clipboard.writeText(text).catch(()=>{}); }
+    showToast('Invite link copied');
+  }
+
+  /* ---------------- Early access countdown ---------------- */
+  let earlyAccessSeconds = 4*60+12;
+  setInterval(()=>{
+    if(earlyAccessSeconds<=0) return;
+    earlyAccessSeconds--;
+    const m = String(Math.floor(earlyAccessSeconds/60)).padStart(2,'0');
+    const s = String(earlyAccessSeconds%60).padStart(2,'0');
+    document.getElementById('earlyAccessClock').textContent = m+':'+s;
+  },1000);
+
+  /* ---------------- Opportunities data ---------------- */
+  const ratingFromConfidence = c => c>=85 ? {label:'BUY',cls:'pill-buy'} : c>=70 ? {label:'HOLD',cls:'pill-hold'} : {label:'AVOID',cls:'pill-avoid'};
+  const urgencyMeta = { hot:{label:'HOT',cls:'pill-hot'}, standard:{label:'STANDARD',cls:'pill-standard'}, stable:{label:'STABLE',cls:'pill-stable'} };
+
+  const opportunities = [
+    {id:482, cat:'Technic — Large Construction Set', source:'Major UK high-street clearance', margin:'18–24%', conf:91, stock:'~40 units (5/customer cap)', urgency:'hot', bid:14.50, instant:19.00, seconds:24*60+10, early:true,
+     why:'High confidence driven by consistent 90-day resale price stability, strong destination market depth, and a low return-rate history for this category.'},
+    {id:479, cat:'Footwear — Limited Trainers', source:'Independent retailer clearance', margin:'25–32%', conf:78, stock:'~12 pairs', urgency:'standard', bid:22.00, instant:29.00, seconds:41*60+55, early:true,
+     why:'Solid margin but thinner resale depth than usual for this silhouette — confidence held back slightly by size-curve uncertainty.'},
+    {id:475, cat:'Tech Accessories — Audio', source:'Major online marketplace overstock', margin:'12–16%', conf:95, stock:'~80 units', urgency:'stable', bid:6.20, instant:9.00, seconds:58*60+2, early:false,
+     why:'Very high confidence — deep, liquid resale market and a long, stable price history for this exact model.'},
+    {id:471, cat:'Home & Kitchen — Small Appliances', source:'Supermarket clearance aisle', margin:'20–26%', conf:84, stock:'~25 units', urgency:'standard', bid:9.80, instant:13.00, seconds:37*60+20, early:false,
+     why:'Good margin, healthy stock. Confidence just below BUY threshold due to seasonal demand variability.'},
+    {id:468, cat:'Collectibles — Trading Cards (Sealed)', source:'Independent retailer clearance', margin:'30–38%', conf:72, stock:'~15 boxes', urgency:'hot', bid:18.00, instant:24.00, seconds:19*60+45, early:true,
+     why:'Big margin if it lands, but collectible pricing is more volatile — confidence reflects genuine sell-through uncertainty.'},
+    {id:463, cat:'Beauty — Fragrance Sets', source:'Department store clearance', margin:'22–28%', conf:88, stock:'~30 units', urgency:'stable', bid:11.40, instant:15.50, seconds:52*60+8, early:false,
+     why:'Reliable, evergreen category with consistent resale demand year-round.'},
+  ];
+
+  function fmtClock(s){
+    const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60;
+    return (h>0?String(h).padStart(2,'0')+':':'') + String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0');
+  }
+
+  const oppGrid = document.getElementById('oppGrid');
+  opportunities.forEach(o=>{
+    const rating = ratingFromConfidence(o.conf);
+    const urg = urgencyMeta[o.urgency];
+    const card = document.createElement('div');
+    card.className = 'opp-card';
+    card.innerHTML = `
+      ${o.early ? '<div class="ribbon">★ PRO EARLY ACCESS</div>' : ''}
+      <div class="opp-thumb">TEASER IMAGE — REDACTED</div>
+      <div>
+        <div class="opp-cat">${o.cat}</div>
+        <div class="opp-source">${o.source}</div>
+      </div>
+      <div class="opp-row">
+        <span class="pill ${urg.cls}">${o.urgency==='hot'?'<span class="pulse"></span> ':''}${urg.label}</span>
+        <span class="pill ${rating.cls}">${rating.label}</span>
+      </div>
+      <div class="opp-row">
+        <span>Margin band</span><b style="color:var(--text);">${o.margin}</b>
+      </div>
+      <div class="opp-row">
+        <span>Est. stock</span><span style="color:var(--text);">${o.stock}</span>
+      </div>
+      <div class="opp-row">
+        <div class="conf-ring" style="background:conic-gradient(var(--brand-2) 0% ${o.conf}%, var(--surface-3) ${o.conf}% 100%);">
+          <div style="background:var(--surface); width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:9.5px;">${o.conf}%</div>
+        </div>
+        <span class="clock ${o.urgency}" data-seconds="${o.seconds}" data-id="clock-${o.id}">${fmtClock(o.seconds)}</span>
+      </div>
+      <div class="opp-bidrow">
+        <div><div class="hint">Current bid</div><div class="bidval" data-bid="${o.id}">£${o.bid.toFixed(2)}</div></div>
+        <div class="opp-actions">
+          <button class="sniper-btn" title="Sniper mode" onclick="event.stopPropagation(); toggleSniper(this)">⚡</button>
+          <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); openOppModal(${o.id})">Bid</button>
+        </div>
+      </div>
+    `;
+    card.addEventListener('click', ()=>openOppModal(o.id));
+    oppGrid.appendChild(card);
+
+    setInterval(()=>{
+      const el = card.querySelector(`[data-id="clock-${o.id}"]`);
+      let s = parseInt(el.dataset.seconds);
+      if(s>0){ s--; el.dataset.seconds = s; el.textContent = fmtClock(s); }
+    },1000);
+  });
+
+  function toggleSniper(btn){
+    btn.classList.toggle('active');
+    showToast(btn.classList.contains('active') ? 'Sniper mode activated for this category' : 'Sniper mode deactivated');
+  }
+
+  function openOppModal(id){
+    const o = opportunities.find(x=>x.id===id);
+    const rating = ratingFromConfidence(o.conf);
+    document.getElementById('oppModalBody').innerHTML = `
+      <div class="opp-thumb" style="height:120px; margin-bottom:14px;">TEASER IMAGE — REDACTED</div>
+      <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+        <div>
+          <h3 style="margin-bottom:2px;">${o.cat}</h3>
+          <div class="hint">${o.source}</div>
+        </div>
+        <span class="pill ${rating.cls}">${rating.label}</span>
+      </div>
+      <div class="grid grid-2" style="margin:16px 0;">
+        <div class="stat-tile"><div class="label">Margin band</div><div class="value" style="font-size:17px;">${o.margin}</div></div>
+        <div class="stat-tile"><div class="label">Confidence</div><div class="value" style="font-size:17px;">${o.conf}%</div></div>
+      </div>
+      <div class="hint" style="margin-bottom:14px; cursor:pointer; color:var(--brand-2);" onclick="this.nextElementSibling.style.display='block'; this.style.display='none';">Why this score? (AI explainability)</div>
+      <div class="hint" style="display:none; margin-bottom:14px; padding:10px; background:var(--surface-2); border-radius:8px;">${o.why}</div>
+      <div class="field"><label>Your bid (current: £${o.bid.toFixed(2)})</label><input type="text" placeholder="£${(o.bid+2).toFixed(2)}"></div>
+      <button class="btn btn-primary btn-block" onclick="closeModal('oppModalBackdrop'); showToast('Bid placed on Opportunity #${o.id}')">Place bid</button>
+      <button class="btn btn-gold btn-block" style="margin-top:8px;" onclick="closeModal('oppModalBackdrop'); showToast('Instant-win — Opportunity #${o.id} won for £${o.instant.toFixed(2)}')">Pay £${o.instant.toFixed(2)} — instant win</button>
+    `;
+    openModal('oppModalBackdrop');
+  }
+
+  /* ---------------- Live feed simulation ---------------- */
+  const names = ['Alex_R','MinifigMargins','BrickFlip_UK','ClearanceQueen','steven_resells','Priya_K','JD_Flips','SoleTrader88'];
+  const feedEl = document.getElementById('feed');
+  function addFeedItem(){
+    const n = names[Math.floor(Math.random()*names.length)];
+    const opp = opportunities[Math.floor(Math.random()*opportunities.length)];
+    const actions = [
+      `<b>${n}</b> bid £${(opp.bid + Math.random()*4).toFixed(2)} on #${opp.id}`,
+      `<b>${n}</b>'s sniper mode won #${opp.id} for £${(opp.instant - Math.random()*3).toFixed(2)}`,
+      `<b>${n}</b> paid instant-win on #${opp.id}`,
+      `<b>${n}</b> listed a win on the Marketplace`,
+    ];
+    const div = document.createElement('div');
+    div.className = 'feed-item';
+    div.innerHTML = actions[Math.floor(Math.random()*actions.length)];
+    feedEl.prepend(div);
+    while(feedEl.children.length > 9) feedEl.removeChild(feedEl.lastChild);
+  }
+  for(let i=0;i<5;i++) addFeedItem();
+  setInterval(addFeedItem, 3200);
+
+  /* ---------------- Buyer Wants ---------------- */
+  const wants = [
+    {item:'Nike Air Max 1 "Big Bubble", UK 9, deadstock', max:185, closes:'2h 14m', offers:[{seller:'SoleTrader88',price:178},{seller:'JD_Flips',price:174},{seller:'Priya_K',price:171}]},
+    {item:'LEGO Icons 10333 — Natural History Museum, sealed', max:95, closes:'5h 02m', offers:[{seller:'BrickFlip_UK',price:92},{seller:'MinifigMargins',price:89}]},
+    {item:'Sony WH-1000XM5, black, sealed', max:210, closes:'Just posted', offers:[]},
+  ];
+  const wantsGrid = document.getElementById('wantsGrid');
+  wants.forEach(w=>{
+    const sorted = [...w.offers].sort((a,b)=>a.price-b.price);
+    const offersHtml = sorted.length ? sorted.map((o,i)=>`<div class="offer-row ${i===0?'lowest':'beaten'}"><span>${o.seller}</span><span>£${o.price}${i===0?' — lowest':''}</span></div>`).join('') : '<div class="hint">No offers yet — open to sourcing.</div>';
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+        <div><h3>${w.item}</h3><div class="hint">Max £${w.max} · closes ${w.closes}</div></div>
+      </div>
+      <div style="margin:12px 0;">${offersHtml}</div>
+      <div style="display:flex; gap:8px;">
+        <input type="text" placeholder="Your offer (£)" style="flex:1; background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:8px 10px; color:var(--text); font-size:13px;">
+        <button class="btn btn-primary btn-sm" onclick="showToast('Offer submitted')">Offer</button>
+      </div>
+    `;
+    wantsGrid.appendChild(card);
+  });
+
+  /* ---------------- Limit sell slider ---------------- */
+  function setSellType(type){
+    document.getElementById('marketSellBtn').classList.toggle('btn-primary', type==='market');
+    document.getElementById('limitSellBtn').classList.toggle('btn-primary', type==='limit');
+    document.getElementById('limitSellPanel').style.display = type==='limit' ? 'block' : 'none';
+  }
+  function updateMargin(v){
+    document.getElementById('marginVal').textContent = v+'%';
+    const base = 53.99;
+    document.getElementById('releasePrice').textContent = '£'+(base * (1+v/100)).toFixed(2);
+  }
+
+  /* ---------------- Wallet hold toggle ---------------- */
+  function toggleHold(){
+    const on = document.getElementById('holdToggle').checked;
+    showToast(on ? 'Funds will now be held 2 weeks after delivery' : 'Standard hold period restored');
+  }
+
+  /* ---------------- P&L chart (hand-drawn SVG) ---------------- */
+  (function(){
+    const data = [120,210,90,340,280,410,260,390];
+    const w=480,h=150,pad=20, max=Math.max(...data), barW = (w-pad*2)/data.length*0.6, gap=(w-pad*2)/data.length;
+    const svg = document.getElementById('pnlChart');
+    let html = `<line x1="${pad}" y1="${h-24}" x2="${w-pad}" y2="${h-24}" stroke="#262f4a" stroke-width="1"/>`;
+    data.forEach((v,i)=>{
+      const barH = (v/max)*(h-50);
+      const x = pad + i*gap + (gap-barW)/2;
+      const y = h-24-barH;
+      html += `<rect x="${x}" y="${y}" width="${barW}" height="${barH}" rx="3" fill="url(#grad)"/>`;
+      html += `<text x="${x+barW/2}" y="${h-8}" text-anchor="middle" font-size="9" fill="#5b6a8f">W${i+1}</text>`;
+    });
+    html = `<defs><linearGradient id="grad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#5b7cfa"/><stop offset="100%" stop-color="#22d3ee"/></linearGradient></defs>` + html;
+    svg.innerHTML = html;
+  })();
+</script>
+</body>
+</html>

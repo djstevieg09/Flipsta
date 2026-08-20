@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Flipsta — Admin Dashboard (Mockup)</title>
+<style>
+  :root{
+    --bg:#0a0e17;
+    --surface:#121729;
+    --surface-2:#1a2138;
+    --surface-3:#212a45;
+    --border:#262f4a;
+    --text:#eef1f8;
+    --text-dim:#8891ab;
+    --text-faint:#5b6a8f;
+    --brand:#5b7cfa;
+    --brand-2:#22d3ee;
+    --gold:#f2b545;
+    --gold-2:#f59e0b;
+    --green:#2fd77a;
+    --red:#f2495c;
+    --amber:#f2b545;
+    --radius:12px;
+    --radius-sm:8px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; background:var(--bg); color:var(--text); }
+  body{ font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased; }
+  a{ color:inherit; text-decoration:none; }
+  button{ font-family:inherit; cursor:pointer; }
+  input,select,textarea{ font-family:inherit; }
+  ::selection{ background:var(--brand); color:#fff; }
+
+  /* ---------- Top bar (same global convention: centered search, tabs underneath) ---------- */
+  header.topbar{
+    position:sticky; top:0; z-index:50;
+    display:flex; flex-direction:column;
+    background:rgba(10,14,23,0.92); backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--border);
+  }
+  .topbar-main{ display:flex; align-items:center; gap:20px; height:60px; padding:0 24px; }
+  .topbar-search{ flex:1; display:flex; justify-content:center; }
+  .topbar-search-wrap{ position:relative; width:100%; max-width:440px; }
+  .topbar-search-wrap svg{ position:absolute; left:13px; top:50%; transform:translateY(-50%); opacity:.5; pointer-events:none; }
+  .topbar-search-wrap input{ width:100%; background:var(--surface-2); border:1px solid var(--border); border-radius:999px; padding:9px 16px 9px 36px; color:var(--text); font-size:13px; font-family:inherit; }
+  .topbar-search-wrap input::placeholder{ color:var(--text-faint); }
+  .topbar-search-wrap input:focus{ outline:none; border-color:var(--red); }
+  .topbar-tabs-row{ display:flex; justify-content:center; padding:0 24px; border-top:1px solid var(--border); }
+  .brand{ display:flex; align-items:center; gap:9px; font-weight:800; font-size:18px; letter-spacing:-0.02em; white-space:nowrap; }
+  .brand .mark{
+    width:26px; height:26px; border-radius:7px;
+    background:linear-gradient(135deg, var(--red), var(--gold));
+    display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:900; color:#fff;
+  }
+  .brand .staff-tag{ font-size:10px; font-weight:800; letter-spacing:.08em; color:var(--red); border:1px solid rgba(242,73,92,.4); background:rgba(242,73,92,.1); padding:2px 7px; border-radius:999px; margin-left:2px; }
+  nav.tabs{ display:flex; gap:4px; overflow-x:auto; }
+  nav.tabs button{
+    background:none; border:none; color:var(--text-dim); font-size:13.5px; font-weight:600;
+    padding:12px 14px; border-radius:8px; white-space:nowrap; transition:.15s;
+  }
+  nav.tabs button:hover{ color:var(--text); background:var(--surface-2); }
+  nav.tabs button.active{ color:var(--text); background:var(--surface-2); }
+  .topbar-right{ display:flex; align-items:center; gap:14px; }
+  .icon-btn{ position:relative; width:34px; height:34px; border-radius:9px; border:1px solid var(--border); background:var(--surface); display:flex; align-items:center; justify-content:center; color:var(--text-dim); }
+  .icon-btn:hover{ color:var(--text); border-color:var(--surface-3); }
+  .dot-badge{ position:absolute; top:-3px; right:-3px; width:14px; height:14px; border-radius:50%; background:var(--red); color:#fff; font-size:9px; display:flex; align-items:center; justify-content:center; border:2px solid var(--bg); font-weight:700; }
+  .user-chip{ display:flex; align-items:center; gap:8px; padding:5px 10px 5px 5px; border:1px solid var(--border); border-radius:999px; background:var(--surface); }
+  .avatar{ width:26px; height:26px; border-radius:50%; background:linear-gradient(135deg,var(--red),var(--gold)); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; color:#1a0d00; }
+  .role-pill{ font-size:10px; font-weight:800; letter-spacing:.05em; padding:2px 7px; border-radius:999px; background:linear-gradient(135deg,var(--red),var(--gold)); color:#2b0a00; }
+
+  /* ---------- Layout ---------- */
+  main{ max-width:1400px; margin:0 auto; padding:28px 24px 80px; }
+  .page{ display:none; animation:fade .25s ease; }
+  .page.active{ display:block; }
+  @keyframes fade{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);} }
+  h1.page-title{ font-size:22px; margin:0 0 4px; letter-spacing:-0.02em; }
+  p.page-sub{ color:var(--text-dim); margin:0 0 22px; font-size:13.5px; }
+
+  .grid{ display:grid; gap:16px; }
+  .grid-6{ grid-template-columns:repeat(6,1fr); }
+  .grid-3{ grid-template-columns:2fr 1fr; }
+  .grid-2{ grid-template-columns:1fr 1fr; }
+  @media(max-width:1100px){ .grid-6{grid-template-columns:repeat(3,1fr);} .grid-3{grid-template-columns:1fr;} .grid-2{grid-template-columns:1fr;} }
+
+  .card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:18px; }
+  .card h3{ margin:0 0 4px; font-size:14px; }
+  .card .hint{ color:var(--text-dim); font-size:12px; }
+  .card-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+  .card-head h3{ margin:0; }
+
+  .stat-tile{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; }
+  .stat-tile .label{ color:var(--text-dim); font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; margin-bottom:8px; }
+  .stat-tile .value{ font-size:21px; font-weight:800; letter-spacing:-0.02em; }
+  .stat-tile .delta{ font-size:11.5px; font-weight:700; margin-top:4px; }
+  .up{ color:var(--green); } .down{ color:var(--red); }
+
+  .btn{ border-radius:9px; padding:9px 16px; font-size:13px; font-weight:700; border:1px solid transparent; transition:.15s; }
+  .btn-primary{ background:linear-gradient(135deg,var(--red),var(--gold)); color:#1a0d00; }
+  .btn-primary:hover{ filter:brightness(1.08); }
+  .btn-ghost{ background:var(--surface-2); color:var(--text); border-color:var(--border); }
+  .btn-ghost:hover{ background:var(--surface-3); }
+  .btn-danger{ background:rgba(242,73,92,.15); color:var(--red); border-color:rgba(242,73,92,.35); }
+  .btn-danger:hover{ background:rgba(242,73,92,.25); }
+  .btn-sm{ padding:6px 11px; font-size:12px; border-radius:7px; }
+  .btn:disabled{ opacity:.4; cursor:not-allowed; }
+
+  table{ width:100%; border-collapse:collapse; font-size:13px; }
+  thead th{ text-align:left; color:var(--text-dim); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.04em; padding:8px 10px; border-bottom:1px solid var(--border); white-space:nowrap; }
+  tbody td{ padding:11px 10px; border-bottom:1px solid var(--border); vertical-align:middle; }
+  tbody tr:hover{ background:var(--surface-2); }
+  tbody tr:last-child td{ border-bottom:none; }
+
+  .pill{ display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:800; padding:3px 9px; border-radius:999px; letter-spacing:.02em; white-space:nowrap; }
+  .pill-green{ background:rgba(47,215,122,.15); color:var(--green); }
+  .pill-red{ background:rgba(242,73,92,.15); color:var(--red); }
+  .pill-amber{ background:rgba(242,181,69,.15); color:var(--gold); }
+  .pill-blue{ background:rgba(91,124,250,.15); color:var(--brand); }
+  .pill-muted{ background:var(--surface-3); color:var(--text-dim); }
+
+  .toolbar{ display:flex; align-items:center; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
+  .toolbar input[type=text]{ background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:8px 12px; color:var(--text); font-size:13px; min-width:220px; }
+  .toolbar select{ background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:8px 10px; color:var(--text); font-size:13px; }
+  .toolbar .spacer{ flex:1; }
+  .chip-filter{ background:var(--surface-2); border:1px solid var(--border); color:var(--text-dim); font-size:12px; font-weight:600; padding:7px 12px; border-radius:999px; }
+  .chip-filter.active{ background:var(--surface-3); color:var(--text); border-color:var(--red); }
+
+  /* modal */
+  .modal-backdrop{ display:none; position:fixed; inset:0; background:rgba(5,7,13,.7); backdrop-filter:blur(2px); z-index:100; align-items:flex-start; justify-content:center; padding:60px 20px; overflow-y:auto; }
+  .modal-backdrop.open{ display:flex; }
+  .modal{ background:var(--surface); border:1px solid var(--border); border-radius:16px; width:100%; max-width:640px; padding:24px; }
+  .modal-head{ display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:16px; }
+  .modal-head h2{ margin:0 0 4px; font-size:18px; }
+  .modal-close{ background:var(--surface-2); border:1px solid var(--border); width:30px; height:30px; border-radius:8px; color:var(--text-dim); }
+  .kv{ display:grid; grid-template-columns:130px 1fr; gap:8px 12px; font-size:13px; margin-bottom:16px; }
+  .kv .k{ color:var(--text-dim); }
+  .detail-tabs{ display:flex; gap:4px; border-bottom:1px solid var(--border); margin-bottom:14px; }
+  .detail-tabs button{ background:none; border:none; color:var(--text-dim); font-size:12.5px; font-weight:700; padding:8px 12px; border-bottom:2px solid transparent; }
+  .detail-tabs button.active{ color:var(--text); border-bottom-color:var(--red); }
+  .detail-pane{ display:none; }
+  .detail-pane.active{ display:block; }
+  textarea{ width:100%; background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; color:var(--text); font-size:13px; min-height:70px; resize:vertical; }
+  .canned-row{ display:flex; gap:6px; flex-wrap:wrap; margin:8px 0 12px; }
+  .canned-row button{ font-size:11px; }
+  label.flabel{ display:block; font-size:11.5px; color:var(--text-dim); font-weight:700; text-transform:uppercase; letter-spacing:.04em; margin:12px 0 6px; }
+  input[type=text].finput, select.finput{ width:100%; background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:9px 12px; color:var(--text); font-size:13px; }
+
+  .toast{ position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--surface-3); border:1px solid var(--border); padding:12px 20px; border-radius:10px; font-size:13px; font-weight:600; opacity:0; transition:.25s; z-index:200; box-shadow:0 8px 30px rgba(0,0,0,.4); }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+  .empty-row td{ text-align:center; color:var(--text-dim); padding:24px; font-size:13px; }
+  .sev-dot{ width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:6px; }
+  .sev-high{ background:var(--red); } .sev-med{ background:var(--gold); } .sev-low{ background:var(--brand); }
+
+  .audit-row .who{ font-weight:700; }
+  .fade-out{ animation:fadeOut .3s forwards; }
+  @keyframes fadeOut{ to{ opacity:0; transform:translateX(8px); } }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-main">
+    <div class="brand"><div class="mark">F</div>Flipsta<span class="staff-tag">STAFF</span></div>
+    <div class="topbar-search">
+      <div class="topbar-search-wrap">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" placeholder="Search sellers, tickets, orders, partners…" />
+      </div>
+    </div>
+    <div class="topbar-right">
+      <button class="icon-btn" title="Alerts">🔔<span class="dot-badge">5</span></button>
+      <div class="user-chip">
+        <div class="avatar">S</div>
+        <span style="font-weight:700;">Steven</span>
+        <span class="role-pill">ADMIN</span>
+      </div>
+    </div>
+  </div>
+  <div class="topbar-tabs-row">
+    <nav class="tabs" id="tabs">
+      <button class="active" data-page="overview">Overview</button>
+      <button data-page="sellers">Sellers</button>
+      <button data-page="tickets">Tickets</button>
+      <button data-page="partners">Partners</button>
+      <button data-page="risk">Risk &amp; Fraud</button>
+      <button data-page="audit">Audit Log</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+  <!-- ===================== OVERVIEW ===================== -->
+  <section class="page active" id="page-overview">
+    <h1 class="page-title">Platform overview</h1>
+    <p class="page-sub">The one screen to check first — live numbers, not a snapshot.</p>
+
+    <div class="grid grid-6" style="margin-bottom:16px;">
+      <div class="stat-tile"><div class="label">GMV (30d)</div><div class="value">£184,920</div><div class="delta up">▲ 12%</div></div>
+      <div class="stat-tile"><div class="label">Active auctions</div><div class="value">37</div><div class="delta" style="color:var(--text-dim);">avg clock 34m</div></div>
+      <div class="stat-tile"><div class="label">Escrow held</div><div class="value">£41,650</div><div class="delta" style="color:var(--text-dim);">312 orders</div></div>
+      <div class="stat-tile"><div class="label">Blended take rate</div><div class="value">9.4%</div><div class="delta up">▲ 0.3pt</div></div>
+      <div class="stat-tile"><div class="label">Open tickets</div><div class="value">14</div><div class="delta down">3 breaching SLA</div></div>
+      <div class="stat-tile"><div class="label">Risk flags</div><div class="value">4</div><div class="delta down">2 high severity</div></div>
+    </div>
+
+    <div class="grid grid-3">
+      <div class="card">
+        <div class="card-head"><h3>Sellers by tier</h3><span class="hint">1,204 total</span></div>
+        <table>
+          <thead><tr><th>Tier</th><th>Sellers</th><th>Share of GMV</th><th></th></tr></thead>
+          <tbody>
+            <tr><td><span class="pill pill-muted">Standard</span></td><td>842</td><td>38%</td><td></td></tr>
+            <tr><td><span class="pill pill-blue">Pro</span></td><td>301</td><td>41%</td><td></td></tr>
+            <tr><td><span class="pill pill-amber">Elite</span></td><td>52</td><td>15%</td><td></td></tr>
+            <tr><td><span class="pill pill-green">Trade Seller</span></td><td>9</td><td>6%</td><td></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>Needs attention</h3></div>
+        <div style="display:flex; flex-direction:column; gap:10px; font-size:12.5px;">
+          <div><span class="sev-dot sev-high"></span><b>3 tickets</b> breaching SLA — see Tickets</div>
+          <div><span class="sev-dot sev-high"></span><b>1 seller</b> near concentration cap — see Risk &amp; Fraud</div>
+          <div><span class="sev-dot sev-med"></span><b>2 buyback claims</b> flagged for review</div>
+          <div><span class="sev-dot sev-low"></span><b>1 partner application</b> pending approval</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== SELLERS ===================== -->
+  <section class="page" id="page-sellers">
+    <h1 class="page-title">Seller management</h1>
+    <p class="page-sub">Search, review, and act on any seller account.</p>
+
+    <div class="toolbar">
+      <input type="text" id="sellerSearch" placeholder="Search by name or email…" oninput="filterSellers()" />
+      <select id="sellerTierFilter" onchange="filterSellers()">
+        <option value="">All tiers</option>
+        <option>Standard</option><option>Pro</option><option>Elite</option><option>Trade Seller</option>
+      </select>
+      <select id="sellerStatusFilter" onchange="filterSellers()">
+        <option value="">All statuses</option>
+        <option>Active</option><option>Under review</option><option>Suspended</option>
+      </select>
+      <div class="spacer"></div>
+      <span class="hint" id="sellerCount"></span>
+    </div>
+
+    <div class="card" style="padding:0; overflow-x:auto;">
+      <table id="sellersTable">
+        <thead><tr><th>Seller</th><th>Tier</th><th>GMV (90d)</th><th>Strikes</th><th>Buyback claims</th><th>Status</th><th></th></tr></thead>
+        <tbody id="sellersBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===================== TICKETS ===================== -->
+  <section class="page" id="page-tickets">
+    <h1 class="page-title">Support &amp; disputes</h1>
+    <p class="page-sub">Every buyer/seller contact for an order goes through here — the only channel, by design (Section 5's blind-teaser protection depends on it).</p>
+
+    <div class="toolbar">
+      <button class="chip-filter active" data-cat="all" onclick="filterTickets('all',this)">All</button>
+      <button class="chip-filter" data-cat="Payment dispute" onclick="filterTickets('Payment dispute',this)">Payment dispute</button>
+      <button class="chip-filter" data-cat="Buyback claim" onclick="filterTickets('Buyback claim',this)">Buyback claim</button>
+      <button class="chip-filter" data-cat="Item not as described" onclick="filterTickets('Item not as described',this)">Item not as described</button>
+      <button class="chip-filter" data-cat="Courier issue" onclick="filterTickets('Courier issue',this)">Courier issue</button>
+      <button class="chip-filter" data-cat="Account" onclick="filterTickets('Account',this)">Account</button>
+      <div class="spacer"></div>
+      <span class="hint" id="ticketCount"></span>
+    </div>
+
+    <div class="card" style="padding:0; overflow-x:auto;">
+      <table id="ticketsTable">
+        <thead><tr><th>Ticket</th><th>Category</th><th>Priority</th><th>Requester</th><th>Assigned</th><th>SLA</th><th>Status</th><th></th></tr></thead>
+        <tbody id="ticketsBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===================== PARTNERS ===================== -->
+  <section class="page" id="page-partners">
+    <h1 class="page-title">Supplier &amp; courier partners</h1>
+    <p class="page-sub">Trade/wholesale suppliers and courier affiliate programmes, in one place.</p>
+
+    <div class="toolbar">
+      <button class="chip-filter active" data-t="all" onclick="filterPartners('all',this)">All</button>
+      <button class="chip-filter" data-t="Supplier" onclick="filterPartners('Supplier',this)">Suppliers</button>
+      <button class="chip-filter" data-t="Courier" onclick="filterPartners('Courier',this)">Couriers</button>
+      <div class="spacer"></div>
+      <button class="btn btn-primary btn-sm" onclick="openModal('partnerModal')">+ Add partner</button>
+    </div>
+
+    <div class="card" style="padding:0; overflow-x:auto;">
+      <table id="partnersTable">
+        <thead><tr><th>Partner</th><th>Type</th><th>Commission / Affiliate code</th><th>Status</th><th>Joined</th><th></th></tr></thead>
+        <tbody id="partnersBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===================== RISK & FRAUD ===================== -->
+  <section class="page" id="page-risk">
+    <h1 class="page-title">Risk &amp; fraud monitoring</h1>
+    <p class="page-sub">Concentration-risk flags (Section 8.4), buyback abuse patterns (Section 11.6), and unusual bidding — surfaced for a human to review, not auto-actioned.</p>
+
+    <div class="card" style="padding:0; overflow-x:auto;">
+      <table id="riskTable">
+        <thead><tr><th>Severity</th><th>Type</th><th>Seller</th><th>Detail</th><th>Flagged</th><th></th></tr></thead>
+        <tbody id="riskBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===================== AUDIT LOG ===================== -->
+  <section class="page" id="page-audit">
+    <h1 class="page-title">Audit log</h1>
+    <p class="page-sub">Every admin action, logged with who, when, and why.</p>
+
+    <div class="card" style="padding:0; overflow-x:auto;">
+      <table>
+        <thead><tr><th>Time</th><th>Admin</th><th>Action</th><th>Target</th><th>Reason</th></tr></thead>
+        <tbody id="auditBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<!-- ===== Seller detail modal ===== -->
+<div class="modal-backdrop" id="sellerModal">
+  <div class="modal" style="max-width:700px;">
+    <div class="modal-head">
+      <div>
+        <h2 id="sModalName">—</h2>
+        <span class="hint" id="sModalSub">—</span>
+      </div>
+      <button class="modal-close" onclick="closeModal('sellerModal')">✕</button>
+    </div>
+    <div class="detail-tabs">
+      <button class="active" data-dt="sProfile" onclick="showDetailTab('sProfile', this)">Profile</button>
+      <button data-dt="sListings" onclick="showDetailTab('sListings', this)">Listings</button>
+      <button data-dt="sBuyback" onclick="showDetailTab('sBuyback', this)">Buyback claims</button>
+      <button data-dt="sVerify" onclick="showDetailTab('sVerify', this)">Verification</button>
+    </div>
+    <div class="detail-pane active" id="sProfile">
+      <div class="kv">
+        <div class="k">Tier</div><div id="sTier">—</div>
+        <div class="k">GMV (90d)</div><div id="sGmv">—</div>
+        <div class="k">Strikes</div><div id="sStrikes">—</div>
+        <div class="k">Member since</div><div id="sSince">—</div>
+        <div class="k">Rating</div><div id="sRating">—</div>
+      </div>
+    </div>
+    <div class="detail-pane" id="sListings">
+      <table><thead><tr><th>Item</th><th>Price</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td>LEGO Technic 42211</td><td>£79.00</td><td><span class="pill pill-green">Live</span></td></tr>
+        <tr><td>Sony WH-1000XM5</td><td>£205.00</td><td><span class="pill pill-blue">Sold</span></td></tr>
+        <tr><td>Nike Air Max 1 UK9</td><td>£178.00</td><td><span class="pill pill-muted">Draft</span></td></tr>
+      </tbody></table>
+    </div>
+    <div class="detail-pane" id="sBuyback">
+      <table><thead><tr><th>Item</th><th>Filed</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td>Ninja Foodi Mini</td><td>3 days ago</td><td><span class="pill pill-amber">Awaiting at-cost window</span></td></tr>
+      </tbody></table>
+    </div>
+    <div class="detail-pane" id="sVerify">
+      <div class="kv">
+        <div class="k">ID verified</div><div><span class="pill pill-green">Yes</span></div>
+        <div class="k">Bank account</div><div><span class="pill pill-green">Connected (Stripe)</span></div>
+        <div class="k">Tax info</div><div><span class="pill pill-green">Collected — HMRC reportable</span></div>
+      </div>
+    </div>
+    <div style="display:flex; gap:8px; margin-top:16px; border-top:1px solid var(--border); padding-top:16px;">
+      <button class="btn btn-ghost btn-sm" onclick="fakeAction('Tier override saved')">Override tier</button>
+      <button class="btn btn-ghost btn-sm" onclick="fakeAction('Seller flagged for review')">Flag for review</button>
+      <div class="spacer"></div>
+      <button class="btn btn-danger btn-sm" onclick="fakeAction('Seller suspended')">Suspend</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Ticket detail modal ===== -->
+<div class="modal-backdrop" id="ticketModal">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h2 id="tModalSubject">—</h2>
+        <span class="hint" id="tModalMeta">—</span>
+      </div>
+      <button class="modal-close" onclick="closeModal('ticketModal')">✕</button>
+    </div>
+    <div class="card" style="background:var(--surface-2); margin-bottom:14px;">
+      <p style="margin:0; font-size:13px;" id="tModalBody">—</p>
+    </div>
+    <label class="flabel">Canned responses</label>
+    <div class="canned-row">
+      <button class="btn btn-ghost btn-sm" onclick="insertCanned()">Request proof of listing</button>
+      <button class="btn btn-ghost btn-sm" onclick="insertCanned()">Courier delay — standard reply</button>
+      <button class="btn btn-ghost btn-sm" onclick="insertCanned()">Buyback window explanation</button>
+    </div>
+    <label class="flabel">Internal note (not visible to user)</label>
+    <textarea id="tNote" placeholder="Add a note for the team…"></textarea>
+    <div style="display:flex; gap:8px; margin-top:16px; align-items:center;">
+      <select class="finput" id="tStatusSelect" style="max-width:180px;">
+        <option>Open</option><option>In progress</option><option>Waiting on user</option><option>Resolved</option>
+      </select>
+      <div class="spacer"></div>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('ticketModal')">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="resolveTicket()">Save &amp; update</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Add partner modal ===== -->
+<div class="modal-backdrop" id="partnerModal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-head">
+      <div><h2>Add partner</h2><span class="hint">Supplier or courier affiliate</span></div>
+      <button class="modal-close" onclick="closeModal('partnerModal')">✕</button>
+    </div>
+    <label class="flabel">Partner name</label>
+    <input type="text" class="finput" id="pName" placeholder="e.g. Screwfix Clearance, DPD Affiliate" />
+    <label class="flabel">Type</label>
+    <select class="finput" id="pType"><option>Supplier</option><option>Courier</option></select>
+    <label class="flabel">Commission rate / affiliate code</label>
+    <input type="text" class="finput" id="pCommission" placeholder="e.g. 10% tiered, or SHOPPER-DPD-2214" />
+    <div style="display:flex; gap:8px; margin-top:18px;">
+      <div class="spacer"></div>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('partnerModal')">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="addPartner()">Add as pending</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  // ---------- Tab navigation ----------
+  document.querySelectorAll('nav.tabs button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('main > .page').forEach(p=>p.classList.remove('active'));
+      document.getElementById('page-'+btn.dataset.page).classList.add('active');
+    });
+  });
+
+  function showToast(msg){
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(()=>t.classList.remove('show'), 2200);
+  }
+  function fakeAction(msg){ showToast(msg); closeModal('sellerModal'); }
+  function openModal(id){ document.getElementById(id).classList.add('open'); }
+  function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+  document.querySelectorAll('.modal-backdrop').forEach(m=>{
+    m.addEventListener('click', e=>{ if(e.target===m) closeModal(m.id); });
+  });
+  function showDetailTab(id, btn){
+    btn.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    btn.closest('.modal').querySelectorAll('.detail-pane').forEach(p=>p.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+  }
+
+  // ---------- Sellers ----------
+  const sellers = [
+    {name:'Marcus Reid', email:'marcus.r@example.co.uk', tier:'Pro', gmv:'£4,210', strikes:0, buyback:1, status:'Active', since:'Feb 2026', rating:'4.9 (112)'},
+    {name:'Aisha Khan', email:'aisha.k@example.co.uk', tier:'Elite', gmv:'£11,980', strikes:0, buyback:0, status:'Active', since:'Nov 2025', rating:'5.0 (301)'},
+    {name:'Callum Boyd', email:'c.boyd@example.co.uk', tier:'Standard', gmv:'£980', strikes:1, buyback:2, status:'Under review', since:'Jun 2026', rating:'4.2 (18)'},
+    {name:'Priya Shah', email:'priya.shah@example.co.uk', tier:'Pro', gmv:'£6,340', strikes:0, buyback:0, status:'Active', since:'Jan 2026', rating:'4.8 (204)'},
+    {name:'DealStock Ltd', email:'accounts@dealstock.co.uk', tier:'Trade Seller', gmv:'£28,500', strikes:0, buyback:0, status:'Active', since:'Apr 2026', rating:'4.7 (55)'},
+    {name:'Jamie Foulkes', email:'jamie.f@example.co.uk', tier:'Standard', gmv:'£410', strikes:2, buyback:3, status:'Suspended', since:'Aug 2025', rating:'3.1 (9)'},
+    {name:'Nadia Petrov', email:'nadia.p@example.co.uk', tier:'Elite', gmv:'£9,120', strikes:0, buyback:1, status:'Active', since:'Mar 2026', rating:'4.9 (167)'},
+  ];
+  function statusPill(s){
+    if(s==='Active') return '<span class="pill pill-green">Active</span>';
+    if(s==='Under review') return '<span class="pill pill-amber">Under review</span>';
+    return '<span class="pill pill-red">Suspended</span>';
+  }
+  function tierPill(t){
+    const map = {Standard:'pill-muted', Pro:'pill-blue', Elite:'pill-amber', 'Trade Seller':'pill-green'};
+    return `<span class="pill ${map[t]||'pill-muted'}">${t}</span>`;
+  }
+  function renderSellers(list){
+    const body = document.getElementById('sellersBody');
+    document.getElementById('sellerCount').textContent = list.length + ' sellers';
+    if(!list.length){ body.innerHTML = '<tr class="empty-row"><td colspan="7">No sellers match those filters.</td></tr>'; return; }
+    body.innerHTML = list.map((s,i)=>`
+      <tr>
+        <td><b>${s.name}</b><br><span class="hint">${s.email}</span></td>
+        <td>${tierPill(s.tier)}</td>
+        <td>${s.gmv}</td>
+        <td>${s.strikes}</td>
+        <td>${s.buyback}</td>
+        <td>${statusPill(s.status)}</td>
+        <td><button class="btn btn-ghost btn-sm" onclick="openSeller(${i})">View</button></td>
+      </tr>`).join('');
+  }
+  function filterSellers(){
+    const q = document.getElementById('sellerSearch').value.toLowerCase();
+    const tier = document.getElementById('sellerTierFilter').value;
+    const status = document.getElementById('sellerStatusFilter').value;
+    renderSellers(sellers.filter(s=>
+      (!q || s.name.toLowerCase().includes(q) || s.email.toLowerCase().includes(q)) &&
+      (!tier || s.tier===tier) && (!status || s.status===status)
+    ));
+  }
+  function openSeller(i){
+    const s = sellers[i];
+    document.getElementById('sModalName').textContent = s.name;
+    document.getElementById('sModalSub').textContent = s.email + ' · ' + s.status;
+    document.getElementById('sTier').innerHTML = tierPill(s.tier);
+    document.getElementById('sGmv').textContent = s.gmv;
+    document.getElementById('sStrikes').textContent = s.strikes;
+    document.getElementById('sSince').textContent = s.since;
+    document.getElementById('sRating').textContent = s.rating;
+    openModal('sellerModal');
+  }
+  renderSellers(sellers);
+
+  // ---------- Tickets ----------
+  const tickets = [
+    {id:'#4821', subject:'Buyback claim — item unsold after 14 days', category:'Buyback claim', priority:'High', requester:'Callum Boyd', assigned:'Steven', sla:'2h left', status:'Open', body:'Seller has filed a buyback claim on a Ninja Foodi Mini. Proof of listing attached. At-cost offer window opened this morning — needs review before SLA breach.'},
+    {id:'#4819', subject:'Payment not released after delivery confirmed', category:'Payment dispute', priority:'High', requester:'Priya Shah', assigned:'Unassigned', sla:'Breaching', status:'Open', body:'Buyer confirmed delivery 3 days ago but escrow funds have not released. Likely a webhook delay — needs a manual release check.'},
+    {id:'#4815', subject:'Item arrived with a scratch, not as described', category:'Item not as described', priority:'Medium', requester:'Buyer — J. Ahmed', assigned:'Leah', sla:'1d left', status:'In progress', body:'Buyer says the headphones arrived with a visible scratch not shown in listing photos. Photos attached from buyer.'},
+    {id:'#4810', subject:'DPD label failed to generate', category:'Courier issue', priority:'Low', requester:'Aisha Khan', assigned:'Leah', sla:'2d left', status:'Waiting on user', status:'Waiting on user', sla:'2d left', body:'Seller reports the DPD label button in their dashboard is failing. Asked them to confirm which order ID.'},
+    {id:'#4802', subject:'Cannot verify bank details for payout', category:'Account', priority:'Medium', requester:'Nadia Petrov', assigned:'Steven', sla:'4h left', status:'In progress', body:'Stripe Connect verification stuck on bank details step. Likely a sort-code mismatch — needs a support ticket with Stripe.'},
+    {id:'#4798', subject:'Suspected duplicate buyback claim', category:'Buyback claim', priority:'High', requester:'Jamie Foulkes', assigned:'Steven', sla:'Resolved', status:'Resolved', body:'Third buyback claim from this seller in 60 days — cross-referenced with the Risk & Fraud flag on this account.'},
+  ];
+  function priorityPill(p){
+    if(p==='High') return '<span class="pill pill-red">High</span>';
+    if(p==='Medium') return '<span class="pill pill-amber">Medium</span>';
+    return '<span class="pill pill-muted">Low</span>';
+  }
+  function ticketStatusPill(s){
+    const map = {Open:'pill-red','In progress':'pill-blue','Waiting on user':'pill-amber',Resolved:'pill-green'};
+    return `<span class="pill ${map[s]||'pill-muted'}">${s}</span>`;
+  }
+  let currentTicketIdx = null;
+  function renderTickets(list){
+    const body = document.getElementById('ticketsBody');
+    document.getElementById('ticketCount').textContent = list.length + ' tickets';
+    if(!list.length){ body.innerHTML = '<tr class="empty-row"><td colspan="8">No tickets in this category.</td></tr>'; return; }
+    body.innerHTML = list.map(t=>{
+      const i = tickets.indexOf(t);
+      return `<tr>
+        <td><b>${t.id}</b><br><span class="hint">${t.subject}</span></td>
+        <td>${t.category}</td>
+        <td>${priorityPill(t.priority)}</td>
+        <td>${t.requester}</td>
+        <td>${t.assigned}</td>
+        <td style="color:${t.sla==='Breaching'?'var(--red)':'var(--text-dim)'}; font-weight:${t.sla==='Breaching'?'700':'400'};">${t.sla}</td>
+        <td>${ticketStatusPill(t.status)}</td>
+        <td><button class="btn btn-ghost btn-sm" onclick="openTicket(${i})">Open</button></td>
+      </tr>`;
+    }).join('');
+  }
+  function filterTickets(cat, btn){
+    document.querySelectorAll('#page-tickets .chip-filter').forEach(c=>c.classList.remove('active'));
+    btn.classList.add('active');
+    renderTickets(cat==='all' ? tickets : tickets.filter(t=>t.category===cat));
+  }
+  function openTicket(i){
+    currentTicketIdx = i;
+    const t = tickets[i];
+    document.getElementById('tModalSubject').textContent = t.id + ' — ' + t.subject;
+    document.getElementById('tModalMeta').textContent = t.category + ' · ' + t.requester + ' · assigned to ' + t.assigned;
+    document.getElementById('tModalBody').textContent = t.body;
+    document.getElementById('tNote').value = '';
+    document.getElementById('tStatusSelect').value = t.status;
+    openModal('ticketModal');
+  }
+  function insertCanned(){
+    document.getElementById('tNote').value += (document.getElementById('tNote').value?'\n':'') + 'Sent canned response to requester.';
+  }
+  function resolveTicket(){
+    if(currentTicketIdx===null) return;
+    tickets[currentTicketIdx].status = document.getElementById('tStatusSelect').value;
+    closeModal('ticketModal');
+    renderTickets(tickets);
+    showToast('Ticket ' + tickets[currentTicketIdx].id + ' updated to "' + tickets[currentTicketIdx].status + '"');
+  }
+  renderTickets(tickets);
+
+  // ---------- Partners ----------
+  const partners = [
+    {name:'Screwfix Clearance', type:'Supplier', commission:'8–12% tiered', status:'Active', joined:'May 2026'},
+    {name:'DPD Affiliate (Shopper.com)', type:'Courier', commission:'SHOPPER-DPD-2214', status:'Active', joined:'Mar 2026'},
+    {name:'Evri Business', type:'Courier', commission:'EVRI-AFF-0091', status:'Active', joined:'Mar 2026'},
+    {name:'Northgate Liquidation', type:'Supplier', commission:'10% flat', status:'Pending', joined:'Aug 2026'},
+  ];
+  function partnerStatusPill(s){
+    if(s==='Active') return '<span class="pill pill-green">Active</span>';
+    if(s==='Pending') return '<span class="pill pill-amber">Pending approval</span>';
+    return '<span class="pill pill-red">Suspended</span>';
+  }
+  function renderPartners(list){
+    document.getElementById('partnersBody').innerHTML = list.map(p=>`
+      <tr>
+        <td><b>${p.name}</b></td>
+        <td><span class="pill ${p.type==='Supplier'?'pill-blue':'pill-muted'}">${p.type}</span></td>
+        <td>${p.commission}</td>
+        <td>${partnerStatusPill(p.status)}</td>
+        <td>${p.joined}</td>
+        <td><button class="btn btn-ghost btn-sm" onclick="showToast('Opening ${p.name} — contract terms view (mockup)')">View</button></td>
+      </tr>`).join('');
+  }
+  function filterPartners(type, btn){
+    document.querySelectorAll('#page-partners .chip-filter').forEach(c=>c.classList.remove('active'));
+    btn.classList.add('active');
+    renderPartners(type==='all' ? partners : partners.filter(p=>p.type===type));
+  }
+  function addPartner(){
+    const name = document.getElementById('pName').value.trim();
+    if(!name){ showToast('Enter a partner name first'); return; }
+    partners.unshift({name, type:document.getElementById('pType').value, commission:document.getElementById('pCommission').value||'—', status:'Pending', joined:'Today'});
+    renderPartners(partners);
+    closeModal('partnerModal');
+    document.getElementById('pName').value=''; document.getElementById('pCommission').value='';
+    showToast('Partner added as pending approval');
+  }
+  renderPartners(partners);
+
+  // ---------- Risk & Fraud ----------
+  const riskItems = [
+    {sev:'high', type:'Concentration risk', seller:'Aisha Khan', detail:'Approaching the per-opportunity exposure cap (Section 8.4) on Collectibles category.'},
+    {sev:'high', type:'Buyback abuse pattern', seller:'Jamie Foulkes', detail:'3rd buyback claim in 60 days — below the platform average sell-through window.'},
+    {sev:'med', type:'Unusual bidding', seller:'Callum Boyd', detail:'Consistently outbid by <£1 on high-margin opportunities — possible coordinated sniping.'},
+    {sev:'low', type:'Buyback claim flagged', seller:'Marcus Reid', detail:'At-cost offer window closed with no offers — routine review before payout.'},
+  ];
+  function sevLabel(s){ return s==='high' ? 'High' : s==='med' ? 'Medium' : 'Low'; }
+  function renderRisk(){
+    document.getElementById('riskBody').innerHTML = riskItems.map((r,i)=>`
+      <tr id="risk-${i}">
+        <td><span class="sev-dot sev-${r.sev}"></span>${sevLabel(r.sev)}</td>
+        <td>${r.type}</td>
+        <td><b>${r.seller}</b></td>
+        <td class="hint">${r.detail}</td>
+        <td class="hint">Today</td>
+        <td style="display:flex; gap:6px;">
+          <button class="btn btn-ghost btn-sm" onclick="showToast('Investigation opened for ${r.seller}')">Investigate</button>
+          <button class="btn btn-danger btn-sm" onclick="dismissRisk(${i})">Dismiss</button>
+        </td>
+      </tr>`).join('');
+  }
+  function dismissRisk(i){
+    const row = document.getElementById('risk-'+i);
+    row.classList.add('fade-out');
+    setTimeout(()=>{ riskItems.splice(i,1); renderRisk(); showToast('Flag dismissed'); }, 280);
+  }
+  renderRisk();
+
+  // ---------- Audit log ----------
+  const audit = [
+    {t:'Today 09:41', who:'Steven', action:'Resolved ticket', target:'#4798', reason:'Duplicate buyback claim — confirmed and declined'},
+    {t:'Yesterday 17:02', who:'Leah', action:'Suspended seller', target:'Jamie Foulkes', reason:'2nd strike — buyback abuse pattern'},
+    {t:'Yesterday 11:15', who:'Steven', action:'Approved partner', target:'DPD Affiliate', reason:'Contract signed, affiliate code live'},
+    {t:'2 days ago', who:'Leah', action:'Manual escrow release', target:'Order #10432', reason:'Webhook delay confirmed, delivery proof on file'},
+    {t:'3 days ago', who:'Steven', action:'Tier override', target:'Priya Shah', reason:'Goodwill upgrade to Pro after platform payment delay'},
+  ];
+  document.getElementById('auditBody').innerHTML = audit.map(a=>`
+    <tr class="audit-row">
+      <td class="hint">${a.t}</td>
+      <td class="who">${a.who}</td>
+      <td>${a.action}</td>
+      <td>${a.target}</td>
+      <td class="hint">${a.reason}</td>
+    </tr>`).join('');
+</script>
+</body>
+</html>

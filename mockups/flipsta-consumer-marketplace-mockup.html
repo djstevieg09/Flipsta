@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Flipsta — Marketplace (Consumer Mockup)</title>
+<style>
+  :root{
+    --bg:#0a0e17;
+    --surface:#121729;
+    --surface-2:#1a2138;
+    --surface-3:#212a45;
+    --border:#262f4a;
+    --text:#eef1f8;
+    --text-dim:#8891ab;
+    --text-faint:#5b6a8f;
+    --brand:#5b7cfa;
+    --brand-2:#22d3ee;
+    --gold:#f2b545;
+    --gold-2:#f59e0b;
+    --green:#2fd77a;
+    --red:#f2495c;
+    --amber:#f2b545;
+    --radius:12px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; background:var(--bg); color:var(--text); }
+  body{ font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased; }
+  a{ color:inherit; text-decoration:none; }
+  button{ font-family:inherit; cursor:pointer; }
+  ::selection{ background:var(--brand); color:#fff; }
+
+  /* ---------- Top bar ---------- */
+  header.topbar{
+    position:sticky; top:0; z-index:50;
+    display:flex; flex-direction:column;
+    background:rgba(10,14,23,0.94); backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--border);
+  }
+  .topbar-main{ display:flex; align-items:center; gap:20px; height:64px; padding:0 24px; }
+  .topbar-tabs-row{ display:flex; justify-content:center; padding:0 24px; border-top:1px solid var(--border); }
+  .brand{ display:flex; align-items:center; gap:9px; font-weight:800; font-size:18px; letter-spacing:-0.02em; white-space:nowrap; flex-shrink:0; }
+  .brand .mark{ width:26px; height:26px; border-radius:7px; background:linear-gradient(135deg, var(--brand), var(--brand-2)); display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:900; color:#fff; }
+  .searchbar{ flex:1; display:flex; justify-content:center; }
+  .searchbar-wrap{ position:relative; width:100%; max-width:480px; }
+  .searchbar-wrap input{ width:100%; background:var(--surface-2); border:1px solid var(--border); border-radius:9px; padding:9px 14px 9px 34px; color:var(--text); font-size:13.5px; font-family:inherit; }
+  .searchbar-wrap input::placeholder{ color:var(--text-faint); }
+  .searchbar-wrap input:focus{ outline:none; border-color:var(--brand-2); }
+  .searchbar-wrap .sicon{ position:absolute; left:11px; top:50%; transform:translateY(-50%); color:var(--text-faint); font-size:13px; }
+  nav.toppages{ display:flex; gap:2px; flex-shrink:0; }
+  nav.toppages button{ background:none; border:none; color:var(--text-dim); font-size:13px; font-weight:600; padding:11px 14px; border-radius:8px; }
+  nav.toppages button:hover{ color:var(--text); background:var(--surface-2); }
+  nav.toppages button.active{ color:var(--text); background:var(--surface-2); }
+  .topbar-right{ display:flex; align-items:center; gap:10px; flex-shrink:0; }
+  .icon-btn{ position:relative; width:36px; height:36px; border-radius:9px; border:1px solid var(--border); background:var(--surface); display:flex; align-items:center; justify-content:center; color:var(--text-dim); font-size:14px; }
+  .icon-btn:hover{ color:var(--text); border-color:var(--surface-3); }
+  .dot-badge{ position:absolute; top:-4px; right:-4px; min-width:16px; height:16px; border-radius:999px; background:var(--brand-2); color:#08131c; font-size:9.5px; display:flex; align-items:center; justify-content:center; border:2px solid var(--bg); font-weight:800; padding:0 3px; }
+  .sell-link{ font-size:12.5px; font-weight:700; color:var(--text-dim); border:1px solid var(--border); border-radius:999px; padding:7px 13px; }
+  .sell-link:hover{ color:var(--text); border-color:var(--brand); }
+  .user-chip{ display:flex; align-items:center; gap:8px; padding:5px 10px 5px 5px; border:1px solid var(--border); border-radius:999px; background:var(--surface); }
+  .avatar{ width:26px; height:26px; border-radius:50%; background:linear-gradient(135deg,#7c8fff,#22d3ee); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; color:#0a0e17; }
+
+  .trust-strip{ background:var(--surface-2); border-bottom:1px solid var(--border); padding:8px 24px; display:flex; gap:26px; justify-content:center; flex-wrap:wrap; font-size:12px; color:var(--text-dim); }
+  .trust-strip b{ color:var(--text); }
+
+  /* ---------- Layout ---------- */
+  main{ max-width:1320px; margin:0 auto; padding:24px 24px 80px; }
+  .page{ display:none; animation:fade .25s ease; }
+  .page.active{ display:block; }
+  @keyframes fade{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);} }
+  h1.page-title{ font-size:21px; margin:0 0 4px; letter-spacing:-0.02em; }
+  p.page-sub{ color:var(--text-dim); margin:0 0 20px; font-size:13.5px; }
+
+  .btn{ border-radius:9px; padding:9px 16px; font-size:13px; font-weight:700; border:1px solid transparent; transition:.15s; }
+  .btn-primary{ background:linear-gradient(135deg,var(--brand),var(--brand-2)); color:#fff; }
+  .btn-primary:hover{ filter:brightness(1.1); }
+  .btn-ghost{ background:var(--surface-2); color:var(--text); border-color:var(--border); }
+  .btn-ghost:hover{ background:var(--surface-3); }
+  .btn-sm{ padding:6px 11px; font-size:12px; border-radius:7px; }
+  .btn-block{ width:100%; }
+  .btn:disabled{ opacity:.45; cursor:not-allowed; }
+
+  .card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:18px; }
+  .hint{ color:var(--text-dim); font-size:12px; }
+
+  .pill{ display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:800; padding:3px 9px; border-radius:999px; letter-spacing:.02em; }
+  .pill-buy{ background:rgba(47,215,122,.15); color:var(--green); }
+  .pill-muted{ background:var(--surface-3); color:var(--text-dim); }
+
+  /* ---------- Shop layout ---------- */
+  .shop-layout{ display:grid; grid-template-columns:220px 1fr; gap:24px; align-items:start; }
+  @media(max-width:860px){ .shop-layout{ grid-template-columns:1fr; } }
+  .filters .fgroup{ margin-bottom:22px; }
+  .filters h4{ font-size:11.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-dim); margin:0 0 10px; }
+  .cat-link{ display:flex; justify-content:space-between; padding:7px 9px; border-radius:7px; font-size:13px; color:var(--text-dim); cursor:pointer; }
+  .cat-link:hover{ background:var(--surface-2); color:var(--text); }
+  .cat-link.active{ background:var(--surface-2); color:var(--text); font-weight:700; }
+  .cat-link span.cnt{ color:var(--text-faint); font-weight:400; }
+  .chk-row{ display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--text-dim); margin-bottom:8px; }
+  .price-inputs{ display:flex; align-items:center; gap:8px; }
+  .price-inputs input{ width:100%; background:var(--surface-2); border:1px solid var(--border); border-radius:7px; padding:7px 8px; color:var(--text); font-size:12.5px; }
+
+  .shop-toolbar{ display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+  .shop-toolbar select{ background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:7px 10px; color:var(--text); font-size:12.5px; }
+
+  .product-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:16px; }
+  @media(max-width:1150px){ .product-grid{ grid-template-columns:repeat(3,1fr);} }
+  @media(max-width:860px){ .product-grid{ grid-template-columns:repeat(2,1fr);} }
+  @media(max-width:520px){ .product-grid{ grid-template-columns:1fr;} }
+  .p-card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; cursor:pointer; transition:.15s; display:flex; flex-direction:column; }
+  .p-card:hover{ border-color:var(--brand); transform:translateY(-2px); }
+  .p-thumb{ height:130px; position:relative; display:flex; align-items:center; justify-content:center; color:var(--text-faint); font-size:10.5px; font-weight:700; letter-spacing:.04em; }
+  .p-thumb svg{ width:58px; height:58px; }
+  .p-thumb.big svg{ width:92px; height:92px; }
+  .cart-thumb svg{ width:26px; height:26px; }
+  .cond-tag{ position:absolute; top:8px; left:8px; font-size:9.5px; font-weight:800; background:var(--surface); border:1px solid var(--border); padding:3px 7px; border-radius:999px; color:var(--text-dim); }
+  .p-body{ padding:12px 13px 14px; display:flex; flex-direction:column; gap:6px; flex:1; }
+  .p-title{ font-size:13px; font-weight:700; line-height:1.3; min-height:34px; }
+  .p-cat{ font-size:11px; color:var(--text-faint); }
+  .p-price-row{ display:flex; justify-content:space-between; align-items:baseline; margin-top:2px; }
+  .p-price{ font-size:16px; font-weight:800; }
+  .p-sellers{ font-size:11px; color:var(--text-dim); }
+  .p-trust{ font-size:10.5px; color:var(--green); display:flex; align-items:center; gap:4px; }
+  .p-actions{ display:flex; gap:6px; margin-top:6px; }
+
+  .stars{ color:var(--gold); font-size:11px; letter-spacing:1px; }
+
+  /* ---------- Modal ---------- */
+  .modal-backdrop{ position:fixed; inset:0; background:rgba(5,7,13,.72); backdrop-filter:blur(2px); display:none; align-items:center; justify-content:center; z-index:100; padding:20px; }
+  .modal-backdrop.open{ display:flex; }
+  .modal{ background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:24px; width:100%; max-width:520px; max-height:88vh; overflow-y:auto; }
+  .modal.wide{ max-width:640px; }
+  .modal-close{ float:right; background:none; border:none; color:var(--text-dim); font-size:20px; line-height:1; }
+  .field{ margin-bottom:14px; }
+  .field label{ display:block; font-size:12px; color:var(--text-dim); margin-bottom:6px; font-weight:600; }
+  .field input, .field select{ width:100%; background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:9px 11px; color:var(--text); font-size:13.5px; }
+  .field-row{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+
+  table{ width:100%; border-collapse:collapse; font-size:13px; }
+  th{ text-align:left; color:var(--text-dim); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:.03em; padding:8px 8px; border-bottom:1px solid var(--border); }
+  td{ padding:10px 8px; border-bottom:1px solid var(--border); }
+  tr:last-child td{ border-bottom:none; }
+
+  .offer-row{ display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-bottom:1px solid var(--border); font-size:13px; }
+  .offer-row:last-child{ border-bottom:none; }
+
+  .courier-card{ border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; cursor:pointer; }
+  .courier-card.selected{ border-color:var(--brand); background:rgba(91,124,250,.08); }
+
+  .cart-item{ display:flex; gap:10px; align-items:center; padding:10px 0; border-bottom:1px solid var(--border); }
+  .cart-item:last-child{ border-bottom:none; }
+  .cart-thumb{ width:48px; height:48px; border-radius:8px; background:var(--surface-3); flex-shrink:0; display:flex; align-items:center; justify-content:center; }
+
+  .toast{ position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--surface-3); border:1px solid var(--brand); color:var(--text); padding:11px 18px; border-radius:9px; font-size:13px; font-weight:600; opacity:0; transition:.25s; z-index:200; }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+  .banner{ background:linear-gradient(120deg, rgba(91,124,250,.15), rgba(34,211,238,.08)); border:1px solid var(--border); border-radius:14px; padding:20px 24px; display:flex; justify-content:space-between; align-items:center; margin-bottom:22px; flex-wrap:wrap; gap:12px; }
+  .banner h2{ margin:0 0 4px; font-size:17px; }
+
+  .want-card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px; }
+  .status-pill{ font-size:11px; font-weight:800; padding:3px 9px; border-radius:999px; }
+  .status-prep{ background:rgba(242,181,69,.15); color:var(--amber); }
+  .status-ship{ background:rgba(91,124,250,.18); color:#9db0ff; }
+  .status-done{ background:rgba(47,215,122,.15); color:var(--green); }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-main">
+    <div class="brand"><div class="mark">F</div>Flipsta</div>
+    <div class="searchbar">
+      <div class="searchbar-wrap">
+        <span class="sicon">🔍</span>
+        <input placeholder="Search trainers, LEGO, tech, collectibles…">
+      </div>
+    </div>
+    <div class="topbar-right">
+      <a class="sell-link" onclick="showToast('That\'s the reseller side — see the Pro/Standard/Elite dashboard mockups')">Sell on Flipsta</a>
+      <button class="icon-btn" title="Basket" onclick="openModal('cartModal')">🛒<span class="dot-badge" id="cartCount">0</span></button>
+      <div class="user-chip"><div class="avatar">J</div><span style="font-weight:700;">Jordan</span></div>
+    </div>
+  </div>
+  <div class="topbar-tabs-row">
+    <nav class="toppages" id="toppages">
+      <button class="active" data-page="shop">Shop</button>
+      <button data-page="wants">Buyer Wants</button>
+      <button data-page="orders">My Orders</button>
+    </nav>
+  </div>
+</header>
+
+<div class="trust-strip">
+  <span>🛡 <b>Buyer Protected</b> — payment held until delivery is confirmed</span>
+  <span>✓ Verified sellers only</span>
+  <span>↩ Free returns within 14 days</span>
+</div>
+
+<main>
+
+  <!-- ===================== SHOP ===================== -->
+  <section class="page active" id="page-shop">
+    <div class="banner">
+      <div>
+        <h2>This week's find: LEGO Technic 42211, from £74.50</h2>
+        <div class="hint">Retiring set, verified against live market data — 4 sellers, price-time priority means the lowest ask sells first.</div>
+      </div>
+      <button class="btn btn-primary" onclick="openProduct(1)">View deal</button>
+    </div>
+
+    <div class="shop-layout">
+      <div class="filters">
+        <div class="fgroup">
+          <h4>Category</h4>
+          <div id="catList"></div>
+        </div>
+        <div class="fgroup">
+          <h4>Condition</h4>
+          <label class="chk-row"><input type="checkbox" checked> New / sealed</label>
+          <label class="chk-row"><input type="checkbox" checked> Like new</label>
+          <label class="chk-row"><input type="checkbox"> Used</label>
+        </div>
+        <div class="fgroup">
+          <h4>Price</h4>
+          <div class="price-inputs"><input placeholder="Min"><span class="hint">–</span><input placeholder="Max"></div>
+        </div>
+        <div class="fgroup">
+          <h4>Trust</h4>
+          <label class="chk-row"><input type="checkbox" checked> Buyer Protected only</label>
+        </div>
+      </div>
+
+      <div>
+        <div class="shop-toolbar">
+          <div class="hint" id="resultCount">10 results</div>
+          <select><option>Sort: Recommended</option><option>Price: low to high</option><option>Price: high to low</option><option>Most sellers</option></select>
+        </div>
+        <div class="product-grid" id="productGrid"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== BUYER WANTS ===================== -->
+  <section class="page" id="page-wants">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
+      <div>
+        <h1 class="page-title">Can't find exactly what you want?</h1>
+        <p class="page-sub">Tell us the item and the most you'll pay — sellers who have it compete to offer you their best price.</p>
+      </div>
+      <button class="btn btn-primary" onclick="openModal('postWantModal')">+ Post a Want</button>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;" id="wantsGrid"></div>
+  </section>
+
+  <!-- ===================== MY ORDERS ===================== -->
+  <section class="page" id="page-orders">
+    <h1 class="page-title">My Orders</h1>
+    <p class="page-sub">Funds are only released to the seller once delivery is confirmed.</p>
+    <div class="card" style="padding:0;">
+      <table>
+        <thead><tr><th>Item</th><th>Seller</th><th>Price</th><th>Status</th><th>Tracking</th></tr></thead>
+        <tbody id="ordersBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<!-- ===================== PRODUCT MODAL ===================== -->
+<div class="modal-backdrop" id="productModal" onclick="if(event.target===this) closeModal('productModal')">
+  <div class="modal wide">
+    <button class="modal-close" onclick="closeModal('productModal')">×</button>
+    <div id="productModalBody"></div>
+  </div>
+</div>
+
+<!-- ===================== CART MODAL ===================== -->
+<div class="modal-backdrop" id="cartModal" onclick="if(event.target===this) closeModal('cartModal')">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('cartModal')">×</button>
+    <h3>Your basket</h3>
+    <div id="cartBody"></div>
+    <div style="display:flex; justify-content:space-between; margin:14px 0; font-weight:800; font-size:15px;">
+      <span>Subtotal</span><span id="cartSubtotal">£0.00</span>
+    </div>
+    <button class="btn btn-primary btn-block" onclick="closeModal('cartModal'); openModal('checkoutModal')" id="checkoutBtn" disabled>Checkout</button>
+  </div>
+</div>
+
+<!-- ===================== CHECKOUT MODAL ===================== -->
+<div class="modal-backdrop" id="checkoutModal" onclick="if(event.target===this) closeModal('checkoutModal')">
+  <div class="modal wide">
+    <button class="modal-close" onclick="closeModal('checkoutModal')">×</button>
+    <h3>Checkout</h3>
+    <div class="field"><label>Full name</label><input type="text" placeholder="Jordan Blake"></div>
+    <div class="field-row">
+      <div class="field"><label>Address</label><input type="text" placeholder="14 Elm Street"></div>
+      <div class="field"><label>Postcode</label><input type="text" placeholder="M1 4WX"></div>
+    </div>
+    <div class="field"><label>Delivery method</label>
+      <div class="courier-card selected" onclick="selectCourier(this)"><div><b>DPD</b><div class="hint">4.1/5 rated · tracked, 1-hour window · arrives in 2–3 days</div></div><b>£4.99</b></div>
+      <div class="courier-card" onclick="selectCourier(this)"><div><b>Evri</b><div class="hint">Lower cost option · arrives in 3–5 days</div></div><b>£2.99</b></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Card number</label><input type="text" placeholder="4242 4242 4242 4242"></div>
+      <div class="field"><label>Expiry / CVC</label><input type="text" placeholder="12/28  ·  123"></div>
+    </div>
+    <div class="hint" style="margin-bottom:14px; display:flex; align-items:center; gap:6px;">🔒 Payment held securely until your order is delivered — Flipsta Buyer Protection, powered by Stripe.</div>
+    <button class="btn btn-primary btn-block" onclick="placeOrder()">Place order</button>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="postWantModal" onclick="if(event.target===this) closeModal('postWantModal')">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('postWantModal')">×</button>
+    <h3>Post a Want</h3>
+    <div class="hint" style="margin-bottom:14px;">Sellers who already have this can offer directly — others compete by undercutting, so you get the best price.</div>
+    <div class="field"><label>Item</label><input type="text" placeholder="e.g. Sony WH-1000XM5, black, sealed"></div>
+    <div class="field"><label>Size / condition</label><input type="text" placeholder="e.g. New, sealed"></div>
+    <div class="field"><label>Maximum price you'll pay</label><input type="text" placeholder="£"></div>
+    <button class="btn btn-primary btn-block" onclick="closeModal('postWantModal'); showToast('Want posted — sellers can now offer')">Post want</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  /* ---------------- Nav ---------------- */
+  document.getElementById('toppages').addEventListener('click', e=>{
+    const btn = e.target.closest('button[data-page]');
+    if(!btn) return;
+    document.querySelectorAll('nav.toppages button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    document.getElementById('page-'+btn.dataset.page).classList.add('active');
+  });
+  function openModal(id){ document.getElementById(id).classList.add('open'); }
+  function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+  function showToast(msg){
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(window._toastTimer);
+    window._toastTimer = setTimeout(()=>t.classList.remove('show'), 2200);
+  }
+
+  /* ---------------- Icon illustrations (no external images — kept generic, not brand-accurate) ---------------- */
+  const ICONS = {
+    lego: `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="18" width="34" height="20" rx="3"/><circle cx="15" cy="12" r="3.5"/><circle cx="24" cy="12" r="3.5"/><circle cx="33" cy="12" r="3.5"/><line x1="15" y1="15.5" x2="15" y2="18"/><line x1="24" y1="15.5" x2="24" y2="18"/><line x1="33" y1="15.5" x2="33" y2="18"/></svg>`,
+    sneaker: `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 32c0-5 3-9 8-11l9-4c2-1 4-1 6 0l8 4c3 1.5 5 4 5 7v4a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2z"/><path d="M14 21v6"/><path d="M22 18.5V27"/><path d="M6 32h36"/></svg>`,
+    headphones: `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 28v-4a16 16 0 0 1 32 0v4"/><rect x="5" y="27" width="9" height="13" rx="3"/><rect x="34" y="27" width="9" height="13" rx="3"/></svg>`,
+    speaker: `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="10" y="12" width="28" height="24" rx="8"/><circle cx="24" cy="24" r="7"/><circle cx="24" cy="24" r="2.5"/><circle cx="16" cy="17" r="1.2" fill="currentColor" stroke="none"/></svg>`,
+    kitchen: `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="12" y="18" width="24" height="20" rx="4"/><path d="M18 18v-4a6 6 0 0 1 12 0v4"/><line x1="17" y1="26" x2="31" y2="26"/><line x1="17" y1="31" x2="31" y2="31"/></svg>`,
+    cards: `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="12" width="21" height="29" rx="3" transform="rotate(-9 17.5 26.5)"/><rect x="16" y="8" width="22" height="30" rx="3"/><path d="M27 17l1.6 3.3 3.7.5-2.7 2.6.6 3.7-3.2-1.7-3.2 1.7.6-3.7-2.7-2.6 3.7-.5z"/></svg>`,
+    perfume: `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="6" width="8" height="6" rx="1.5"/><path d="M18 12h4v6h-4z"/><path d="M13 18h14l2 4v14a3 3 0 0 1-3 3H14a3 3 0 0 1-3-3V22z"/><line x1="13" y1="28" x2="27" y2="28"/></svg>`,
+    console: `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="6" width="10" height="36" rx="4"/><circle cx="19" cy="15" r="1.4" fill="currentColor" stroke="none"/><circle cx="19" cy="33" r="3"/><line x1="19" y1="20" x2="19" y2="26"/></svg>`,
+  };
+  const categoryStyle = {
+    'Collectibles': '#f2b545', 'Footwear': '#5b7cfa', 'Tech': '#22d3ee', 'Home & Kitchen': '#2fd77a', 'Beauty': '#f2495c',
+  };
+  function thumbHtml(p, big){
+    const accent = categoryStyle[p.cat] || 'var(--brand-2)';
+    const h = big ? '180px' : '130px';
+    return `<div class="p-thumb${big?' big':''}" style="height:${h}; background:radial-gradient(circle at 50% 42%, ${accent}22, var(--surface-2) 72%);"><div style="color:${accent};">${ICONS[p.icon]}</div></div>`;
+  }
+  function iconSmallHtml(p){
+    const accent = categoryStyle[p.cat] || 'var(--brand-2)';
+    return `<div style="color:${accent};">${ICONS[p.icon]}</div>`;
+  }
+
+  /* ---------------- Product catalogue ---------------- */
+  const products = [
+    {id:1, title:'LEGO Technic 42211 — Lunar Outpost Moon Rover', cat:'Collectibles', cond:'New, sealed', from:74.50, icon:'lego', sellers:[
+      {seller:'MinifigMargins', rating:4.9, price:74.50, eta:'2–3 days'},
+      {seller:'BrickFlip_UK', rating:4.7, price:76.00, eta:'2–4 days'},
+      {seller:'steven_resells', rating:4.8, price:78.00, eta:'1–2 days'},
+      {seller:'ClearanceQueen', rating:4.5, price:81.99, eta:'3–5 days'},
+    ]},
+    {id:2, title:'LEGO Icons 10333 — Natural History Museum', cat:'Collectibles', cond:'New, sealed', from:89.00, icon:'lego', sellers:[
+      {seller:'BrickFlip_UK', rating:4.7, price:89.00, eta:'2–4 days'},
+      {seller:'MinifigMargins', rating:4.9, price:92.00, eta:'2–3 days'},
+    ]},
+    {id:3, title:'Nike Air Max 1 "Big Bubble", UK 9', cat:'Footwear', cond:'Deadstock', from:171.00, icon:'sneaker', sellers:[
+      {seller:'Priya_K', rating:4.6, price:171.00, eta:'2–3 days'},
+      {seller:'JD_Flips', rating:4.8, price:174.00, eta:'1–2 days'},
+      {seller:'SoleTrader88', rating:4.4, price:178.00, eta:'3–4 days'},
+    ]},
+    {id:4, title:'Sony WH-1000XM5 Headphones, Black', cat:'Tech', cond:'New, sealed', from:198.00, icon:'headphones', sellers:[
+      {seller:'JD_Flips', rating:4.8, price:198.00, eta:'1–2 days'},
+      {seller:'ClearanceQueen', rating:4.5, price:205.00, eta:'3–5 days'},
+    ]},
+    {id:5, title:'JBL Flip 6 Portable Speaker', cat:'Tech', cond:'New', from:42.00, icon:'speaker', sellers:[
+      {seller:'steven_resells', rating:4.8, price:42.00, eta:'1–2 days'},
+      {seller:'Alex_R', rating:4.3, price:45.50, eta:'2–4 days'},
+      {seller:'BrickFlip_UK', rating:4.7, price:47.00, eta:'2–3 days'},
+    ]},
+    {id:6, title:'Ninja Foodi Mini 7-in-1', cat:'Home & Kitchen', cond:'New, boxed', from:48.00, icon:'kitchen', sellers:[
+      {seller:'steven_resells', rating:4.8, price:48.00, eta:'1–2 days'},
+    ]},
+    {id:7, title:'Pokémon Sealed Booster Box', cat:'Collectibles', cond:'New, sealed', from:58.00, icon:'cards', sellers:[
+      {seller:'ClearanceQueen', rating:4.5, price:58.00, eta:'3–5 days'},
+      {seller:'MinifigMargins', rating:4.9, price:61.00, eta:'2–3 days'},
+      {seller:'Alex_R', rating:4.3, price:62.50, eta:'2–4 days'},
+      {seller:'JD_Flips', rating:4.8, price:64.00, eta:'1–2 days'},
+      {seller:'Priya_K', rating:4.6, price:65.50, eta:'3–4 days'},
+    ]},
+    {id:8, title:'Designer Fragrance Gift Set', cat:'Beauty', cond:'New, boxed', from:34.00, icon:'perfume', sellers:[
+      {seller:'Priya_K', rating:4.6, price:34.00, eta:'2–3 days'},
+      {seller:'SoleTrader88', rating:4.4, price:37.50, eta:'3–5 days'},
+    ]},
+    {id:9, title:'PS5 Slim Console, Disc Edition', cat:'Tech', cond:'New, sealed', from:389.00, icon:'console', sellers:[
+      {seller:'JD_Flips', rating:4.8, price:389.00, eta:'1–2 days'},
+      {seller:'Alex_R', rating:4.3, price:399.00, eta:'2–4 days'},
+    ]},
+    {id:10, title:'Adidas Samba OG', cat:'Footwear', cond:'New', from:68.00, icon:'sneaker', sellers:[
+      {seller:'SoleTrader88', rating:4.4, price:68.00, eta:'2–4 days'},
+      {seller:'Priya_K', rating:4.6, price:70.00, eta:'2–3 days'},
+      {seller:'JD_Flips', rating:4.8, price:72.50, eta:'1–2 days'},
+      {seller:'steven_resells', rating:4.8, price:75.00, eta:'1–2 days'},
+    ]},
+  ];
+
+  const categories = ['All','Collectibles','Footwear','Tech','Home & Kitchen','Beauty'];
+  let activeCat = 'All';
+  const catList = document.getElementById('catList');
+  categories.forEach(c=>{
+    const count = c==='All' ? products.length : products.filter(p=>p.cat===c).length;
+    const div = document.createElement('div');
+    div.className = 'cat-link' + (c==='All' ? ' active' : '');
+    div.innerHTML = `<span>${c}</span><span class="cnt">${count}</span>`;
+    div.onclick = ()=>{ activeCat = c; document.querySelectorAll('.cat-link').forEach(x=>x.classList.remove('active')); div.classList.add('active'); renderGrid(); };
+    catList.appendChild(div);
+  });
+
+  const grid = document.getElementById('productGrid');
+  function renderGrid(){
+    grid.innerHTML = '';
+    const list = products.filter(p=> activeCat==='All' || p.cat===activeCat);
+    document.getElementById('resultCount').textContent = list.length + ' results';
+    list.forEach(p=>{
+      const card = document.createElement('div');
+      card.className = 'p-card';
+      card.innerHTML = `
+        <div style="position:relative;">${thumbHtml(p,false)}<span class="cond-tag" style="left:auto; right:8px;">${p.cond}</span></div>
+        <div class="p-body">
+          <div class="p-title">${p.title}</div>
+          <div class="p-cat">${p.cat}</div>
+          <div class="p-price-row"><span class="p-price">from £${p.from.toFixed(2)}</span><span class="p-sellers">${p.sellers.length} seller${p.sellers.length>1?'s':''}</span></div>
+          <div class="p-trust">🛡 Buyer Protected</div>
+          <div class="p-actions">
+            <button class="btn btn-ghost btn-sm" style="flex:1;" onclick="event.stopPropagation(); openProduct(${p.id})">View</button>
+            <button class="btn btn-primary btn-sm" style="flex:1;" onclick="event.stopPropagation(); addToCart(${p.id}, ${p.sellers[0].price}, '${p.sellers[0].seller}')">Add</button>
+          </div>
+        </div>
+      `;
+      card.onclick = ()=>openProduct(p.id);
+      grid.appendChild(card);
+    });
+  }
+  renderGrid();
+
+  function starString(rating){
+    const full = Math.round(rating);
+    return '★'.repeat(full) + '☆'.repeat(5-full) + ` <span class="hint">${rating}</span>`;
+  }
+
+  function openProduct(id){
+    const p = products.find(x=>x.id===id);
+    const sorted = [...p.sellers].sort((a,b)=>a.price-b.price);
+    document.getElementById('productModalBody').innerHTML = `
+      <div style="margin-bottom:16px; border-radius:12px; overflow:hidden;">${thumbHtml(p,true)}</div>
+      <h3 style="margin-bottom:2px;">${p.title}</h3>
+      <div class="hint" style="margin-bottom:14px;">${p.cat} · ${p.cond}</div>
+      <h4 style="margin:0 0 8px; font-size:12.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-dim);">Available from ${sorted.length} seller${sorted.length>1?'s':''}</h4>
+      ${sorted.map((s,i)=>`
+        <div class="offer-row">
+          <div>
+            <div style="font-weight:700;">${s.seller} ${i===0?'<span class=\"pill pill-buy\">BEST PRICE</span>':''}</div>
+            <div class="stars">${starString(s.rating)}</div>
+            <div class="hint">Arrives in ${s.eta}</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-weight:800; font-size:15px; margin-bottom:6px;">£${s.price.toFixed(2)}</div>
+            <button class="btn btn-primary btn-sm" onclick="addToCart(${p.id}, ${s.price}, '${s.seller}')">Add to basket</button>
+          </div>
+        </div>
+      `).join('')}
+      <div class="hint" style="margin-top:14px; display:flex; align-items:center; gap:6px;">🛡 Payment held until delivery confirmed. Free returns within 14 days.</div>
+    `;
+    openModal('productModal');
+  }
+
+  /* ---------------- Cart ---------------- */
+  let cart = [];
+  function addToCart(productId, price, seller){
+    const p = products.find(x=>x.id===productId);
+    cart.push({title:p.title, price, seller, cat:p.cat, icon:p.icon});
+    renderCart();
+    showToast('Added to basket');
+  }
+  function removeFromCart(i){ cart.splice(i,1); renderCart(); }
+  function renderCart(){
+    document.getElementById('cartCount').textContent = cart.length;
+    const body = document.getElementById('cartBody');
+    if(cart.length===0){
+      body.innerHTML = '<div class="hint" style="padding:20px 0; text-align:center;">Your basket is empty.</div>';
+    } else {
+      body.innerHTML = cart.map((c,i)=>`
+        <div class="cart-item">
+          <div class="cart-thumb">${iconSmallHtml(c)}</div>
+          <div style="flex:1;">
+            <div style="font-weight:700; font-size:13px;">${c.title}</div>
+            <div class="hint">Sold by ${c.seller}</div>
+          </div>
+          <div style="font-weight:800;">£${c.price.toFixed(2)}</div>
+          <button class="icon-btn" style="width:28px; height:28px; font-size:12px;" onclick="removeFromCart(${i})">✕</button>
+        </div>
+      `).join('');
+    }
+    const subtotal = cart.reduce((s,c)=>s+c.price,0);
+    document.getElementById('cartSubtotal').textContent = '£'+subtotal.toFixed(2);
+    document.getElementById('checkoutBtn').disabled = cart.length===0;
+  }
+  renderCart();
+
+  function selectCourier(el){
+    document.querySelectorAll('.courier-card').forEach(c=>c.classList.remove('selected'));
+    el.classList.add('selected');
+  }
+
+  /* ---------------- Orders ---------------- */
+  let orders = [
+    {item:'Ninja Foodi Mini 7-in-1', seller:'steven_resells', price:48.00, status:'done'},
+    {item:'JBL Flip 6 Portable Speaker', seller:'Alex_R', price:45.50, status:'ship'},
+  ];
+  function renderOrders(){
+    const body = document.getElementById('ordersBody');
+    body.innerHTML = orders.map(o=>{
+      const statusMap = {prep:['status-prep','Preparing'], ship:['status-ship','Shipped'], done:['status-done','Delivered']};
+      const [cls,label] = statusMap[o.status];
+      return `<tr><td>${o.item}</td><td>${o.seller}</td><td>£${o.price.toFixed(2)}</td><td><span class="status-pill ${cls}">${label}</span></td><td>${o.status==='prep' ? '—' : '<a style="color:var(--brand-2);">Track</a>'}</td></tr>`;
+    }).join('');
+  }
+  renderOrders();
+
+  function placeOrder(){
+    cart.forEach(c=> orders.unshift({item:c.title, seller:c.seller, price:c.price, status:'prep'}));
+    cart = [];
+    renderCart();
+    renderOrders();
+    closeModal('checkoutModal');
+    showToast('Order placed — you\'ll get tracking once it\'s dispatched');
+    document.querySelectorAll('nav.toppages button').forEach(b=>b.classList.remove('active'));
+    document.querySelector('nav.toppages button[data-page="orders"]').classList.add('active');
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    document.getElementById('page-orders').classList.add('active');
+  }
+
+  /* ---------------- Buyer Wants ---------------- */
+  const wants = [
+    {item:'Nike Air Max 1 "Big Bubble", UK 9, deadstock', max:185, closes:'2h 14m', offers:[{seller:'SoleTrader88',price:178},{seller:'JD_Flips',price:174},{seller:'Priya_K',price:171}]},
+    {item:'LEGO Icons 10333 — Natural History Museum, sealed', max:95, closes:'5h 02m', offers:[{seller:'BrickFlip_UK',price:92},{seller:'MinifigMargins',price:89}]},
+    {item:'Sony WH-1000XM5, black, sealed', max:210, closes:'Just posted', offers:[]},
+  ];
+  const wantsGrid = document.getElementById('wantsGrid');
+  wants.forEach(w=>{
+    const sorted = [...w.offers].sort((a,b)=>a.price-b.price);
+    const offersHtml = sorted.length ? sorted.map((o,i)=>`<div class="offer-row" style="padding:6px 0; font-size:12.5px;"><span>${o.seller}</span><span style="${i===0?'color:var(--green); font-weight:700;':'color:var(--text-faint); text-decoration:line-through;'}">£${o.price}${i===0?' — best offer':''}</span></div>`).join('') : '<div class="hint">No offers yet.</div>';
+    const card = document.createElement('div');
+    card.className = 'want-card';
+    card.innerHTML = `
+      <h3 style="margin-bottom:2px; font-size:14px;">${w.item}</h3>
+      <div class="hint" style="margin-bottom:10px;">You'll pay up to £${w.max} · closes ${w.closes}</div>
+      ${offersHtml}
+    `;
+    wantsGrid.appendChild(card);
+  });
+</script>
+</body>
+</html>

@@ -24,9 +24,50 @@ services:
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
         sync: false
+      - key: STRIPE_PRICE_STANDARD
+        sync: false
+      - key: STRIPE_PRICE_PRO
+        sync: false
+      - key: STRIPE_PRICE_ELITE
+        sync: false
       - key: RESEND_API_KEY
         sync: false
       - key: NOTIFICATIONS_FROM_EMAIL
+        sync: false
+      # Section 7 — seller "Connect account" OAuth for cross-posting
+      # (apps/web/lib/channelOAuth.ts). Only set the ones you've actually
+      # registered for; a channel with any of its vars missing just shows
+      # as "not connectable yet" instead of failing — see
+      # INFRASTRUCTURE_TODO.md #9 for how to get each one.
+      - key: CHANNEL_EBAY_CLIENT_ID
+        sync: false
+      - key: CHANNEL_EBAY_CLIENT_SECRET
+        sync: false
+      - key: CHANNEL_ETSY_CLIENT_ID
+        sync: false
+      - key: CHANNEL_DEPOP_CLIENT_ID
+        sync: false
+      - key: CHANNEL_DEPOP_CLIENT_SECRET
+        sync: false
+      - key: CHANNEL_DEPOP_AUTHORIZE_URL
+        sync: false
+      - key: CHANNEL_DEPOP_TOKEN_URL
+        sync: false
+      - key: CHANNEL_WHATNOT_CLIENT_ID
+        sync: false
+      - key: CHANNEL_WHATNOT_CLIENT_SECRET
+        sync: false
+      - key: CHANNEL_WHATNOT_AUTHORIZE_URL
+        sync: false
+      - key: CHANNEL_WHATNOT_TOKEN_URL
+        sync: false
+      - key: CHANNEL_STOCKX_CLIENT_ID
+        sync: false
+      - key: CHANNEL_STOCKX_CLIENT_SECRET
+        sync: false
+      - key: CHANNEL_STOCKX_AUTHORIZE_URL
+        sync: false
+      - key: CHANNEL_STOCKX_TOKEN_URL
         sync: false
 
   - type: worker

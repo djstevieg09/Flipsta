@@ -41,6 +41,7 @@ exactly, not to introduce new accounts you didn't ask for.
 | 11.6 — Buyback anti-abuse | `packages/shared/src/pricing.ts: isBuybackClaimEligible` |
 | 11.10 — Buyer Wants reverse auction | `packages/shared/src/orderMatching.ts: rankWantOffers` |
 | 7 — Multi-platform listing | `packages/shared/src/salesChannels.ts`, `apps/web/app/sell/new`, `apps/web/app/api/listings/route.ts` (POST), `apps/worker/src/jobs/crossPostListings.ts` |
+| 7 — Seller "Connect account" OAuth | `apps/web/lib/channelOAuth.ts`, `apps/web/app/settings/connections`, `apps/web/app/api/channel-connections/*`, `supabase/migrations/0007_channel_connections.sql` |
 | 12.1 — Admin dashboard & ticketing | `apps/web/app/admin/*`, `apps/web/app/api/admin/*`, `apps/web/lib/adminGuard.ts`, `apps/web/lib/adminAudit.ts`, `apps/worker/src/jobs/flagRiskSignals.ts` |
 | 12.2 — Supplier & courier partners | `supabase/migrations/0002_admin_ops.sql: partners`, `apps/web/app/api/admin/partners`, public apply flow at `apps/web/app/partners/apply` + `apps/web/app/api/partners/apply` |
 | 12.3 — Global header convention | `apps/web/app/layout.tsx` (centered search, tabs underneath) |
@@ -50,6 +51,7 @@ exactly, not to introduce new accounts you didn't ask for.
 | 9.1 — AI confidence scoring | `apps/worker/src/aiScoring.ts` (real Claude call, gated on `ANTHROPIC_API_KEY`), `apps/worker/src/scoring.ts` (heuristic fallback) |
 | Auth / account recovery | `apps/web/app/signup`, `/login`, `/forgot-password`, `/reset-password`, `supabase/migrations/0004_auth_profile_trigger.sql` |
 | 12.1 — Self-serve dashboard | `apps/web/app/dashboard`, `/portfolio`, `/wallet`, `apps/web/app/api/wallet`, `apps/web/app/api/orders` (GET), `supabase/migrations/0005_seller_order_visibility.sql` |
+| 7 — Self-serve tier upgrades | `apps/web/app/upgrade`, `apps/web/app/api/billing/checkout`, `/billing/portal`, `apps/web/app/api/webhooks/stripe` (subscription events), `apps/web/lib/stripe.ts`, `supabase/migrations/0006_subscription_billing.sql` |
 
 ## Scaling path — what "could get as big as Amazon or eBay" actually requires
 

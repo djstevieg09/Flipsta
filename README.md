@@ -21,7 +21,7 @@ apps/worker/     Background service — the AI discovery pipeline (with a real,
 packages/shared/ Business logic used by both: pricing formulas, order
                  matching, tier entitlements, ticket SLAs, HMRC reportable-
                  seller check, AI listing pre-fill. Fully unit tested (39 tests).
-supabase/        SQL schema (5 migrations, run in order — see below) + seed data.
+supabase/        SQL schema (7 migrations, run in order — see below) + seed data.
 legal/           Draft Terms & Conditions (Section 12.7) — not solicitor-reviewed, see the file itself.
 mockups/         The signed-off HTML mockups (Pro/Standard/Elite/consumer/admin) the real UI is built against.
 render.yaml      Deploy blueprint for Render (web service + worker service).
@@ -35,7 +35,7 @@ doc it implements, so the code and the plan stay traceable to each other.
 
 1. `npm install` (root — this is an npm workspaces monorepo, one install covers everything)
 2. Copy `apps/web/.env.example` to `apps/web/.env.local` and `apps/worker/.env.example` to `apps/worker/.env.local`, and fill in your Supabase project's URL/keys (see `INFRASTRUCTURE_TODO.md` — none of this runs against real data until that's done)
-3. Run every migration against your Supabase project, **in order**: `0001_init.sql`, `0002_admin_ops.sql`, `0003_cross_posting.sql`, `0004_auth_profile_trigger.sql`, `0005_seller_order_visibility.sql`, then `supabase/seed.sql` for sample data
+3. Run every migration against your Supabase project, **in order**: `0001_init.sql`, `0002_admin_ops.sql`, `0003_cross_posting.sql`, `0004_auth_profile_trigger.sql`, `0005_seller_order_visibility.sql`, `0006_subscription_billing.sql`, `0007_channel_connections.sql`, then `supabase/seed.sql` for sample data
 4. `npm run dev:web` — the site at localhost:3000. Sign up at `/signup` (in Supabase Auth settings, consider disabling "Confirm email" for local testing so you don't need a real inbox)
 5. To reach the admin dashboard, manually set your profile's `role` column to `'admin'` in the Supabase table editor after signing up — there's no self-service way to become staff, deliberately
 6. `npm run dev:worker` — the background jobs, in a separate terminal. Set `ANTHROPIC_API_KEY` here to turn on real AI scoring for newly discovered deals (see STATUS.md)
@@ -67,9 +67,16 @@ doc it implements, so the code and the plan stay traceable to each other.
   with no key set or if the call fails.
 - **Multi-platform listing (Section 7)** at `/sell/new` — AI-prefilled
   title/price from a won opportunity, a real auto cross-post switch to
-  eBay/Amazon/Vinted/Facebook Marketplace/Depop, a real per-channel DB
+  eBay/Depop/Etsy/Whatnot/StockX, a real per-channel DB
   record, and a worker retry sweep. The actual external post is stubbed
   until each platform's API credentials exist (see INFRASTRUCTURE_TODO.md).
+- **Real "Connect account" OAuth for cross-posting (Section 7)** at
+  `/settings/connections` — a seller signs into their own account on each
+  marketplace and grants access with one click, no API key ever seen by
+  them or by Flipsta's admins; only a channel a seller has actually
+  connected can be ticked on `/sell/new`. Needs Flipsta's own developer
+  credentials set per channel first (see INFRASTRUCTURE_TODO.md) — until
+  then that channel's Connect button clearly shows it isn't set up yet.
 - **The admin dashboard (Section 12.1)** at `/admin` — real seller list with
   tier override/suspend, a real ticket queue with SLA breach detection and
   internal notes, supplier/courier partner management (Section 12.2), a
@@ -85,6 +92,11 @@ doc it implements, so the code and the plan stay traceable to each other.
   status changes as the first real call site.
 - **The global header convention (Section 12.3)** — centered search bar,
   tabs underneath — applied to the real site's layout, not just the mockups.
+- **Self-serve subscription tier upgrades (Section 7)** at `/upgrade` — pay
+  to move to Standard/Pro/Elite via a real Stripe Checkout session, manage
+  or cancel via Stripe's own hosted billing portal. Needs a Stripe Price ID
+  per tier set as an env var (see INFRASTRUCTURE_TODO.md) — previously the
+  only way to change a seller's tier was an admin editing it directly.
 - **Seller tax-reporting schema (Section 12.6)** — `seller_tax_info` table
   and an `isHmrcReportableSeller()` helper matching current HMRC digital
   platform reporting guidance; the actual onboarding UI to collect this

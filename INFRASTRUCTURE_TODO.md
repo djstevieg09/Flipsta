@@ -17,7 +17,7 @@ would be publishing to your account without permission.
 ## 2. Supabase — the database
 
 - [ ] Create a new Supabase project (or use an existing one, if you'd rather keep this separate from anything else on your account).
-- [ ] In the SQL editor, run every migration **in order**: `0001_init.sql`, `0002_admin_ops.sql` (admin dashboard/tickets/partners/reviews/tax), `0003_cross_posting.sql` (multi-platform listing), `0004_auth_profile_trigger.sql` (auto-creates a profile on signup — sign-up won't work at all without this one), `0005_seller_order_visibility.sql` (lets a seller see their own sales) — then `supabase/seed.sql` for sample data to develop against.
+- [ ] In the SQL editor, run every migration **in order**: `0001_init.sql`, `0002_admin_ops.sql` (admin dashboard/tickets/partners/reviews/tax), `0003_cross_posting.sql` (multi-platform listing), `0004_auth_profile_trigger.sql` (auto-creates a profile on signup — sign-up won't work at all without this one), `0005_seller_order_visibility.sql` (lets a seller see their own sales), `0006_subscription_billing.sql` (Stripe subscription id, for self-serve tier upgrades — see section 3), `0007_channel_connections.sql` (stores each seller's connected marketplace accounts — see section 9) — then `supabase/seed.sql` for sample data to develop against.
 - [ ] Auth → Settings: for testing, consider turning **off** "Confirm email" so a freshly signed-up test account can sign in immediately without clicking an email link. Turn it back on before real users sign up.
 - [ ] Project Settings → API: copy the **Project URL** and **anon public key** → these become `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 - [ ] Same page: copy the **service_role key** (keep this one secret, server-only) → `SUPABASE_SERVICE_ROLE_KEY`.
@@ -30,7 +30,9 @@ would be publishing to your account without permission.
 - [ ] Create a Stripe account if you don't have one, and enable **Stripe Connect** (Dashboard → Connect → Get started). This is what lets sellers get paid out while you still control when funds release.
 - [ ] Choose **Express** accounts for sellers (the standard choice for a marketplace like this — Stripe handles most of the onboarding UI for you).
 - [ ] Dashboard → Developers → API keys: copy the **secret key** → `STRIPE_SECRET_KEY`. Use a *test mode* key until you're ready to take real payments.
-- [ ] Dashboard → Developers → Webhooks: add an endpoint pointing at `https://<your-render-url>/api/webhooks/stripe`, listening for at least `payment_intent.succeeded` and `payment_intent.payment_failed`. Copy the **signing secret** → `STRIPE_WEBHOOK_SECRET`.
+- [ ] Dashboard → Developers → Webhooks: add an endpoint pointing at `https://<your-render-url>/api/webhooks/stripe`, listening for at least `payment_intent.succeeded`, `payment_intent.payment_failed`, `checkout.session.completed`, `customer.subscription.updated`, and `customer.subscription.deleted` (the last three power the self-serve tier upgrade flow below — without them, a paid upgrade would take payment but never actually change the account's tier). Copy the **signing secret** → `STRIPE_WEBHOOK_SECRET`.
+- [ ] **For the `/upgrade` self-serve subscription flow:** Dashboard → Product catalogue → create one Product per paid tier (Standard, Pro, Elite) with a **recurring monthly Price** on each — the actual amount is your call (Section 7 of the planning doc has suggested ranges, but nothing in the code enforces those numbers, they're just the UI's display text). Copy each Price's ID (starts `price_...`) → `STRIPE_PRICE_STANDARD`, `STRIPE_PRICE_PRO`, `STRIPE_PRICE_ELITE` on the `flipsta-web` service.
+- [ ] Also enable the **Customer Portal** (Dashboard → Settings → Billing → Customer portal) with its defaults — this is what powers the "Manage billing" button on `/upgrade` for existing subscribers.
 - [ ] Later, before accepting real payments: Stripe will ask for business verification details (Companies House number, once Flipsta is registered — see the planning doc's next-steps note) and your UK bank account for payouts.
 
 ## 4. Render — deploying the app
@@ -65,13 +67,30 @@ The worker currently uses a mock data source (`apps/worker/src/adapters/mockAdap
 
 ## 9. Multi-platform listing — external marketplace accounts
 
-- [ ] The `/sell/new` auto cross-post switch (Section 7) currently simulates a successful post to every channel — see `packages/shared/src/salesChannels.ts`. Each of these needs its own seller/developer API account before it can go live for real:
-  - [ ] **eBay** — eBay Developers Program account + a Trading/Sell API OAuth application.
-  - [ ] **Amazon** — Amazon Selling Partner API access, which requires an active Amazon seller account first.
-  - [ ] **Vinted** — no public seller API as of this document; a real integration may need a partnership conversation with Vinted directly, worth confirming before committing engineering time here.
-  - [ ] **Facebook Marketplace** — Meta Commerce/Catalog API access via a Meta Business account.
-  - [ ] **Depop** — added as a strong fit for the trainers/streetwear/collectibles audience, not in the original plan; no public seller API as of this document either — confirm feasibility before committing to it as a launch channel.
-- [ ] None of this blocks launch — the toggle, the per-channel tracking, and the worker retry sweep all work today against the stub; this is purely about making the actual external post real.
+There are two separate things here, easy to conflate: **Flipsta's own developer
+registration** on each platform (this section, one-time, only you can do it —
+account creation, business verification, agreeing to their API terms), and
+**each seller's one-click "Connect account"** (already built — see
+`/settings/connections`, `apps/web/lib/channelOAuth.ts` — a seller signs into
+their own account on that platform and grants access, no API key ever shown
+to them). The second only lights up once the first is done for a given
+channel: with no credentials set, that channel's "Connect" button shows
+"not connectable yet" instead of a broken flow.
+
+- [ ] The channel list was updated (2026) to prioritise platforms with a real, documented, self-serve seller API — swapping out Amazon/Facebook Marketplace/Vinted in favour of Etsy/Whatnot/StockX, and correcting Depop's status (it now has an official API, where the original build assumed it didn't). Register Flipsta as a developer/app on each active channel, then set the matching env vars on `flipsta-web` (already scaffolded in `render.yaml`, all `sync: false`):
+  - [ ] **eBay** — self-serve. Register an OAuth application at the eBay Developers Program (developer.ebay.com) → a Trading/Sell API app with an `sell.inventory` scope. Set `CHANNEL_EBAY_CLIENT_ID` / `CHANNEL_EBAY_CLIENT_SECRET`. The authorize/token URLs are already built in — nothing else to set.
+  - [ ] **Etsy** — self-serve. Apply for a Keystring (client id) via Etsy's developer portal (developers.etsy.com) for Etsy Open API v3. Set `CHANNEL_ETSY_CLIENT_ID` only — Etsy's flow is PKCE-based and doesn't use a client secret. Authorize/token URLs are already built in.
+  - [ ] **Depop** — gated. Email Depop's Partner API team (partnerapi.depop.com) to request access; they'll issue a client id/secret and give you your specific authorize/token URLs (these aren't publicly published — they're issued per partner). Set all four: `CHANNEL_DEPOP_CLIENT_ID`, `_CLIENT_SECRET`, `_AUTHORIZE_URL`, `_TOKEN_URL`.
+  - [ ] **Whatnot** — gated. Contact Whatnot's developer team to register a client app and your redirect URI (`https://<your-render-url>/api/channel-connections/whatnot/callback`); they generate the secret and give you the endpoint URLs. Set all four: `CHANNEL_WHATNOT_CLIENT_ID`, `_CLIENT_SECRET`, `_AUTHORIZE_URL`, `_TOKEN_URL`.
+  - [ ] **StockX** — gated, application/review process via the StockX Developer Portal, and their OAuth pages sit behind PerimeterX bot-detection (a reason to budget more lead time here, not to script around it — see the note below). Once approved, confirm the exact flow with StockX and set all four: `CHANNEL_STOCKX_CLIENT_ID`, `_CLIENT_SECRET`, `_AUTHORIZE_URL`, `_TOKEN_URL`.
+  - [ ] Deprioritised, kept in mind for later rather than built against now:
+    - **Amazon** — Amazon Selling Partner API access exists, but requires an active Amazon seller account first, and Amazon is often not the cheapest source anyway (worth revisiting only if there's a specific business reason to add it back).
+    - **Vinted** — still no public seller API as of this document; a real integration would need a direct partnership conversation with Vinted.
+    - **Facebook Marketplace** — Meta Commerce/Catalog API access exists via a Meta Business account, but was deprioritised in favour of the channels above.
+- [ ] For each channel, once its developer credentials are set, register `https://<your-render-url>/api/channel-connections/<channel>/callback` as that platform's OAuth redirect URI in their developer settings — most platforms reject the login if this doesn't match exactly.
+- [ ] Run `supabase/migrations/0007_channel_connections.sql` — this is what stores each seller's connected account.
+- [ ] None of this blocks launch, and nothing here requires all five channels — set up one (Etsy is the simplest self-serve option) and the rest can follow later. Even once a seller is connected, the actual "create a listing on their behalf" API call to each platform is still a labelled stub (`packages/shared/src/salesChannels.ts: publishListingToChannel()`) — connecting the account and posting the listing are two separate pieces of work, and only the first is done.
+- [ ] **On bot-detection generally:** several of these platforms (StockX in particular) actively gate automated access with bot-detection (PerimeterX and similar). The right response to that is the official API + application process above, or a paid data/API provider — never scripting around the gate itself; that's a real legal/ToS risk and not something built here.
 
 ## 10. Monitoring (do this before launch, not after an incident)
 

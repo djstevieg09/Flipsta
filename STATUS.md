@@ -18,9 +18,10 @@ exactly where that line sits.
   Postgres with Row Level Security, across `supabase/migrations/0001_init.sql`
   (core marketplace), `0002_admin_ops.sql` (admin/tickets/partners/reviews/
   risk/audit/tax), `0003_cross_posting.sql` (multi-platform listing),
-  `0004_auth_profile_trigger.sql` (auto-creates a profile on signup), and
+  `0004_auth_profile_trigger.sql` (auto-creates a profile on signup),
   `0005_seller_order_visibility.sql` (lets a seller see orders on their own
-  listings, not just buyers see their own).
+  listings, not just buyers see their own), and `0006_subscription_billing.sql`
+  (the Stripe subscription id column for self-serve tier upgrades).
 - **Real sign-up, sign-in, and self-serve password reset** — `/signup`,
   `/login`, `/forgot-password`, `/reset-password`, all using Supabase Auth
   directly, no admin involvement. This closes a real gap: previously nothing
@@ -53,10 +54,29 @@ exactly where that line sits.
   needed to onboard a new partner, just an approval click.
 - **Multi-platform listing (Section 7)** — `/sell/new` lets a Pro/Elite
   seller turn a won opportunity into a listing with AI-suggested title/price,
-  flip an auto cross-post switch, and tick eBay/Amazon/Vinted/Facebook
-  Marketplace/Depop. Publishing is a clearly-labelled stub (see "Deliberately
+  flip an auto cross-post switch, and tick eBay/Depop/Etsy/Whatnot/StockX.
+  Publishing is a clearly-labelled stub (see "Deliberately
   stubbed" below) but the whole flow — submit, synchronous attempt, DB
   record per channel, worker retry sweep — is real and tested.
+- **Real seller account-linking for cross-posting (Section 7)** at
+  `/settings/connections` — a seller clicks "Connect" on a channel, signs
+  into their own account on that marketplace's own site via a real OAuth
+  2.0 flow, grants access, and lands back connected. No API key or password
+  ever passes through Flipsta or through the seller — this is what makes
+  the toggle on `/sell/new` genuinely one-click rather than something that
+  would need each seller to obtain and paste in their own API credentials.
+  A channel a seller ticks on `/sell/new` now has to actually be connected
+  first (enforced both on submit and in the worker's retry sweep) — no
+  channel silently "succeeds" without a real account behind it. eBay and
+  Etsy's OAuth endpoints are built in (public, documented, self-serve);
+  Depop/Whatnot/StockX gate API access behind a direct application, so
+  those three need Flipsta's own developer credentials set as env vars
+  before a seller can connect one (see INFRASTRUCTURE_TODO.md #9) — until
+  then that channel's Connect button clearly shows "not set up yet" rather
+  than failing. The listing-creation call itself (actually posting the item
+  to a connected account) is still the separate stub described below —
+  connecting the account and posting the listing are two different pieces
+  of work, and only the first is real so far.
 - **Reviews & seller ratings (Section 12.4)** — gated on the buyer actually
   owning a `delivered` order for that seller, one review per order.
 - **A real notifications layer (Section 12.5)** — stubs to the console
@@ -72,6 +92,20 @@ exactly where that line sits.
   mode so the whole checkout flow is testable before you've even created a
   Stripe account, and switches to real Stripe Connect calls the moment
   `STRIPE_SECRET_KEY` is set.
+- **Self-serve subscription tier upgrades (Section 7)** at `/upgrade` — a
+  user picks Standard/Pro/Elite and pays via a real Stripe Checkout session
+  (subscription mode, separate from the Connect/escrow flow above, which is
+  buyer-seller marketplace money, not platform revenue); an existing
+  subscriber manages or cancels via Stripe's own hosted billing portal. The
+  webhook (`apps/web/app/api/webhooks/stripe`) is the only thing that ever
+  writes `subscription_tier` for a paid upgrade — Stripe is the source of
+  truth, not the checkout route itself — and handles renewal, tier changes
+  made inside the portal, and cancellation (reverts to `free`). The admin
+  override in `/admin/sellers` still works independently for comping an
+  account. Needs `STRIPE_PRICE_STANDARD` / `_PRO` / `_ELITE` set (one real
+  recurring Price per tier, created in the Stripe dashboard) on top of
+  `STRIPE_SECRET_KEY` — see INFRASTRUCTURE_TODO.md. Without those, `/upgrade`
+  shows a clear "not set up yet" message per tier rather than failing silently.
 - Full build, typecheck, and test suite all pass — verified in this session,
   not just written and assumed to work.
 
@@ -87,13 +121,13 @@ exactly where that line sits.
   screening volume and a stronger model deep-verifying shortlisted
   candidates. Worth splitting once real deal volume makes the cost worth
   optimising.
-- **Cross-posting to eBay/Amazon/Vinted/Facebook Marketplace/Depop** —
+- **Cross-posting to eBay/Depop/Etsy/Whatnot/StockX** —
   `packages/shared/src/salesChannels.ts: publishListingToChannel()` simulates
-  a successful post. Every one of those platforms needs its own
-  developer/seller API account and OAuth credentials before this can make a
-  real call — see INFRASTRUCTURE_TODO.md's new cross-posting entry. The
-  toggle, the per-channel DB rows, and the worker retry sweep are all real;
-  only the actual HTTP call out to each platform is stubbed.
+  a successful post, *once a seller has actually connected that channel* via
+  the real OAuth flow above — see INFRASTRUCTURE_TODO.md's cross-posting
+  entry. The toggle, the per-channel DB rows, the account-linking itself,
+  and the worker retry sweep are all real; only the final HTTP call that
+  creates the listing on each platform is stubbed.
 - **AI listing pre-fill** — `suggestListingFromOpportunity()` derives a
   title from category + source tier and a price of cost + full expected
   margin. It's a real, tested function, but a genuinely better title would
@@ -139,16 +173,13 @@ that's what you actually want before it's load-bearing for real transactions.
 
 1. Work through INFRASTRUCTURE_TODO.md #1-2 (GitHub + Supabase) so there's a
    real database to test sign-up/login against, then manually set one
-   profile's `role` to `'admin'` to reach `/admin`.
+   profile's `role` to `'admin'` to reach `/admin`. — **done, confirmed live.**
 2. Set `ANTHROPIC_API_KEY` on the worker to turn on real AI scoring — the
    single highest-leverage env var in this codebase for demo purposes.
-3. Build a tier-upgrade flow (Stripe Checkout for the subscription itself,
-   separate from the Connect/escrow payment flow) — right now `subscription_tier`
-   can only be changed by an admin via `/admin/sellers`.
-4. If the unified `/dashboard` isn't differentiated enough, port the three
+3. If the unified `/dashboard` isn't differentiated enough, port the three
    mockups' distinct visual treatments into it — the design tokens are
    already in `tailwind.config.ts`.
-5. Build the seller tax-info onboarding form against `seller_tax_info`.
-6. Wire a real courier (or Shippo/EasyPost aggregator), then real
-   eBay/Amazon/Vinted/Facebook/Depop API credentials for cross-posting.
-7. Replace the mock discovery adapter with Keepa once that account exists.
+4. Build the seller tax-info onboarding form against `seller_tax_info`.
+5. Wire a real courier (or Shippo/EasyPost aggregator), then real
+   eBay/Depop/Etsy/Whatnot/StockX API credentials for cross-posting.
+6. Replace the mock discovery adapter with Keepa once that account exists.

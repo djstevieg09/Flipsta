@@ -156,3 +156,59 @@ export const claudeSearchAdapter: SourceAdapter = {
     return candidates;
   },
 };
+
+const VERIFY_TOOL = {
+  name: "confirm_deal_status",
+  description: "Report whether this specific deal is still a real, currently purchasable offer.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      still_active: { type: "boolean", description: "true if the offer still appears live/purchasable, false if it's clearly gone (sold out, page removed, price changed a lot)." },
+      reason: { type: "string" },
+    },
+    required: ["still_active"],
+  },
+};
+
+/**
+ * Steven's re-run ask: an opportunity that lapsed with zero bids gets
+ * re-checked the next day rather than just discarded — but only actually
+ * re-listed if the underlying retailer deal still looks real. Reuses the
+ * same ANTHROPIC_API_KEY / web_search setup as findCandidates() above.
+ *
+ * Stub-until-configured, same as the rest of this file: with no key set,
+ * this assumes "still active" so relistLapsedOpportunities.ts is
+ * demonstrable without a paid key. On any API error it also assumes
+ * "still active" (fails open) rather than silently killing a good deal
+ * over a transient search failure.
+ */
+export async function verifyDealStillActive(deal: {
+  sourceRetailer: string;
+  sourceUrl: string;
+  sourcePriceGBP: number;
+}): Promise<boolean> {
+  if (!client) return true;
+
+  try {
+    const response = await client.messages.create({
+      model: "claude-sonnet-4-5",
+      max_tokens: 512,
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 2 }, VERIFY_TOOL],
+      messages: [
+        {
+          role: "user",
+          content: `Check whether this specific resale deal is still live and purchasable right now: retailer "${deal.sourceRetailer}", approx £${deal.sourcePriceGBP}, listing at ${deal.sourceUrl}. Use web search to check the actual page or a very recent reference to it, then call confirm_deal_status with your finding.`,
+        },
+      ],
+    });
+
+    const toolUse = response.content.find(
+      (block): block is Anthropic.ToolUseBlock => block.type === "tool_use" && block.name === "confirm_deal_status",
+    );
+    const stillActive = (toolUse?.input as { still_active?: unknown } | undefined)?.still_active;
+    return stillActive !== false; // ambiguous/missing answer -> assume still active
+  } catch (err) {
+    console.error("[claudeSearchAdapter] verifyDealStillActive failed, assuming still active:", err);
+    return true;
+  }
+}

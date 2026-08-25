@@ -59,6 +59,7 @@ export async function discoverOpportunities(adapter: SourceAdapter) {
       source_retailer: c.sourceRetailer,
       source_url: c.sourceUrl,
       source_price_gbp: c.sourcePriceGBP,
+      estimated_resale_price_gbp: c.estimatedResalePriceGBP,
       margin_band_low: Math.max(0, marginPct - 0.03),
       margin_band_high: marginPct + 0.03,
       expected_margin_gbp: Math.round(marginGBP * 100) / 100,

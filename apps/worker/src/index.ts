@@ -1,5 +1,6 @@
 import { discoverOpportunities } from "./jobs/discoverOpportunities.js";
 import { closeExpiredAuctions } from "./jobs/closeExpiredAuctions.js";
+import { relistLapsedOpportunities } from "./jobs/relistLapsedOpportunities.js";
 import { evaluateBatchRelisting } from "./jobs/evaluateBatchRelisting.js";
 import { releaseEscrow } from "./jobs/releaseEscrow.js";
 import { flagRiskSignals } from "./jobs/flagRiskSignals.js";
@@ -34,6 +35,7 @@ const discoveryIntervalMs = (Number(process.env.DISCOVERY_INTERVAL_MINUTES) || D
 const INTERVALS_MS = {
   discovery: discoveryIntervalMs,
   closeAuctions: 30 * 1000, // action clocks are as short as 20 minutes (Section 11.1) — check often
+  relistLapsed: 30 * 60 * 1000, // gated internally by next_recheck_at (24h), so this just needs to be "often enough"
   batchRelist: 10 * 60 * 1000,
   releaseEscrow: 60 * 60 * 1000,
   riskSignals: 15 * 60 * 1000, // Section 12.1 — feeds the admin dashboard's Risk & Fraud tab
@@ -58,6 +60,7 @@ async function main() {
 
   await tick("discoverOpportunities", () => discoverOpportunities(discoveryAdapter));
   await tick("closeExpiredAuctions", closeExpiredAuctions);
+  await tick("relistLapsedOpportunities", relistLapsedOpportunities);
   await tick("evaluateBatchRelisting", evaluateBatchRelisting);
   await tick("releaseEscrow", releaseEscrow);
   await tick("flagRiskSignals", flagRiskSignals);
@@ -65,6 +68,7 @@ async function main() {
 
   setInterval(() => tick("discoverOpportunities", () => discoverOpportunities(discoveryAdapter)), INTERVALS_MS.discovery);
   setInterval(() => tick("closeExpiredAuctions", closeExpiredAuctions), INTERVALS_MS.closeAuctions);
+  setInterval(() => tick("relistLapsedOpportunities", relistLapsedOpportunities), INTERVALS_MS.relistLapsed);
   setInterval(() => tick("evaluateBatchRelisting", evaluateBatchRelisting), INTERVALS_MS.batchRelist);
   setInterval(() => tick("releaseEscrow", releaseEscrow), INTERVALS_MS.releaseEscrow);
   setInterval(() => tick("flagRiskSignals", flagRiskSignals), INTERVALS_MS.riskSignals);

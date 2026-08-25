@@ -10,10 +10,10 @@ import {
 } from "./pricing.js";
 
 describe("classifyUrgencyTier + actionClockSeconds (Section 11.1)", () => {
-  it("classifies limited, volatile stock as hot with a short clock", () => {
+  it("classifies limited, volatile stock as hot with a flat 30 minute clock", () => {
     const tier = classifyUrgencyTier({ limitedStock: true, estimatedMarketDepth: 40, priceVolatility: 0.8 });
     expect(tier).toBe("hot");
-    expect(actionClockSeconds(tier)).toBe(25 * 60);
+    expect(actionClockSeconds(tier)).toBe(30 * 60);
   });
 
   it("classifies deep, stable stock as stable with a 60 minute clock", () => {

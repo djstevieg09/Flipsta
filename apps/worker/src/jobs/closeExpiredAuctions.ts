@@ -15,7 +15,7 @@ export async function closeExpiredAuctions() {
 
   const { data: expired } = await db
     .from("opportunities")
-    .select("id")
+    .select("id, lapse_streak_days")
     .eq("status", "live")
     .lt("action_clock_expires_at", nowIso);
 
@@ -35,7 +35,19 @@ export async function closeExpiredAuctions() {
       await db.from("opportunities").update({ status: "won", won_by: highBid.bidder_id }).eq("id", opp.id).eq("status", "live");
       won++;
     } else {
-      await db.from("opportunities").update({ status: "lapsed" }).eq("id", opp.id).eq("status", "live");
+      // No bids at all — rather than dying here, this gets one more look
+      // tomorrow (Steven's ask). See relistLapsedOpportunities.ts, which
+      // reads lapse_streak_days / next_recheck_at set here.
+      const nextRecheckIso = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      await db
+        .from("opportunities")
+        .update({
+          status: "lapsed",
+          lapse_streak_days: (opp.lapse_streak_days ?? 0) + 1,
+          next_recheck_at: nextRecheckIso,
+        })
+        .eq("id", opp.id)
+        .eq("status", "live");
       lapsed++;
     }
   }

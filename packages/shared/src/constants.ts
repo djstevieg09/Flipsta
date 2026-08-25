@@ -9,9 +9,14 @@ export type SubscriptionTier = "free" | "standard" | "pro" | "elite";
 
 export type UrgencyTier = "hot" | "standard" | "stable";
 
-/** Section 11.1 — Dynamic Action Clock ("Deal Heat") */
+/**
+ * Section 11.1 — Dynamic Action Clock ("Deal Heat").
+ * "hot" is fixed at a flat 30 minutes per Steven's spec ("if a low price to
+ * win then run for 30 minutes") — these are the flame-icon, cheap/urgent
+ * deals on the live feed.
+ */
 export const ACTION_CLOCK_SECONDS: Record<UrgencyTier, { min: number; max: number }> = {
-  hot: { min: 20 * 60, max: 30 * 60 },
+  hot: { min: 30 * 60, max: 30 * 60 },
   standard: { min: 45 * 60, max: 45 * 60 },
   stable: { min: 60 * 60, max: 60 * 60 },
 };

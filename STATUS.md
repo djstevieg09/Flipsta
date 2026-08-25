@@ -20,8 +20,18 @@ exactly where that line sits.
   risk/audit/tax), `0003_cross_posting.sql` (multi-platform listing),
   `0004_auth_profile_trigger.sql` (auto-creates a profile on signup),
   `0005_seller_order_visibility.sql` (lets a seller see orders on their own
-  listings, not just buyers see their own), and `0006_subscription_billing.sql`
-  (the Stripe subscription id column for self-serve tier upgrades).
+  listings, not just buyers see their own), `0006_subscription_billing.sql`
+  (the Stripe subscription id column for self-serve tier upgrades),
+  `0007_channel_connections.sql` (seller "Connect account" OAuth tokens),
+  and `0008_opportunity_lifecycle.sql` (real resale price + lapsed-deal
+  re-run tracking).
+- **The live feed re-runs lapsed deals instead of just dropping them** —
+  a zero-bid opportunity is re-checked the next day and re-listed if the
+  underlying retailer deal still looks real, resting for a week only after
+  three consecutive no-bid days. `apps/worker/src/jobs/closeExpiredAuctions.ts`
+  + `relistLapsedOpportunities.ts`. The "still real?" check reuses the same
+  `ANTHROPIC_API_KEY` as discovery — assumes "still active" with no key set,
+  same stub-until-configured pattern as everything else here.
 - **Real sign-up, sign-in, and self-serve password reset** — `/signup`,
   `/login`, `/forgot-password`, `/reset-password`, all using Supabase Auth
   directly, no admin involvement. This closes a real gap: previously nothing

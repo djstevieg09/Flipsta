@@ -68,7 +68,18 @@ export async function discoverOpportunities(adapter: SourceAdapter, targetOpport
     const nowIso = new Date().toISOString();
     const expiresIso = new Date(Date.now() + clockSeconds * 1000).toISOString();
 
-    await db.from("opportunities").insert({
+    // 26 Aug 2026 real-run bug: this insert's result was never checked, so a
+    // failed insert (e.g. the DB missing a column this row tries to write —
+    // exactly what happened today: estimated_resale_price_gbp didn't exist
+    // in production yet) was silently swallowed and this function still
+    // returned true, incrementing `created` and making the run's log line
+    // say "opportunitiesCreated: 2" when zero rows had actually been
+    // written. Steven spent a long back-and-forth chasing a display bug
+    // that didn't exist — the "opportunities" were never really created.
+    // Now the insert's error is checked and logged loudly, and a failed
+    // insert correctly counts as not-created so the caller keeps trying
+    // instead of stopping early on a phantom success.
+    const { error: insertError } = await db.from("opportunities").insert({
       category_id: category.id,
       source_tier: c.sourceTier,
       source_retailer: c.sourceRetailer,
@@ -90,6 +101,12 @@ export async function discoverOpportunities(adapter: SourceAdapter, targetOpport
       action_clock_expires_at: expiresIso,
       ai_reasoning: reasoning,
     });
+    if (insertError) {
+      console.error(
+        `[discoverOpportunities] INSERT FAILED for ${c.sourceRetailer} (${c.sourceUrl}): ${insertError.message}`,
+      );
+      return false;
+    }
     return true;
   }
 
@@ -107,9 +124,22 @@ export async function discoverOpportunities(adapter: SourceAdapter, targetOpport
   // Catch-all: process anything the adapter returned but never actually
   // ran through the callback (adapters like mockAdapter ignore onBatch
   // entirely and just return everything at once) — processed's dedupe
-  // means anything the callback already handled is skipped here, so this
-  // is always safe to run regardless of which style the adapter used.
-  await processBatch(candidates);
+  // means anything the callback already handled is skipped here.
+  //
+  // 26 Aug 2026 real-run bug: this used to run unconditionally, even when
+  // the callback path had already hit the target and told the adapter to
+  // stop. processBatch's own for-loop breaks the INSTANT it hits the
+  // target, so a batch with 2+ candidates where the first one alone
+  // satisfies the target leaves the second one never added to `processed`
+  // — and this catch-all would then pick it up and create it anyway.
+  // Real trigger: TARGET_OPPORTUNITIES_PER_RUN=1, a Zavvi batch reported 2
+  // real candidates, and both got created instead of stopping at 1. Now
+  // only runs the catch-all when the target genuinely hasn't been met yet
+  // — which is also exactly the case mockAdapter needs it for, since it
+  // never calls onBatch at all and `created` stays 0.
+  if (created < targetOpportunities) {
+    await processBatch(candidates);
+  }
 
   if (run) {
     await db

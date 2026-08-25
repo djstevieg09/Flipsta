@@ -2,110 +2,185 @@
 
 import { useEffect, useState } from "react";
 
-type ChannelConnection = {
-  channel: string;
-  name: string;
-  connectable: boolean;
-  connected: boolean;
-  externalUsername: string | null;
-  connectedAt: string | null;
+type WonOpportunity = {
+  id: string;
+  categories: { name: string } | null;
+  source_tier: string;
+  status: string;
+  source_retailer?: string | null;
+  source_url?: string | null;
+  source_price_gbp?: number | null;
 };
+type Listing = {
+  id: string;
+  price_gbp: number;
+  sold_at: string | null;
+  products: { title: string; condition: string } | null;
+  listing_channel_posts: { channel: string; status: string; external_url: string | null }[];
+};
+type Order = { id: string; price_gbp: number; status: string; created_at: string; listings: { products: { title: string } | null } | null };
 
 /**
- * Section 7 — "Connected accounts": the real seller-side of multi-platform
- * listing. A seller clicks Connect, is sent to sign into their own account
- * on that marketplace, grants access, and lands back here connected — no
- * API key ever shown to or handled by them. /sell/new only lets a seller
- * tick a channel to cross-post to once it shows connected here.
- *
- * "connectable: false" means Flipsta itself isn't set up for that channel
- * yet (no developer credentials on Render) — that's Steven's side to fix,
- * see INFRASTRUCTURE_TODO.md, not something a seller can do anything about.
+ * Section 12.1's "self serving" ask, made real: everything a seller needs
+ * to see about their own activity — wins, listings (with cross-post
+ * status), and orders both bought and sold — without an admin in the loop.
  */
-export default function ConnectionsPage() {
-  const [channels, setChannels] = useState<ChannelConnection[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [busyChannel, setBusyChannel] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  async function load() {
-    setLoading(true);
-    const res = await fetch("/api/channel-connections");
-    const data = await res.json();
-    if (res.ok) setChannels(data.channels);
-    setLoading(false);
-  }
+export default function PortfolioPage() {
+  const [won, setWon] = useState<WonOpportunity[]>([]);
+  const [listings, setListings] = useState<Listing[]>([]);
+  const [ordersAsBuyer, setOrdersAsBuyer] = useState<Order[]>([]);
+  const [ordersAsSeller, setOrdersAsSeller] = useState<Order[]>([]);
+  const [signedIn, setSignedIn] = useState(true);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const status = params.get("status");
-    const channel = params.get("channel");
-    if (status === "connected" && channel) setNotice(`${channel} connected.`);
-    if (status === "error") setError(params.get("message") ?? "The connection attempt failed.");
-    load();
+    fetch("/api/opportunities?won=true").then(async (r) => {
+      if (r.status === 401) {
+        setSignedIn(false);
+        return;
+      }
+      const d = await r.json();
+      setWon(d.opportunities ?? []);
+    });
+    fetch("/api/listings?mine=true")
+      .then((r) => r.json())
+      .then((d) => setListings(d.listings ?? []));
+    fetch("/api/orders")
+      .then((r) => r.json())
+      .then((d) => {
+        setOrdersAsBuyer(d.asBuyer ?? []);
+        setOrdersAsSeller(d.asSeller ?? []);
+      });
   }, []);
 
-  async function disconnect(channel: string) {
-    setBusyChannel(channel);
-    setError(null);
-    const res = await fetch(`/api/channel-connections/${channel}/disconnect`, { method: "POST" });
-    const data = await res.json();
-    if (!res.ok) setError(data.error ?? "Couldn't disconnect.");
-    await load();
-    setBusyChannel(null);
+  if (!signedIn) {
+    return (
+      <p className="text-textDim text-sm">
+        <a className="underline" href="/login">Sign in</a> to see your portfolio.
+      </p>
+    );
   }
 
+  const unlistedWins = won.filter((o) => o.status === "won");
+
   return (
-    <div className="max-w-2xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Connected accounts</h1>
-        <p className="text-textDim text-sm">
-          Connect your own account on each marketplace once — sign in on their site, grant access, done. After that,
-          cross-posting a listing from <span className="font-mono">/sell/new</span> is a single click, no further
-          setup per listing.
-        </p>
-      </div>
+    <div className="space-y-8">
+      <h1 className="text-2xl font-bold">Portfolio</h1>
 
-      {notice && <p className="text-sm text-green">{notice}</p>}
-      {error && <p className="text-sm text-red">{error}</p>}
-
-      {loading ? (
-        <p className="text-sm text-textDim">Loading…</p>
-      ) : (
-        <div className="space-y-2">
-          {channels.map((c) => (
-            <div key={c.channel} className="card flex items-center justify-between gap-3">
-              <div>
-                <p className="font-bold">{c.name}</p>
-                {c.connected ? (
-                  <p className="text-xs text-green">
-                    Connected{c.externalUsername ? ` as ${c.externalUsername}` : ""}
-                    {c.connectedAt ? ` · ${new Date(c.connectedAt).toLocaleDateString()}` : ""}
-                  </p>
-                ) : c.connectable ? (
-                  <p className="text-xs text-textDim">Not connected yet.</p>
-                ) : (
-                  <p className="text-xs text-gold">Not set up on Flipsta's side yet — see INFRASTRUCTURE_TODO.md.</p>
-                )}
-              </div>
-              {c.connected ? (
-                <button className="btn" disabled={busyChannel === c.channel} onClick={() => disconnect(c.channel)}>
-                  {busyChannel === c.channel ? "Disconnecting…" : "Disconnect"}
-                </button>
-              ) : (
-                <a
-                  className={`btn btn-primary ${!c.connectable ? "pointer-events-none opacity-40" : ""}`}
-                  href={c.connectable ? `/api/channel-connections/${c.channel}/connect` : undefined}
-                  aria-disabled={!c.connectable}
-                >
-                  Connect
-                </a>
+      <section className="space-y-2">
+        <h2 className="font-bold text-lg">Won opportunities</h2>
+        {unlistedWins.length > 0 && (
+          <p className="text-xs text-gold">
+            {unlistedWins.length} won and not listed yet — <a className="underline" href="/sell/new">list one now</a>.
+          </p>
+        )}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {won.map((o) => (
+            <div key={o.id} className="card">
+              <div className="font-bold text-sm">{o.categories?.name ?? "Item"}</div>
+              <div className="text-xs text-textDim">{o.source_tier}</div>
+              <div className="text-xs mt-1 capitalize">{o.status}</div>
+              {/* Section 5's blind-teaser reveal, made visible: everything below
+                  this line is redacted on the public feed and only ever comes
+                  back from the API once you've actually won the opportunity. */}
+              {o.source_retailer && (
+                <div className="mt-2 pt-2 border-t border-border space-y-0.5">
+                  <div className="text-xs font-bold">{o.source_retailer}</div>
+                  {typeof o.source_price_gbp === "number" && (
+                    <div className="text-xs text-textDim">Source price: £{o.source_price_gbp.toFixed(2)}</div>
+                  )}
+                  {o.source_url && (
+                    <a href={o.source_url} target="_blank" rel="noopener noreferrer" className="text-xs underline text-textDim break-all">
+                      {o.source_url}
+                    </a>
+                  )}
+                </div>
               )}
             </div>
           ))}
+          {won.length === 0 && <p className="text-textDim text-sm">No wins yet — browse Live Opportunities.</p>}
         </div>
-      )}
+      </section>
+
+      <section className="space-y-2">
+        <h2 className="font-bold text-lg">My listings</h2>
+        <div className="card p-0 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-textDim text-xs uppercase border-b border-border">
+                <th className="p-3">Item</th>
+                <th className="p-3">Price</th>
+                <th className="p-3">Status</th>
+                <th className="p-3">Cross-posted to</th>
+              </tr>
+            </thead>
+            <tbody>
+              {listings.map((l) => (
+                <tr key={l.id} className="border-b border-border last:border-0">
+                  <td className="p-3 font-bold">{l.products?.title ?? "—"}</td>
+                  <td className="p-3">£{Number(l.price_gbp).toFixed(2)}</td>
+                  <td className="p-3">{l.sold_at ? "Sold" : "Live"}</td>
+                  <td className="p-3 text-textDim">
+                    {l.listing_channel_posts.length === 0
+                      ? "—"
+                      : l.listing_channel_posts.map((c) => `${c.channel} (${c.status})`).join(", ")}
+                  </td>
+                </tr>
+              ))}
+              {listings.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="p-6 text-center text-textDim">
+                    No listings yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="space-y-2">
+        <h2 className="font-bold text-lg">My sales</h2>
+        <OrdersTable orders={ordersAsSeller} />
+      </section>
+
+      <section className="space-y-2">
+        <h2 className="font-bold text-lg">My purchases</h2>
+        <OrdersTable orders={ordersAsBuyer} />
+      </section>
+    </div>
+  );
+}
+
+function OrdersTable({ orders }: { orders: Order[] }) {
+  return (
+    <div className="card p-0 overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-textDim text-xs uppercase border-b border-border">
+            <th className="p-3">Item</th>
+            <th className="p-3">Price</th>
+            <th className="p-3">Status</th>
+            <th className="p-3">Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          {orders.map((o) => (
+            <tr key={o.id} className="border-b border-border last:border-0">
+              <td className="p-3 font-bold">{o.listings?.products?.title ?? "—"}</td>
+              <td className="p-3">£{Number(o.price_gbp).toFixed(2)}</td>
+              <td className="p-3 capitalize">{o.status.replace(/_/g, " ")}</td>
+              <td className="p-3 text-textDim">{new Date(o.created_at).toLocaleDateString()}</td>
+            </tr>
+          ))}
+          {orders.length === 0 && (
+            <tr>
+              <td colSpan={4} className="p-6 text-center text-textDim">
+                None yet.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
     </div>
   );
 }

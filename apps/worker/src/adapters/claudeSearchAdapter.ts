@@ -183,6 +183,8 @@ From what you see there:
 1. Pick 1-2 products with a genuine, clearly-marked discount and (if shown) in-stock availability. If the page looks thin on real content (some retailer sites don't render properly for a plain fetch), use web_search restricted to ${source.domain} instead, e.g. "site:${source.domain} clearance" — don't burn time on that fallback if the fetch worked.
 2. For each one, use web_search to find real resale evidence — what the same or equivalent item is actually selling for right now. Good sources for this category: ${RESALE_EVIDENCE_HINTS[source.category]}.
 
+ON RESALE EVIDENCE — a true "sold/completed" eBay listing is the gold standard, but it's genuinely often invisible to a plain web search (eBay's own sold-items filter isn't reliably exposed to automated tools — this is a known limitation, not something to burn your whole search budget chasing). If you can't find one after 2-3 real attempts, it's fine to instead use several CURRENT live listings (eBay, Vinted, or another marketplace) clustering around a similar price as your evidence — that's a genuine, honest signal of real resale value even without a confirmed completed sale, and is a completely acceptable substitute. What's NOT acceptable: a single unrelated price you happened to notice (e.g. a different current offer on the SAME retailer site you're sourcing from — that's not independent resale evidence, don't use it), or inventing a plausible-sounding number with no real URL behind it.
+
 THIS IS RETAIL ARBITRAGE, NOT COLLECTIBLE INVESTING. Profit comes from buying BELOW an item's normal price and reselling AT OR NEAR that normal price, soon (days to weeks) — not from it appreciating over months/years like a collector holding it. A £120 item with a ~£200+ normal price is a good candidate even if some tracker site says it "hasn't appreciated" — that phrase is about long-term collectible growth and is irrelevant here; never use it as a reason to drop a candidate, and never use it as your resale evidence. Check currency too — if a site shows USD or another non-GBP currency, convert explicitly or find a GBP source instead.
 
 Report what you find with report_candidate_deals — category_slug should be "${source.category}". An empty deals array is a completely fine outcome if nothing on the page genuinely clears a real margin; don't invent a candidate to avoid reporting zero.`;
@@ -201,7 +203,15 @@ export const claudeSearchAdapter: SourceAdapter = {
     // .stream().finalMessage() waits for the same complete response with
     // no such cap. Less of a real risk now than when this budget was 32
     // searches for open-ended discovery, but cheap insurance to keep.
-    const WEB_SEARCH_MAX_USES = 10; // resale-evidence checks only now, not discovery — see file header
+    // 25 Aug real run: a genuinely good run (4 real candidates found from
+    // one clean web_fetch) still came back with candidatesFound: 0 because
+    // it used 7 of 10 searches hunting for true "sold" eBay evidence — hard
+    // to find for any automated tool, eBay's sold-items filter especially —
+    // and correctly refused to invent evidence rather than report nothing.
+    // Raised the budget a bit so a genuinely hard resale-evidence search
+    // isn't cut short by budget alone, alongside relaxing what counts as
+    // acceptable evidence (see buildPrompt's "ON RESALE EVIDENCE" note).
+    const WEB_SEARCH_MAX_USES = 14; // resale-evidence checks only now, not discovery — see file header
     const WEB_FETCH_MAX_USES = 4; // the curated page itself, plus room for a product page or a fallback fetch
 
     // Computed once per run (not per continuation) so a paused-and-resumed

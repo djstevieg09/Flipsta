@@ -48,6 +48,40 @@ const VALID_CATEGORY_SLUGS = [
   "gaming",
 ] as const;
 
+// Steven, 25 Aug 2026: "its only really looking at lego sets." Root cause —
+// the old prompt's only concrete example anywhere was "a collector
+// price-tracker like BrickEconomy for LEGO", in an otherwise-abstract list
+// of 10 categories with no other named verification source. Given a choice
+// under uncertainty, the model rationally kept reaching for the one
+// category it had a spelled-out way to verify. The fix isn't "ask it more
+// firmly to vary" — it's to stop leaving that choice to the model at all.
+// Each run now gets a specific category assigned in code, rotating through
+// all 10 on a clock (see focusCategoryForRun below), with its own
+// resale-evidence hint so every category gets the same kind of concrete
+// guidance LEGO used to get exclusively.
+const RESALE_EVIDENCE_HINTS: Record<(typeof VALID_CATEGORY_SLUGS)[number], string> = {
+  collectibles: "eBay UK sold listings first — that's the real near-term resale price. A collector tracker like BrickEconomy can be a secondary sanity check ONLY of its GBP secondary-market price, never its USD price and never any 'investment growth' or 'value after retirement' percentage — see the note below on why.",
+  footwear: "eBay sold listings, StockX, or GOAT",
+  tech: "eBay sold listings, or CeX's own trade-in/resale pricing",
+  "home-kitchen": "eBay sold listings or Vinted",
+  beauty: "eBay sold listings or Vinted — check it's sealed/unused, resale value collapses fast on opened beauty items",
+  "toys-games": "eBay UK sold listings first — that's the real near-term resale price. A collector tracker like BrickEconomy can be a secondary sanity check ONLY of its GBP secondary-market price, never its USD price and never any 'investment growth' or 'value after retirement' percentage — see the note below on why.",
+  "fashion-accessories": "eBay sold listings, Vinted, or Depop",
+  "sports-outdoors": "eBay sold listings or Vinted",
+  "baby-kids": "eBay sold listings or Vinted",
+  gaming: "eBay sold listings, CeX, or PriceCharting for game/console resale value",
+};
+
+// Deterministic rotation, not random or model-chosen — advances to the next
+// category roughly every 12h (matching the twice-a-day interval in
+// index.ts) purely from wall-clock time, so it needs no stored state and
+// naturally cycles through all 10 categories over 5 days regardless of how
+// many times the worker gets restarted in between.
+function focusCategoryForRun(): (typeof VALID_CATEGORY_SLUGS)[number] {
+  const twelveHourBuckets = Math.floor(Date.now() / (12 * 60 * 60 * 1000));
+  return VALID_CATEGORY_SLUGS[twelveHourBuckets % VALID_CATEGORY_SLUGS.length];
+}
+
 const REPORT_TOOL = {
   name: "report_candidate_deals",
   description:
@@ -103,15 +137,21 @@ const REPORT_TOOL = {
   },
 };
 
-const PROMPT = `You're sourcing real resale opportunities for a UK reselling marketplace. Use web search to find products that are:
+function buildPrompt(focusCategory: (typeof VALID_CATEGORY_SLUGS)[number]): string {
+  return `You're sourcing real resale opportunities for a UK reselling marketplace. Use web search to find products that are:
 
 1. Currently on genuine discount/clearance/overstock at a real UK (or reputable online) retailer right now, with a specific current price you can point to. A "best deals" roundup or clearance-page article is a GOOD place to START looking — it's an efficient way to surface leads — but don't report the roundup itself as the deal. Pick one specific product it names, then go confirm that product's own page: the exact current price, and ideally that it still shows as in stock/purchasable right now (deals do go out of stock — if the retailer's own page shows it unavailable, drop it and try another lead).
-2. Resellable at a real profit — search a second-hand or marketplace site (eBay sold listings, Vinted, a collector price-tracker like BrickEconomy for LEGO, etc.) for what the same or equivalent item is actually selling for, so the margin is based on real evidence, not a guess. Amazon is NOT always the cheapest source — check independent retailers and other marketplaces too, not just Amazon. Note eBay's own search results sometimes fail to load for automated tools — if that happens, try a different resale evidence source rather than giving up on the candidate.
-3. In one of these categories only: collectibles, footwear, tech, home-kitchen, beauty, toys-games, fashion-accessories, sports-outdoors, baby-kids, gaming.
+2. Resellable at a real profit — search a second-hand or marketplace site for what the same or equivalent item is actually selling for, so the margin is based on real evidence, not a guess. For this run's category, good resale-evidence sources are: ${RESALE_EVIDENCE_HINTS[focusCategory]}. Amazon is NOT always the cheapest source — check independent retailers and other marketplaces too, not just Amazon. Note eBay's own search results sometimes fail to load for automated tools — if that happens, try a different resale evidence source rather than giving up on the candidate.
 
-This only runs twice a day, so this is the main chance to find the day's deals — spread your searching across a genuine mix of these categories rather than exhausting your budget on just one or two, but never lower the bar to fill a quota. Aim for 4-8 genuine, fully-verified candidates across the categories you check. Fewer real candidates is always better than making anything up. For each, you must have an actual source URL for the current offer and an actual URL you checked for the resale price evidence.
+THIS IS RETAIL ARBITRAGE, NOT COLLECTIBLE INVESTING — an important distinction that's caused real mistakes before. The profit here comes from buying BELOW an item's normal price and reselling AT OR NEAR that normal price, quickly (days to weeks) — NOT from the item appreciating in value over months or years the way a collectible investor thinks about it. Concretely: an item at £120 with a normal/RRP price around £200+ is a genuinely good candidate even if a collector-investment site says it "hasn't appreciated" or is "still at retail value" — that phrase describes long-term collectible growth, which is irrelevant here, not resale viability. NEVER use a long-term appreciation figure ("X% growth after retirement," "investment return," a holding-period analysis, an article about a set's value over years) as your resale evidence, and never let one talk you out of an otherwise-solid discount-to-RRP margin — that is a different question to the one you're answering. Your resale evidence must be an actual current selling/sold price on a resale marketplace. Also check currency carefully: if a site shows a price in USD or another currency (BrickEconomy defaults to USD unless you can confirm it's showing GBP), either convert it explicitly and say so, or find a GBP source instead — never compare a GBP cost against a non-GBP figure as if they were the same currency.
+3. THIS RUN'S CATEGORY IS: **${focusCategory}**. Search specifically within this category. The full approved list (for reference only — do not search other categories this run) is: collectibles, footwear, tech, home-kitchen, beauty, toys-games, fashion-accessories, sports-outdoors, baby-kids, gaming — categories are rotated across runs in code so every one gets covered over time; only branch outside ${focusCategory} if a genuine, sustained effort inside it turns up nothing viable at all.
 
-Call report_candidate_deals with what you found once you're done searching. If you find nothing real, call it with an empty deals array.`;
+DEPTH OVER BREADTH — this is the most important instruction here. Fully closing out ONE candidate (its current price confirmed on the retailer's own page, its stock confirmed, and real resale evidence found) typically takes 4-6 searches on its own. Pick a lead, then commit to it: verify price, verify stock, find resale evidence, confirm resale evidence — all before you go looking for a different lead. Do NOT sample many products broadly and leave every one of them half-verified — that produces zero reportable candidates, which has been happening. A run that fully verifies just 1 or 2 real candidates is a completely successful run, better than a run that touches 6 leads and finishes none of them. Only move to a different lead once you've either fully closed out a candidate or genuinely exhausted a promising one.
+
+There's no quota to hit — 1 genuine, fully-verified candidate is a good outcome, more is a bonus. Fewer real candidates is always better than making anything up, and always better than reporting nothing because you spread too thin. For each candidate, you must have an actual source URL for the current offer and an actual URL you checked for the resale price evidence.
+
+Call report_candidate_deals with what you found once you're done searching. If you genuinely find nothing after fully committing to a few leads within ${focusCategory}, call it with an empty deals array — but that should be rare if you're closing out leads one at a time instead of sampling broadly.`;
+}
 
 export const claudeSearchAdapter: SourceAdapter = {
   name: "claude-search",
@@ -120,17 +160,51 @@ export const claudeSearchAdapter: SourceAdapter = {
       throw new Error("claudeSearchAdapter needs ANTHROPIC_API_KEY set — see INFRASTRUCTURE_TODO.md #6.");
     }
 
-    const response = await client.messages.create({
-      model: "claude-sonnet-4-5",
-      max_tokens: 24000, // raised again — see the diagnostic logging below; a truncated (max_tokens) response before it
-      // ever reaches report_candidate_deals is one of the leading suspects for "candidatesFound: 0" every real run so far.
-      // Search budget raised alongside doubling the category count (5 -> 10)
-      // so per-category coverage doesn't get thinner just because there's
-      // more ground to cover in one run — this only runs twice a day
-      // (index.ts), not every 2 hours, so each run matters more.
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 32 }, REPORT_TOOL],
-      messages: [{ role: "user", content: PROMPT }],
-    });
+    // Streaming, not .create() — the Anthropic SDK refuses to run a
+    // non-streaming request that it estimates could take longer than 10
+    // minutes (a real risk here: max_tokens 24000 + up to 32 web searches
+    // to reason over), and throws client-side before ever calling the API
+    // at all. .stream().finalMessage() waits for the same complete
+    // response with no such cap.
+    //
+    // Search budget raised alongside doubling the category count (5 -> 10)
+    // so per-category coverage doesn't get thinner just because there's
+    // more ground to cover in one run — this only runs twice a day
+    // (index.ts), not every 2 hours, so each run matters more.
+    const tools: Anthropic.Messages.MessageCreateParams["tools"] = [
+      { type: "web_search_20250305", name: "web_search", max_uses: 32 },
+      REPORT_TOOL,
+    ];
+    // Computed once per run (not per continuation) so a paused-and-resumed
+    // run stays on the same category throughout — see focusCategoryForRun.
+    const focusCategory = focusCategoryForRun();
+    const prompt = buildPrompt(focusCategory);
+    console.log(`[claudeSearchAdapter] This run's focus category: ${focusCategory}`);
+    let messages: Anthropic.Messages.MessageParam[] = [{ role: "user", content: prompt }];
+    let response = await client.messages.stream({ model: "claude-sonnet-4-5", max_tokens: 24000, tools, messages }).finalMessage();
+
+    // stop_reason "pause_turn" is Anthropic's server-side sampling loop
+    // hitting its own internal iteration cap mid-way through a server tool
+    // (web_search) — it's not finished, just paused, and the documented fix
+    // is to send the assistant's partial response straight back and let it
+    // continue (server tools keep their state across the pause; no
+    // tool_result needed). Seen for real on this account: it had committed
+    // to one specific lead (an Argos LEGO clearance set), confirmed the
+    // product and price, and was mid-way through checking stock when it got
+    // paused — exactly the kind of thorough, depth-first search this
+    // adapter is now supposed to do, so finishing the turn matters more
+    // than ever rather than treating a pause as "found nothing."
+    let continuations = 0;
+    const MAX_CONTINUATIONS = 6;
+    while (response.stop_reason === "pause_turn" && continuations < MAX_CONTINUATIONS) {
+      continuations++;
+      console.log(`[claudeSearchAdapter] stop_reason=pause_turn — continuing (${continuations}/${MAX_CONTINUATIONS})`);
+      messages = [{ role: "user", content: prompt }, { role: "assistant", content: response.content }];
+      response = await client.messages.stream({ model: "claude-sonnet-4-5", max_tokens: 24000, tools, messages }).finalMessage();
+    }
+    if (response.stop_reason === "pause_turn") {
+      console.warn(`[claudeSearchAdapter] Still paused after ${MAX_CONTINUATIONS} continuations — giving up on this run.`);
+    }
 
     // Diagnostic logging — every real run so far has come back with zero
     // candidates despite genuinely spending money, which isn't normal even

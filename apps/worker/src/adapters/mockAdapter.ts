@@ -38,6 +38,9 @@ const SAMPLE_POOL: Omit<CandidateDeal, "sourcePriceGBP" | "estimatedResalePriceG
 
 export const mockAdapter: SourceAdapter = {
   name: "mock",
+  // Ignores onBatch — it's a single-shot demo adapter with nothing to
+  // batch across, so the caller's own final catch-all pass over whatever
+  // this returns handles it (see discoverOpportunities.ts).
   async findCandidates(): Promise<CandidateDeal[]> {
     return SAMPLE_POOL.map((base) => {
       const sourcePriceGBP = round2(10 + Math.random() * 80);

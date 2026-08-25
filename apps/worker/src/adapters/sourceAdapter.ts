@@ -18,5 +18,22 @@ export interface CandidateDeal {
 
 export interface SourceAdapter {
   name: string;
-  findCandidates(): Promise<CandidateDeal[]>;
+  /**
+   * 26 Aug 2026, Steven, filling the dashboard for the first time: "i need
+   * it to keep goint to start with until its got 1 oppotunity. then stop
+   * once its founfd one and its displayed it on dashboard." "Displayed on
+   * the dashboard" means an actual opportunity, past the real margin and
+   * AI-confidence checks in discoverOpportunities.ts — not just a
+   * candidate the adapter itself thinks looks promising, which is a lower
+   * bar. onBatch, when provided, lets the caller (discoverOpportunities.ts)
+   * run that real verification on each batch of candidates AS the adapter
+   * finds them, and tell the adapter "I've got enough, stop early" (return
+   * true) or "keep going" (return false) — so a multi-source adapter like
+   * claudeSearchAdapter can stop trying more sources the moment a real
+   * opportunity has actually been created, not just reported. Adapters
+   * that don't do multi-batch discovery (mockAdapter) can ignore this and
+   * just return everything at once — the caller still processes whatever
+   * comes back either way.
+   */
+  findCandidates(onBatch?: (batch: CandidateDeal[]) => Promise<boolean>): Promise<CandidateDeal[]>;
 }

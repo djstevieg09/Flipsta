@@ -190,46 +190,56 @@ THIS IS RETAIL ARBITRAGE, NOT COLLECTIBLE INVESTING. Profit comes from buying BE
 Report what you find with report_candidate_deals — category_slug should be "${source.category}". An empty deals array is a completely fine outcome if nothing on the page genuinely clears a real margin; don't invent a candidate to avoid reporting zero.`;
 }
 
-export const claudeSearchAdapter: SourceAdapter = {
-  name: "claude-search",
-  async findCandidates(): Promise<CandidateDeal[]> {
-    if (!client) {
-      throw new Error("claudeSearchAdapter needs ANTHROPIC_API_KEY set — see INFRASTRUCTURE_TODO.md #6.");
-    }
+// 25-26 Aug 2026, Steven, while testing: a single run now tries multiple
+// curated sources in sequence (starting from the normal 12h-rotation pick,
+// then moving forward through the list) rather than giving up after just
+// one page. The real stopping condition now comes from discoverOpportunities.ts
+// via findCandidates's onBatch callback (see sourceAdapter.ts) — it stops
+// the moment the caller says it has enough ACTUAL opportunities created
+// (Steven, 26 Aug: "keep goint... until its got 1 oppotunity. then stop
+// once its founfd one"), not just raw candidates reported. TARGET_CANDIDATES_PER_RUN
+// below is only a fallback for a caller that doesn't pass onBatch at all.
+// MAX_SOURCES_PER_RUN is always a hard safety cap either way — a run can
+// never silently work through more than this many sources' full search
+// budgets in one go, however far the real target is from being met.
+const TARGET_CANDIDATES_PER_RUN = 3;
+const MAX_SOURCES_PER_RUN = 5;
 
-    // Streaming, not .create() — the Anthropic SDK refuses to run a
-    // non-streaming request that it estimates could take longer than 10
-    // minutes, and throws client-side before ever calling the API at all.
-    // .stream().finalMessage() waits for the same complete response with
-    // no such cap. Less of a real risk now than when this budget was 32
-    // searches for open-ended discovery, but cheap insurance to keep.
-    // 25 Aug real run: a genuinely good run (4 real candidates found from
-    // one clean web_fetch) still came back with candidatesFound: 0 because
-    // it used 7 of 10 searches hunting for true "sold" eBay evidence — hard
-    // to find for any automated tool, eBay's sold-items filter especially —
-    // and correctly refused to invent evidence rather than report nothing.
-    // Raised the budget a bit so a genuinely hard resale-evidence search
-    // isn't cut short by budget alone, alongside relaxing what counts as
-    // acceptable evidence (see buildPrompt's "ON RESALE EVIDENCE" note).
-    const WEB_SEARCH_MAX_USES = 14; // resale-evidence checks only now, not discovery — see file header
-    const WEB_FETCH_MAX_USES = 4; // the curated page itself, plus room for a product page or a fallback fetch
+async function discoverFromSource(source: CuratedSource): Promise<CandidateDeal[]> {
+  if (!client) {
+    throw new Error("claudeSearchAdapter needs ANTHROPIC_API_KEY set — see INFRASTRUCTURE_TODO.md #6.");
+  }
 
-    // Computed once per run (not per continuation) so a paused-and-resumed
-    // run stays on the same source throughout — see focusSourceForRun.
-    const source = focusSourceForRun();
-    const tools: Anthropic.Messages.MessageCreateParams["tools"] = [
-      {
-        type: "web_fetch_20250910",
-        name: "web_fetch",
-        max_uses: WEB_FETCH_MAX_USES,
-        allowed_domains: [source.domain, `www.${source.domain}`],
-        max_content_tokens: 50000,
-      },
-      { type: "web_search_20250305", name: "web_search", max_uses: WEB_SEARCH_MAX_USES },
-      REPORT_TOOL,
-    ];
+  // Streaming, not .create() — the Anthropic SDK refuses to run a
+  // non-streaming request that it estimates could take longer than 10
+  // minutes, and throws client-side before ever calling the API at all.
+  // .stream().finalMessage() waits for the same complete response with
+  // no such cap. Less of a real risk now than when this budget was 32
+  // searches for open-ended discovery, but cheap insurance to keep.
+  // 25 Aug real run: a genuinely good run (4 real candidates found from
+  // one clean web_fetch) still came back with candidatesFound: 0 because
+  // it used 7 of 10 searches hunting for true "sold" eBay evidence — hard
+  // to find for any automated tool, eBay's sold-items filter especially —
+  // and correctly refused to invent evidence rather than report nothing.
+  // Raised the budget a bit so a genuinely hard resale-evidence search
+  // isn't cut short by budget alone, alongside relaxing what counts as
+  // acceptable evidence (see buildPrompt's "ON RESALE EVIDENCE" note).
+  const WEB_SEARCH_MAX_USES = 14; // resale-evidence checks only now, not discovery — see file header
+  const WEB_FETCH_MAX_USES = 4; // the curated page itself, plus room for a product page or a fallback fetch
+
+  const tools: Anthropic.Messages.MessageCreateParams["tools"] = [
+    {
+      type: "web_fetch_20250910",
+      name: "web_fetch",
+      max_uses: WEB_FETCH_MAX_USES,
+      allowed_domains: [source.domain, `www.${source.domain}`],
+      max_content_tokens: 50000,
+    },
+    { type: "web_search_20250305", name: "web_search", max_uses: WEB_SEARCH_MAX_USES },
+    REPORT_TOOL,
+  ];
     const prompt = buildPrompt(source);
-    console.log(`[claudeSearchAdapter] This run's source: ${source.retailer} (${source.category}) — ${source.url}`);
+    console.log(`[claudeSearchAdapter] Fetching from: ${source.retailer} (${source.category}) — ${source.url}`);
     let messages: Anthropic.Messages.MessageParam[] = [{ role: "user", content: prompt }];
     let response = await client.messages.stream({ model: "claude-sonnet-4-5", max_tokens: 24000, tools, messages }).finalMessage();
 
@@ -277,12 +287,30 @@ export const claudeSearchAdapter: SourceAdapter = {
       );
     }
 
+    // 26 Aug 2026: candidatesFound: 0 kept showing up with no way to tell
+    // *why* — did the model genuinely decide nothing had a real margin, did
+    // it report deals that then failed our own validation (bad price, no
+    // URL, wrong category), or did it just never call the tool at all?
+    // Those are three very different problems needing three different
+    // fixes, but they all looked identical in the summary log line. The
+    // 800-char text_preview above usually gets cut off mid-reasoning right
+    // when the model explains its call — so on a zero-candidate outcome,
+    // log the model's FULL final reasoning text (untruncated) plus exactly
+    // what (if anything) it handed to report_candidate_deals, so the next
+    // "found a real 71%-off deal but candidatesFound: 0" case is
+    // diagnosable straight from the logs instead of guessing.
+    const fullText = response.content
+      .filter((b: any) => b.type === "text")
+      .map((b: any) => b.text)
+      .join(" ");
+
     const toolUse = response.content.find(
       (block): block is Anthropic.ToolUseBlock => block.type === "tool_use" && block.name === "report_candidate_deals",
     );
     const deals = (toolUse?.input as { deals?: unknown[] } | undefined)?.deals;
     if (!Array.isArray(deals)) {
       console.warn("[claudeSearchAdapter] No report_candidate_deals call in the response — treating as zero candidates this run.");
+      console.warn(`[claudeSearchAdapter] Full reasoning text for this zero-candidate run: ${JSON.stringify(fullText)}`);
       return [];
     }
 
@@ -290,12 +318,21 @@ export const claudeSearchAdapter: SourceAdapter = {
     for (const raw of deals) {
       const d = raw as Record<string, unknown>;
       const categorySlug = typeof d.category_slug === "string" ? d.category_slug : "";
-      if (!(VALID_CATEGORY_SLUGS as readonly string[]).includes(categorySlug)) continue;
+      if (!(VALID_CATEGORY_SLUGS as readonly string[]).includes(categorySlug)) {
+        console.warn(`[claudeSearchAdapter] Dropped a reported deal — bad/missing category_slug: ${JSON.stringify(d)}`);
+        continue;
+      }
 
       const sourcePriceGBP = Number(d.source_price_gbp);
       const estimatedResalePriceGBP = Number(d.estimated_resale_price_gbp);
-      if (!(sourcePriceGBP > 0) || !(estimatedResalePriceGBP > 0)) continue;
-      if (typeof d.source_url !== "string" || !d.source_url) continue;
+      if (!(sourcePriceGBP > 0) || !(estimatedResalePriceGBP > 0)) {
+        console.warn(`[claudeSearchAdapter] Dropped a reported deal — invalid price(s): ${JSON.stringify(d)}`);
+        continue;
+      }
+      if (typeof d.source_url !== "string" || !d.source_url) {
+        console.warn(`[claudeSearchAdapter] Dropped a reported deal — missing source_url: ${JSON.stringify(d)}`);
+        continue;
+      }
 
       // Not persisted (no DB column for it yet) but logged so an admin can
       // spot-check early real runs against what Claude actually found —
@@ -318,7 +355,56 @@ export const claudeSearchAdapter: SourceAdapter = {
       });
     }
 
+    if (candidates.length === 0) {
+      console.warn(
+        `[claudeSearchAdapter] Model called report_candidate_deals with ${deals.length} deal(s), but none survived validation, or it reported zero on purpose. Full reasoning text: ${JSON.stringify(fullText)}`,
+      );
+    }
+
     return candidates;
+}
+
+export const claudeSearchAdapter: SourceAdapter = {
+  name: "claude-search",
+  async findCandidates(onBatch?: (batch: CandidateDeal[]) => Promise<boolean>): Promise<CandidateDeal[]> {
+    // Starts at the normal 12h-rotation source, then walks forward through
+    // CURATED_SOURCES (wrapping around) so repeated runs within the same
+    // 12h window don't all hammer the exact same page — see
+    // TARGET_CANDIDATES_PER_RUN / MAX_SOURCES_PER_RUN above.
+    const startIndex = CURATED_SOURCES.indexOf(focusSourceForRun());
+    const allCandidates: CandidateDeal[] = [];
+    let sourcesTried = 0;
+
+    for (let i = 0; i < MAX_SOURCES_PER_RUN; i++) {
+      const source = CURATED_SOURCES[(startIndex + i) % CURATED_SOURCES.length];
+      sourcesTried++;
+      console.log(
+        `[claudeSearchAdapter] Source ${sourcesTried}/${MAX_SOURCES_PER_RUN}: ${source.retailer} (${source.category}) — ${source.url} — have ${allCandidates.length}/${TARGET_CANDIDATES_PER_RUN} candidates so far`,
+      );
+      const found = await discoverFromSource(source);
+      allCandidates.push(...found);
+
+      // When the caller (discoverOpportunities.ts) hands us a real
+      // verification callback, let IT decide when to stop — it knows
+      // whether something has actually cleared the margin/confidence bar
+      // and been created, which is the real "found 1" Steven means, not
+      // just "the AI reported something." Without a callback (e.g. a
+      // standalone test), fall back to the old raw-count heuristic.
+      if (onBatch) {
+        const satisfied = await onBatch(found);
+        if (satisfied) {
+          console.log(`[claudeSearchAdapter] Caller signalled it has what it needs after source ${sourcesTried}/${MAX_SOURCES_PER_RUN} — stopping early.`);
+          break;
+        }
+      } else if (allCandidates.length >= TARGET_CANDIDATES_PER_RUN) {
+        break;
+      }
+    }
+
+    console.log(
+      `[claudeSearchAdapter] Run finished: ${allCandidates.length} candidate(s) from ${sourcesTried} source(s) (cap was ${MAX_SOURCES_PER_RUN} sources).`,
+    );
+    return allCandidates;
   },
 };
 

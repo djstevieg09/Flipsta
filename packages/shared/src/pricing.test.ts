@@ -10,22 +10,26 @@ import {
 } from "./pricing.js";
 
 describe("classifyUrgencyTier + actionClockSeconds (Section 11.1)", () => {
-  it("classifies limited, volatile stock as hot with a flat 30 minute clock", () => {
+  // ACTION_CLOCK_SECONDS is temporarily flattened to 720min/12h across all
+  // three tiers (constants.ts, 25 Aug 2026) for Steven's testing — these
+  // assertions track that temporary value, not the real 30/45/60min spec.
+  // Revert both together when testing wraps up.
+  it("classifies limited, volatile stock as hot", () => {
     const tier = classifyUrgencyTier({ limitedStock: true, estimatedMarketDepth: 40, priceVolatility: 0.8 });
     expect(tier).toBe("hot");
-    expect(actionClockSeconds(tier)).toBe(30 * 60);
+    expect(actionClockSeconds(tier)).toBe(720 * 60);
   });
 
-  it("classifies deep, stable stock as stable with a 60 minute clock", () => {
+  it("classifies deep, stable stock as stable", () => {
     const tier = classifyUrgencyTier({ limitedStock: false, estimatedMarketDepth: 80, priceVolatility: 0.05 });
     expect(tier).toBe("stable");
-    expect(actionClockSeconds(tier)).toBe(60 * 60);
+    expect(actionClockSeconds(tier)).toBe(720 * 60);
   });
 
   it("falls back to standard otherwise", () => {
     const tier = classifyUrgencyTier({ limitedStock: false, estimatedMarketDepth: 20, priceVolatility: 0.3 });
     expect(tier).toBe("standard");
-    expect(actionClockSeconds(tier)).toBe(45 * 60);
+    expect(actionClockSeconds(tier)).toBe(720 * 60);
   });
 });
 

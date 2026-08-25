@@ -14,11 +14,19 @@ export type UrgencyTier = "hot" | "standard" | "stable";
  * "hot" is fixed at a flat 30 minutes per Steven's spec ("if a low price to
  * win then run for 30 minutes") — these are the flame-icon, cheap/urgent
  * deals on the live feed.
+ *
+ * TEMPORARY — 25 Aug 2026, Steven, while testing: "have the auctions run
+ * for 720 mins. just whlst testing cant have them dissapearing off the
+ * dashboard." All three tiers set to a flat 720 minutes (12h) so
+ * opportunities stay visible long enough to interact with while iterating
+ * on everything else. This is explicitly NOT the real spec above — revert
+ * to the 30/45/60-minute values (still intact in the comments/history)
+ * before real launch, once testing no longer needs the extra time.
  */
 export const ACTION_CLOCK_SECONDS: Record<UrgencyTier, { min: number; max: number }> = {
-  hot: { min: 30 * 60, max: 30 * 60 },
-  standard: { min: 45 * 60, max: 45 * 60 },
-  stable: { min: 60 * 60, max: 60 * 60 },
+  hot: { min: 720 * 60, max: 720 * 60 },
+  standard: { min: 720 * 60, max: 720 * 60 },
+  stable: { min: 720 * 60, max: 720 * 60 },
 };
 
 /** Section 8.1 — Marketplace Commission */

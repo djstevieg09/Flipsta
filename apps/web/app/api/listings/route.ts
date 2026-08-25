@@ -4,6 +4,15 @@ import { getCurrentProfile } from "@/lib/currentProfile";
 import { TIER_ENTITLEMENTS } from "@/lib/tierGuard";
 import { isValidSalesChannel, publishListingToChannel, sortByPriceTimePriority } from "@flipsta/shared";
 
+// Force-dynamic: every route here reads live application data (bids, wallet
+// balances, opportunities, order status) straight from Supabase. Without this,
+// Next.js's App Router can cache a GET route's first response (including the
+// fetch calls a library like supabase-js makes under the hood) and keep
+// serving that same stale response indefinitely, even after the database
+// changes underneath it — exactly what caused real, freshly-discovered
+// opportunities to not show up on /opportunities on 25 Aug 2026.
+export const dynamic = "force-dynamic";
+
 /**
  * GET /api/listings?productId=... — the pooled order book for a product
  * (Section 11.4): every seller's ask for the same SKU, lowest price first,
@@ -117,15 +126,31 @@ export async function POST(req: NextRequest) {
   const crossPostResults: unknown[] = [];
   if (wantsAutoCrossPost && Array.isArray(channels)) {
     const validChannels = channels.filter(isValidSalesChannel);
+
+    // A channel has to actually be connected (Section 7's real OAuth
+    // account-link — see /settings/connections) before we ever attempt a
+    // post to it. Previously every channel "succeeded" unconditionally,
+    // which was honest about the post itself being a stub but glossed
+    // over the fact there was no real seller account behind it at all.
+    const { data: connectedRows } = await supabase
+      .from("channel_connections")
+      .select("channel")
+      .eq("profile_id", auth.userId)
+      .eq("status", "connected")
+      .in("channel", validChannels);
+    const connectedChannels = new Set((connectedRows ?? []).map((r) => r.channel));
+
     for (const channel of validChannels) {
-      const result = await publishListingToChannel(channel, { id: listing.id, title, priceGBP });
+      const result = connectedChannels.has(channel)
+        ? await publishListingToChannel(channel, { id: listing.id, title, priceGBP })
+        : { channel, success: false, error: "Not connected — connect this account at /settings/connections first." };
       const { data: postRow } = await supabase
         .from("listing_channel_posts")
         .insert({
           listing_id: listing.id,
           channel,
           status: result.success ? "posted" : "failed",
-          external_url: result.externalUrl ?? null,
+          external_url: (result as any).externalUrl ?? null,
           error: result.error ?? null,
           posted_at: result.success ? new Date().toISOString() : null,
         })

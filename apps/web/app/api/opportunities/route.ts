@@ -3,6 +3,37 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/currentProfile";
 import { TIER_ENTITLEMENTS } from "@/lib/tierGuard";
 
+// Force-dynamic: every route here reads live application data (bids, wallet
+// balances, opportunities, order status) straight from Supabase. Without this,
+// Next.js's App Router can cache a GET route's first response (including the
+// fetch calls a library like supabase-js makes under the hood) and keep
+// serving that same stale response indefinitely, even after the database
+// changes underneath it — exactly what caused real, freshly-discovered
+// opportunities to not show up on /opportunities on 25 Aug 2026.
+export const dynamic = "force-dynamic";
+
+/**
+ * estimated_resale_price_gbp (0008_opportunity_lifecycle.sql) is only
+ * populated going forward by discoverOpportunities.ts — any opportunity
+ * created before that migration has it as null. Rather than leave those
+ * showing a blank "Returns" figure until they cycle out of the feed,
+ * reconstruct it from two fields that have always been there:
+ * source_price_gbp + expected_margin_gbp ≈ the original resale estimate
+ * (same arithmetic discoverOpportunities.ts used to derive the margin in
+ * the first place, just run in reverse). source_price_gbp is only ever
+ * read here server-side for this calculation — it's never included in
+ * what gets returned to the caller unless they've already won it.
+ */
+function withEstimatedResale<T extends { estimated_resale_price_gbp?: number | null; source_price_gbp?: number | null; expected_margin_gbp?: number | null }>(
+  o: T,
+): number | null {
+  if (typeof o.estimated_resale_price_gbp === "number") return o.estimated_resale_price_gbp;
+  if (typeof o.source_price_gbp === "number" && typeof o.expected_margin_gbp === "number") {
+    return Math.round((o.source_price_gbp + o.expected_margin_gbp) * 100) / 100;
+  }
+  return null;
+}
+
 /**
  * GET /api/opportunities — the live feed (Section 2 step 4, Section 5 blind teaser).
  * - Redacts source_retailer / source_url / source_price_gbp unless the caller won it.
@@ -26,7 +57,8 @@ export async function GET(req: NextRequest) {
       .eq("won_by", auth.userId)
       .order("created_at", { ascending: false });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ opportunities: data });
+    const opportunities = (data ?? []).map((o) => ({ ...o, estimated_resale_price_gbp: withEstimatedResale(o) }));
+    return NextResponse.json({ opportunities });
   }
 
   const { data, error } = await supabase
@@ -48,9 +80,11 @@ export async function GET(req: NextRequest) {
 
   const redacted = visible.map((o) => {
     const wonByMe = auth && o.won_by === auth.userId;
+    const estimatedResalePriceGBP = withEstimatedResale(o);
     const { source_retailer, source_url, source_price_gbp, ai_reasoning, ...teaser } = o;
     return {
       ...teaser,
+      estimated_resale_price_gbp: estimatedResalePriceGBP,
       ...(wonByMe ? { source_retailer, source_url, source_price_gbp } : {}),
       ai_reasoning: entitlements.aiExplainability ? ai_reasoning : null,
     };

@@ -2,6 +2,15 @@ import { NextResponse } from "next/server";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
 import { requireStaff, AdminGuardError } from "@/lib/adminGuard";
 
+// Force-dynamic: every route here reads live application data (bids, wallet
+// balances, opportunities, order status) straight from Supabase. Without this,
+// Next.js's App Router can cache a GET route's first response (including the
+// fetch calls a library like supabase-js makes under the hood) and keep
+// serving that same stale response indefinitely, even after the database
+// changes underneath it — exactly what caused real, freshly-discovered
+// opportunities to not show up on /opportunities on 25 Aug 2026.
+export const dynamic = "force-dynamic";
+
 /**
  * GET /api/admin/risk-flags — Section 12.1 risk & fraud monitoring. Surfaces
  * concentration-risk (Section 8.4) and buyback-abuse (Section 11.6) style

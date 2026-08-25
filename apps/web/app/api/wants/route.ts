@@ -3,6 +3,15 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/currentProfile";
 import { rankWantOffers } from "@flipsta/shared";
 
+// Force-dynamic: every route here reads live application data (bids, wallet
+// balances, opportunities, order status) straight from Supabase. Without this,
+// Next.js's App Router can cache a GET route's first response (including the
+// fetch calls a library like supabase-js makes under the hood) and keep
+// serving that same stale response indefinitely, even after the database
+// changes underneath it — exactly what caused real, freshly-discovered
+// opportunities to not show up on /opportunities on 25 Aug 2026.
+export const dynamic = "force-dynamic";
+
 /** GET /api/wants — Section 11.10 Buyer Wants, each with its ranked reverse-auction offers. */
 export async function GET() {
   const supabase = await createSupabaseServerClient();

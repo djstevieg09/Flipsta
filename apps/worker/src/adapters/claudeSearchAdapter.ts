@@ -120,17 +120,28 @@ export const claudeSearchAdapter: SourceAdapter = {
       throw new Error("claudeSearchAdapter needs ANTHROPIC_API_KEY set — see INFRASTRUCTURE_TODO.md #6.");
     }
 
-    const response = await client.messages.create({
-      model: "claude-sonnet-4-5",
-      max_tokens: 24000, // raised again — see the diagnostic logging below; a truncated (max_tokens) response before it
-      // ever reaches report_candidate_deals is one of the leading suspects for "candidatesFound: 0" every real run so far.
-      // Search budget raised alongside doubling the category count (5 -> 10)
-      // so per-category coverage doesn't get thinner just because there's
-      // more ground to cover in one run — this only runs twice a day
-      // (index.ts), not every 2 hours, so each run matters more.
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 32 }, REPORT_TOOL],
-      messages: [{ role: "user", content: PROMPT }],
-    });
+    // Streaming, not .create() — the Anthropic SDK refuses to run a
+    // non-streaming request that it estimates could take longer than 10
+    // minutes (a real risk here: max_tokens 24000 + up to 32 web searches
+    // to reason over), and throws client-side before ever calling the API
+    // at all. That's the actual cause of the very last real run failing
+    // outright ("Streaming is required for operations that may take longer
+    // than 10 minutes") — not a bad prompt or a truncated response, an SDK
+    // safety limit that has nothing to do with the account or the money
+    // already spent on earlier runs. .stream().finalMessage() waits for
+    // the same complete response with no such cap.
+    const response = await client.messages
+      .stream({
+        model: "claude-sonnet-4-5",
+        max_tokens: 24000,
+        // Search budget raised alongside doubling the category count (5 -> 10)
+        // so per-category coverage doesn't get thinner just because there's
+        // more ground to cover in one run — this only runs twice a day
+        // (index.ts), not every 2 hours, so each run matters more.
+        tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 32 }, REPORT_TOOL],
+        messages: [{ role: "user", content: PROMPT }],
+      })
+      .finalMessage();
 
     // Diagnostic logging — every real run so far has come back with zero
     // candidates despite genuinely spending money, which isn't normal even

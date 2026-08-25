@@ -35,6 +35,13 @@ const discoveryAdapter = isClaudeSearchConfigured() ? claudeSearchAdapter : mock
 const DEFAULT_DISCOVERY_MINUTES = isClaudeSearchConfigured() ? 720 : 5; // Section 9.2: start at 3-5 opportunities/day
 const discoveryIntervalMs = (Number(process.env.DISCOVERY_INTERVAL_MINUTES) || DEFAULT_DISCOVERY_MINUTES) * 60 * 1000;
 
+// Kill switch for real discovery specifically — set DISCOVERY_PAUSED=true on
+// Render to stop spending on search/scoring while diagnosing an issue,
+// without having to unset ANTHROPIC_API_KEY (which would also turn off AI
+// scoring and the lapsed-deal recheck). Every other job keeps running as
+// normal. Remove the env var (or set it to anything else) to resume.
+const discoveryPaused = process.env.DISCOVERY_PAUSED === "true";
+
 const INTERVALS_MS = {
   discovery: discoveryIntervalMs,
   closeAuctions: 30 * 1000, // action clocks are as short as 20 minutes (Section 11.1) — check often
@@ -58,10 +65,15 @@ async function main() {
   console.log(
     `[worker] Flipsta worker starting. Discovery source: ${discoveryAdapter.name}` +
       (discoveryAdapter === mockAdapter ? " (set ANTHROPIC_API_KEY for real Claude-web-search discovery)" : "") +
-      `, every ${INTERVALS_MS.discovery / 60000}min.`,
+      `, every ${INTERVALS_MS.discovery / 60000}min.` +
+      (discoveryPaused ? " DISCOVERY_PAUSED=true — discovery will NOT run until this is removed." : ""),
   );
 
-  await tick("discoverOpportunities", () => discoverOpportunities(discoveryAdapter));
+  if (discoveryPaused) {
+    console.log("[worker] discoverOpportunities skipped — DISCOVERY_PAUSED=true");
+  } else {
+    await tick("discoverOpportunities", () => discoverOpportunities(discoveryAdapter));
+  }
   await tick("closeExpiredAuctions", closeExpiredAuctions);
   await tick("relistLapsedOpportunities", relistLapsedOpportunities);
   await tick("evaluateBatchRelisting", evaluateBatchRelisting);
@@ -69,7 +81,9 @@ async function main() {
   await tick("flagRiskSignals", flagRiskSignals);
   await tick("crossPostListings", crossPostListings);
 
-  setInterval(() => tick("discoverOpportunities", () => discoverOpportunities(discoveryAdapter)), INTERVALS_MS.discovery);
+  if (!discoveryPaused) {
+    setInterval(() => tick("discoverOpportunities", () => discoverOpportunities(discoveryAdapter)), INTERVALS_MS.discovery);
+  }
   setInterval(() => tick("closeExpiredAuctions", closeExpiredAuctions), INTERVALS_MS.closeAuctions);
   setInterval(() => tick("relistLapsedOpportunities", relistLapsedOpportunities), INTERVALS_MS.relistLapsed);
   setInterval(() => tick("evaluateBatchRelisting", evaluateBatchRelisting), INTERVALS_MS.batchRelist);

@@ -14,12 +14,25 @@ import { SalesChannelKey } from "@flipsta/shared";
  * connect an account there; until then this reports "not connectable yet"
  * with a clear reason instead of a broken button.
  *
- * eBay and Etsy's endpoints below are real, stable, publicly documented
- * URLs (verified against developer.ebay.com and developers.etsy.com).
- * Depop, Whatnot, and StockX gate API access behind a direct application —
- * they don't publish their OAuth endpoint URLs, so those three are left
- * fully env-configurable (CHANNEL_<X>_AUTHORIZE_URL / _TOKEN_URL) rather
- * than guessed at here; the platform gives you the real URLs once approved.
+ * eBay's endpoints below are real, stable, publicly documented URLs
+ * (verified against developer.ebay.com). The other four channels on this
+ * list (Amazon, Vinted, Facebook Marketplace, Depop) don't have a fixed
+ * public authorize URL to hardcode, for three different reasons — so all
+ * four are left fully env-configurable (CHANNEL_<X>_AUTHORIZE_URL /
+ * _TOKEN_URL) rather than guessed at here:
+ *   - Amazon (Selling Partner API): the flow is real and self-serve, but
+ *     the authorize URL is specific to Flipsta's own registered
+ *     application (issued once Steven registers as an SP-API developer
+ *     via the Selling Partner Appstore) — there's no single fixed URL to
+ *     hardcode ahead of that.
+ *   - Vinted: has no public seller/listing API at all as of writing —
+ *     this will stay "not connectable" until that changes.
+ *   - Facebook Marketplace: Meta's Graph API deliberately excludes
+ *     Marketplace (Pages, Groups, Ads, Instagram are covered; Marketplace
+ *     is not) — there's no official way to list on a seller's behalf, so
+ *     this will also stay "not connectable" barring a Meta API change.
+ *   - Depop: gated behind a direct Partner API application, not
+ *     self-serve.
  */
 interface ChannelOAuthStatic {
   displayName: string;
@@ -57,18 +70,8 @@ const CHANNEL_OAUTH_STATIC: Record<SalesChannelKey, ChannelOAuthStatic> = {
     accessNote:
       "Gated — Depop's Partner API isn't self-serve; email their Partner API team to get a client_id/secret and your specific authorize/token URLs, then set CHANNEL_DEPOP_CLIENT_ID/_SECRET/_AUTHORIZE_URL/_TOKEN_URL.",
   },
-  etsy: {
-    displayName: "Etsy",
-    defaultAuthorizeUrl: "https://www.etsy.com/oauth/connect",
-    defaultTokenUrl: "https://api.etsy.com/v3/public/oauth/token",
-    scopes: ["listings_r", "listings_w"],
-    usesPkce: true,
-    requiresClientSecret: false,
-    clientAuthMethod: "body",
-    accessNote: "Public, self-serve — apply for a Keystring (client id) via Etsy's developer portal (developers.etsy.com).",
-  },
-  whatnot: {
-    displayName: "Whatnot",
+  amazon: {
+    displayName: "Amazon",
     defaultAuthorizeUrl: null,
     defaultTokenUrl: null,
     scopes: [],
@@ -76,10 +79,10 @@ const CHANNEL_OAUTH_STATIC: Record<SalesChannelKey, ChannelOAuthStatic> = {
     requiresClientSecret: true,
     clientAuthMethod: "body",
     accessNote:
-      "Gated — contact Whatnot's developer team to register a client app and redirect URI; they generate your secret and give you the real authorize/token URLs, then set CHANNEL_WHATNOT_CLIENT_ID/_SECRET/_AUTHORIZE_URL/_TOKEN_URL.",
+      "Real and self-serve via the Selling Partner API (Login with Amazon), but there's no single fixed authorize URL — it's issued once Flipsta is registered as an SP-API developer app via the Selling Partner Appstore, and a seller also needs their own existing Seller Central account. Once registered, set CHANNEL_AMAZON_CLIENT_ID/_SECRET/_AUTHORIZE_URL/_TOKEN_URL from Amazon's app dashboard.",
   },
-  stockx: {
-    displayName: "StockX",
+  vinted: {
+    displayName: "Vinted",
     defaultAuthorizeUrl: null,
     defaultTokenUrl: null,
     scopes: [],
@@ -87,7 +90,18 @@ const CHANNEL_OAUTH_STATIC: Record<SalesChannelKey, ChannelOAuthStatic> = {
     requiresClientSecret: true,
     clientAuthMethod: "body",
     accessNote:
-      "Gated behind an application/review process via the StockX Developer Portal — confirm the exact OAuth flow with StockX once approved, then set CHANNEL_STOCKX_CLIENT_ID/_SECRET/_AUTHORIZE_URL/_TOKEN_URL.",
+      "Not connectable — Vinted has no public seller or listing API to build against. Revisit if that changes; until then this channel will always show as not configured.",
+  },
+  facebook_marketplace: {
+    displayName: "Facebook Marketplace",
+    defaultAuthorizeUrl: null,
+    defaultTokenUrl: null,
+    scopes: [],
+    usesPkce: false,
+    requiresClientSecret: true,
+    clientAuthMethod: "body",
+    accessNote:
+      "Not connectable — Meta's Graph API deliberately excludes Marketplace (Pages, Groups, Ads and Instagram are covered; Marketplace listings are not), so there's no official way to post a listing on a seller's behalf. Revisit if Meta ever opens this up.",
   },
 };
 

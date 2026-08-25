@@ -89,10 +89,7 @@ export default function OpportunitiesPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-bold">Live Opportunities</h1>
-      <p className="text-textDim text-sm">
-        Real data from Postgres via <code>/api/opportunities</code>. Sign in as a Standard+ tier user to bid —
-        see <code>INFRASTRUCTURE_TODO.md</code> for creating a test account once Supabase is connected.
-      </p>
+      <p className="text-textDim text-sm">Real opportunities our AI has found and verified. Sign in as a Standard tier member or above to bid.</p>
       {message && <div className="card text-sm">{message}</div>}
       {loading && <p className="text-textDim">Loading…</p>}
 

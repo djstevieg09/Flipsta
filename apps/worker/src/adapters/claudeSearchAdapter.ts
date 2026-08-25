@@ -28,10 +28,25 @@ export function isClaudeSearchConfigured(): boolean {
   return Boolean(client);
 }
 
-// Must match supabase/seed.sql's categories exactly — discoverOpportunities.ts
-// silently drops any candidate whose category_slug doesn't match a row in
-// the categories table, so keep this list in sync if categories change.
-const VALID_CATEGORY_SLUGS = ["collectibles", "footwear", "tech", "home-kitchen", "beauty"] as const;
+// Must match a row in the categories table exactly — discoverOpportunities.ts
+// silently drops any candidate whose category_slug doesn't match one, so
+// keep this list in sync with supabase/migrations/0009_expand_categories.sql
+// if categories change again. Broadened from the original 5 (Steven: "broadening
+// the horizons") alongside moving discovery to twice a day instead of every
+// 2 hours — roughly the same total daily search budget, spread across more
+// categories rather than more frequent runs of a narrower set.
+const VALID_CATEGORY_SLUGS = [
+  "collectibles",
+  "footwear",
+  "tech",
+  "home-kitchen",
+  "beauty",
+  "toys-games",
+  "fashion-accessories",
+  "sports-outdoors",
+  "baby-kids",
+  "gaming",
+] as const;
 
 const REPORT_TOOL = {
   name: "report_candidate_deals",
@@ -90,11 +105,11 @@ const REPORT_TOOL = {
 
 const PROMPT = `You're sourcing real resale opportunities for a UK reselling marketplace. Use web search to find products that are:
 
-1. Currently on genuine discount/clearance/overstock at a real UK (or reputable online) retailer right now — not a general "best deals" listicle, an actual specific product with a specific current price.
-2. Resellable at a real profit — search a second-hand or marketplace site (eBay sold listings, Vinted, etc.) for what the same or equivalent item is actually selling for, so the margin is based on real evidence, not a guess. Amazon is NOT always the cheapest source — check independent retailers and other marketplaces too, not just Amazon.
-3. In one of these categories only: collectibles, footwear, tech, home-kitchen, beauty.
+1. Currently on genuine discount/clearance/overstock at a real UK (or reputable online) retailer right now, with a specific current price you can point to. A "best deals" roundup or clearance-page article is a GOOD place to START looking — it's an efficient way to surface leads — but don't report the roundup itself as the deal. Pick one specific product it names, then go confirm that product's own page: the exact current price, and ideally that it still shows as in stock/purchasable right now (deals do go out of stock — if the retailer's own page shows it unavailable, drop it and try another lead).
+2. Resellable at a real profit — search a second-hand or marketplace site (eBay sold listings, Vinted, a collector price-tracker like BrickEconomy for LEGO, etc.) for what the same or equivalent item is actually selling for, so the margin is based on real evidence, not a guess. Amazon is NOT always the cheapest source — check independent retailers and other marketplaces too, not just Amazon. Note eBay's own search results sometimes fail to load for automated tools — if that happens, try a different resale evidence source rather than giving up on the candidate.
+3. In one of these categories only: collectibles, footwear, tech, home-kitchen, beauty, toys-games, fashion-accessories, sports-outdoors, baby-kids, gaming.
 
-Find up to 5 genuine candidates this run — fewer is fine and better than making anything up. For each, you must have an actual source URL for the current offer and an actual URL you checked for the resale price evidence. If you can't find enough real evidence for a category, skip it rather than estimate.
+This only runs twice a day, so this is the main chance to find the day's deals — spread your searching across a genuine mix of these categories rather than exhausting your budget on just one or two, but never lower the bar to fill a quota. Aim for 4-8 genuine, fully-verified candidates across the categories you check. Fewer real candidates is always better than making anything up. For each, you must have an actual source URL for the current offer and an actual URL you checked for the resale price evidence.
 
 Call report_candidate_deals with what you found once you're done searching. If you find nothing real, call it with an empty deals array.`;
 
@@ -107,8 +122,12 @@ export const claudeSearchAdapter: SourceAdapter = {
 
     const response = await client.messages.create({
       model: "claude-sonnet-4-5",
-      max_tokens: 4096,
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 8 }, REPORT_TOOL],
+      max_tokens: 12000, // raised alongside max_uses — more searches means more room needed for the final response
+      // Search budget raised again alongside doubling the category count
+      // (5 -> 10) so per-category coverage doesn't get thinner just
+      // because there's more ground to cover in one run — this now only
+      // runs twice a day (index.ts), not every 2 hours, so each run matters more.
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 32 }, REPORT_TOOL],
       messages: [{ role: "user", content: PROMPT }],
     });
 

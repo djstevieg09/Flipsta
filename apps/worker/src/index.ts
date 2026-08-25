@@ -27,9 +27,12 @@ const discoveryAdapter = isClaudeSearchConfigured() ? claudeSearchAdapter : mock
 
 // Real discovery does billed web searches every run (~$10/1,000 searches +
 // tokens — see claudeSearchAdapter.ts) — run it far less often than the
-// free mock path. Override with DISCOVERY_INTERVAL_MINUTES once you've seen
-// real costs in the Anthropic console and want a different cadence.
-const DEFAULT_DISCOVERY_MINUTES = isClaudeSearchConfigured() ? 120 : 5; // Section 9.2: start at 3-5 opportunities/day
+// free mock path. Steven: "twice a day" once the real cost of the old
+// 2-hour cadence became clear (12 runs/day across 5 categories added up
+// fast) — 720 minutes = twice a day, spread across the now-broadened
+// 10-category list instead. Override with DISCOVERY_INTERVAL_MINUTES on
+// Render any time you want a different cadence without a redeploy.
+const DEFAULT_DISCOVERY_MINUTES = isClaudeSearchConfigured() ? 720 : 5; // Section 9.2: start at 3-5 opportunities/day
 const discoveryIntervalMs = (Number(process.env.DISCOVERY_INTERVAL_MINUTES) || DEFAULT_DISCOVERY_MINUTES) * 60 * 1000;
 
 const INTERVALS_MS = {

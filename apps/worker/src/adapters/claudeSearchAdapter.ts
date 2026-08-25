@@ -48,6 +48,40 @@ const VALID_CATEGORY_SLUGS = [
   "gaming",
 ] as const;
 
+// Steven, 25 Aug 2026: "its only really looking at lego sets." Root cause —
+// the old prompt's only concrete example anywhere was "a collector
+// price-tracker like BrickEconomy for LEGO", in an otherwise-abstract list
+// of 10 categories with no other named verification source. Given a choice
+// under uncertainty, the model rationally kept reaching for the one
+// category it had a spelled-out way to verify. The fix isn't "ask it more
+// firmly to vary" — it's to stop leaving that choice to the model at all.
+// Each run now gets a specific category assigned in code, rotating through
+// all 10 on a clock (see focusCategoryForRun below), with its own
+// resale-evidence hint so every category gets the same kind of concrete
+// guidance LEGO used to get exclusively.
+const RESALE_EVIDENCE_HINTS: Record<(typeof VALID_CATEGORY_SLUGS)[number], string> = {
+  collectibles: "a collector price-tracker (BrickEconomy for LEGO, PSA/eBay sold listings for trading cards, etc.) or eBay sold listings",
+  footwear: "eBay sold listings, StockX, or GOAT",
+  tech: "eBay sold listings, or CeX's own trade-in/resale pricing",
+  "home-kitchen": "eBay sold listings or Vinted",
+  beauty: "eBay sold listings or Vinted — check it's sealed/unused, resale value collapses fast on opened beauty items",
+  "toys-games": "eBay sold listings, Vinted, or a category tracker like BrickEconomy for LEGO specifically",
+  "fashion-accessories": "eBay sold listings, Vinted, or Depop",
+  "sports-outdoors": "eBay sold listings or Vinted",
+  "baby-kids": "eBay sold listings or Vinted",
+  gaming: "eBay sold listings, CeX, or PriceCharting for game/console resale value",
+};
+
+// Deterministic rotation, not random or model-chosen — advances to the next
+// category roughly every 12h (matching the twice-a-day interval in
+// index.ts) purely from wall-clock time, so it needs no stored state and
+// naturally cycles through all 10 categories over 5 days regardless of how
+// many times the worker gets restarted in between.
+function focusCategoryForRun(): (typeof VALID_CATEGORY_SLUGS)[number] {
+  const twelveHourBuckets = Math.floor(Date.now() / (12 * 60 * 60 * 1000));
+  return VALID_CATEGORY_SLUGS[twelveHourBuckets % VALID_CATEGORY_SLUGS.length];
+}
+
 const REPORT_TOOL = {
   name: "report_candidate_deals",
   description:
@@ -103,17 +137,19 @@ const REPORT_TOOL = {
   },
 };
 
-const PROMPT = `You're sourcing real resale opportunities for a UK reselling marketplace. Use web search to find products that are:
+function buildPrompt(focusCategory: (typeof VALID_CATEGORY_SLUGS)[number]): string {
+  return `You're sourcing real resale opportunities for a UK reselling marketplace. Use web search to find products that are:
 
 1. Currently on genuine discount/clearance/overstock at a real UK (or reputable online) retailer right now, with a specific current price you can point to. A "best deals" roundup or clearance-page article is a GOOD place to START looking — it's an efficient way to surface leads — but don't report the roundup itself as the deal. Pick one specific product it names, then go confirm that product's own page: the exact current price, and ideally that it still shows as in stock/purchasable right now (deals do go out of stock — if the retailer's own page shows it unavailable, drop it and try another lead).
-2. Resellable at a real profit — search a second-hand or marketplace site (eBay sold listings, Vinted, a collector price-tracker like BrickEconomy for LEGO, etc.) for what the same or equivalent item is actually selling for, so the margin is based on real evidence, not a guess. Amazon is NOT always the cheapest source — check independent retailers and other marketplaces too, not just Amazon. Note eBay's own search results sometimes fail to load for automated tools — if that happens, try a different resale evidence source rather than giving up on the candidate.
-3. In one of these categories only: collectibles, footwear, tech, home-kitchen, beauty, toys-games, fashion-accessories, sports-outdoors, baby-kids, gaming.
+2. Resellable at a real profit — search a second-hand or marketplace site for what the same or equivalent item is actually selling for, so the margin is based on real evidence, not a guess. For this run's category, good resale-evidence sources are: ${RESALE_EVIDENCE_HINTS[focusCategory]}. Amazon is NOT always the cheapest source — check independent retailers and other marketplaces too, not just Amazon. Note eBay's own search results sometimes fail to load for automated tools — if that happens, try a different resale evidence source rather than giving up on the candidate.
+3. THIS RUN'S CATEGORY IS: **${focusCategory}**. Search specifically within this category. The full approved list (for reference only — do not search other categories this run) is: collectibles, footwear, tech, home-kitchen, beauty, toys-games, fashion-accessories, sports-outdoors, baby-kids, gaming — categories are rotated across runs in code so every one gets covered over time; only branch outside ${focusCategory} if a genuine, sustained effort inside it turns up nothing viable at all.
 
-DEPTH OVER BREADTH — this is the most important instruction here. Fully closing out ONE candidate (its current price confirmed on the retailer's own page, its stock confirmed, and real resale evidence found) typically takes 4-6 searches on its own. Pick a lead, then commit to it: verify price, verify stock, find resale evidence, confirm resale evidence — all before you go looking for a different lead in another category. Do NOT sample many categories broadly and leave every one of them half-verified — that produces zero reportable candidates, which has been happening. A run that fully verifies just 1 or 2 real candidates in a single category is a completely successful run, better than a run that touches 6 categories and finishes none of them. Only move on to a new category once you've either fully closed out a candidate or genuinely exhausted a promising lead.
+DEPTH OVER BREADTH — this is the most important instruction here. Fully closing out ONE candidate (its current price confirmed on the retailer's own page, its stock confirmed, and real resale evidence found) typically takes 4-6 searches on its own. Pick a lead, then commit to it: verify price, verify stock, find resale evidence, confirm resale evidence — all before you go looking for a different lead. Do NOT sample many products broadly and leave every one of them half-verified — that produces zero reportable candidates, which has been happening. A run that fully verifies just 1 or 2 real candidates is a completely successful run, better than a run that touches 6 leads and finishes none of them. Only move to a different lead once you've either fully closed out a candidate or genuinely exhausted a promising one.
 
 There's no quota to hit — 1 genuine, fully-verified candidate is a good outcome, more is a bonus. Fewer real candidates is always better than making anything up, and always better than reporting nothing because you spread too thin. For each candidate, you must have an actual source URL for the current offer and an actual URL you checked for the resale price evidence.
 
-Call report_candidate_deals with what you found once you're done searching. If you genuinely find nothing after fully committing to a few leads, call it with an empty deals array — but that should be rare if you're closing out leads one at a time instead of sampling broadly.`;
+Call report_candidate_deals with what you found once you're done searching. If you genuinely find nothing after fully committing to a few leads within ${focusCategory}, call it with an empty deals array — but that should be rare if you're closing out leads one at a time instead of sampling broadly.`;
+}
 
 export const claudeSearchAdapter: SourceAdapter = {
   name: "claude-search",
@@ -137,7 +173,12 @@ export const claudeSearchAdapter: SourceAdapter = {
       { type: "web_search_20250305", name: "web_search", max_uses: 32 },
       REPORT_TOOL,
     ];
-    let messages: Anthropic.Messages.MessageParam[] = [{ role: "user", content: PROMPT }];
+    // Computed once per run (not per continuation) so a paused-and-resumed
+    // run stays on the same category throughout — see focusCategoryForRun.
+    const focusCategory = focusCategoryForRun();
+    const prompt = buildPrompt(focusCategory);
+    console.log(`[claudeSearchAdapter] This run's focus category: ${focusCategory}`);
+    let messages: Anthropic.Messages.MessageParam[] = [{ role: "user", content: prompt }];
     let response = await client.messages.stream({ model: "claude-sonnet-4-5", max_tokens: 24000, tools, messages }).finalMessage();
 
     // stop_reason "pause_turn" is Anthropic's server-side sampling loop
@@ -156,7 +197,7 @@ export const claudeSearchAdapter: SourceAdapter = {
     while (response.stop_reason === "pause_turn" && continuations < MAX_CONTINUATIONS) {
       continuations++;
       console.log(`[claudeSearchAdapter] stop_reason=pause_turn — continuing (${continuations}/${MAX_CONTINUATIONS})`);
-      messages = [{ role: "user", content: PROMPT }, { role: "assistant", content: response.content }];
+      messages = [{ role: "user", content: prompt }, { role: "assistant", content: response.content }];
       response = await client.messages.stream({ model: "claude-sonnet-4-5", max_tokens: 24000, tools, messages }).finalMessage();
     }
     if (response.stop_reason === "pause_turn") {

@@ -8,6 +8,7 @@ type Opportunity = {
   margin_band_low: number;
   margin_band_high: number;
   estimated_resale_price_gbp: number | null;
+  expected_margin_gbp: number;
   confidence_score: number;
   urgency_tier: "hot" | "standard" | "stable";
   estimated_stock_units: number;
@@ -17,6 +18,23 @@ type Opportunity = {
   status: string;
   ai_reasoning: string | null;
 };
+
+/**
+ * 26 Aug 2026, Steven: "i need the outlay to show per item outlay to
+ * purchase it and also the returns to show per item profit." The API
+ * never sends the exact source_price_gbp pre-win (Section 5's blind-teaser
+ * redaction — see api/opportunities/route.ts), but it always sends
+ * estimated_resale_price_gbp and expected_margin_gbp, and outlay is just
+ * those two numbers apart (resale − profit = cost). So this doesn't
+ * reveal anything the redaction is actually protecting — WHICH retailer
+ * and the exact product link (source_retailer/source_url) stay hidden
+ * until you win it; only the arithmetic your eyes could already do from
+ * the resale price and the margin band is now spelled out directly.
+ */
+function estimatedOutlay(o: Opportunity): number | null {
+  if (typeof o.estimated_resale_price_gbp !== "number") return null;
+  return Math.round((o.estimated_resale_price_gbp - o.expected_margin_gbp) * 100) / 100;
+}
 
 type ActivityItem = {
   id: string;
@@ -93,6 +111,8 @@ export default function OpportunitiesPage() {
       {message && <div className="card text-sm">{message}</div>}
       {loading && <p className="text-textDim">Loading…</p>}
 
+      {!loading && opportunities.length > 0 && <TotalReturnsBar opportunities={opportunities} />}
+
       <ActivityTicker />
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -141,21 +161,28 @@ function OpportunityCard({
       </div>
       <div className="text-sm text-textDim">{o.source_tier}</div>
 
-      {/* Outlay/returns — what you'd pay vs. what it's expected to sell
-          for, side by side, so both numbers are visible at a glance. */}
+      {/* Outlay/returns — Steven's ask, 26 Aug 2026: outlay is what it
+          costs to actually buy the item once you've won it (est., since
+          the exact retailer + link stay hidden until then — see
+          estimatedOutlay() above); returns is the profit, not the resale
+          price, since "returns" means what you keep. Resale price and the
+          Flipsta win price are still shown as the smaller supporting line
+          — nothing removed, just the headline numbers changed to match
+          what Steven asked to see first. */}
       <div className="grid grid-cols-2 gap-2 py-2 border-y border-border">
         <div>
           <div className="text-[10px] text-textDim uppercase tracking-wide">Outlay</div>
-          <div className="font-bold">£{o.instant_win_price_gbp.toFixed(2)}</div>
-          <div className="text-[10px] text-textDim">or bid from £{(o.starting_bid_gbp + 2).toFixed(2)}</div>
+          <div className="font-bold">
+            {estimatedOutlay(o) !== null ? `£${estimatedOutlay(o)!.toFixed(2)}` : "—"}
+          </div>
+          <div className="text-[10px] text-textDim">est. to buy the item · win it from £{o.instant_win_price_gbp.toFixed(2)}</div>
         </div>
         <div>
           <div className="text-[10px] text-textDim uppercase tracking-wide">Returns</div>
-          <div className="font-bold text-green">
-            {typeof o.estimated_resale_price_gbp === "number" ? `£${o.estimated_resale_price_gbp.toFixed(2)}` : "—"}
-          </div>
+          <div className="font-bold text-green">£{o.expected_margin_gbp.toFixed(2)}</div>
           <div className="text-[10px] text-textDim">
-            est. resale · {Math.round(o.margin_band_low * 100)}–{Math.round(o.margin_band_high * 100)}% margin
+            est. profit · resells ~
+            {typeof o.estimated_resale_price_gbp === "number" ? `£${o.estimated_resale_price_gbp.toFixed(2)}` : "—"}
           </div>
         </div>
       </div>
@@ -175,6 +202,30 @@ function OpportunityCard({
           Instant win £{o.instant_win_price_gbp.toFixed(2)}
         </button>
       </div>
+    </div>
+  );
+}
+
+/** Steven's ask, 26 Aug 2026: "also show total est returns" — the sum of
+ * every live opportunity's expected profit, so there's one headline number
+ * for "what's the whole feed worth right now" without adding each card up
+ * by hand. */
+function TotalReturnsBar({ opportunities }: { opportunities: Opportunity[] }) {
+  const live = opportunities.filter((o) => o.status === "live");
+  const totalReturns = live.reduce((sum, o) => sum + (o.expected_margin_gbp ?? 0), 0);
+  const totalOutlay = live.reduce((sum, o) => sum + (estimatedOutlay(o) ?? 0), 0);
+
+  return (
+    <div className="card flex flex-wrap gap-x-6 gap-y-1 items-baseline">
+      <div>
+        <span className="text-[10px] text-textDim uppercase tracking-wide mr-1">Total est. returns</span>
+        <span className="font-bold text-green">£{totalReturns.toFixed(2)}</span>
+      </div>
+      <div>
+        <span className="text-[10px] text-textDim uppercase tracking-wide mr-1">Total est. outlay</span>
+        <span className="font-bold">£{totalOutlay.toFixed(2)}</span>
+      </div>
+      <div className="text-[10px] text-textDim">across {live.length} live {live.length === 1 ? "opportunity" : "opportunities"}</div>
     </div>
   );
 }

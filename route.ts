@@ -1,60 +1,85 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/currentProfile";
-import { createSupabaseServiceClient } from "@/lib/supabase/server";
-import { createTierCheckoutSession, isTierBillingConfigured } from "@/lib/stripe";
-
-const UPGRADABLE_TIERS = new Set(["standard", "pro", "elite"]);
+import { TIER_ENTITLEMENTS } from "@/lib/tierGuard";
 
 /**
- * POST /api/billing/checkout — Section 7 self-serve tier upgrade. Starts a
- * Stripe Checkout session (subscription mode) for the requested tier and
- * returns the URL to redirect the browser to. The profile's
- * subscription_tier itself is only ever updated from the webhook
- * (checkout.session.completed / customer.subscription.updated below),
- * never here — Stripe is the source of truth for what's actually paid for.
+ * estimated_resale_price_gbp (0008_opportunity_lifecycle.sql) is only
+ * populated going forward by discoverOpportunities.ts — any opportunity
+ * created before that migration has it as null. Rather than leave those
+ * showing a blank "Returns" figure until they cycle out of the feed,
+ * reconstruct it from two fields that have always been there:
+ * source_price_gbp + expected_margin_gbp ≈ the original resale estimate
+ * (same arithmetic discoverOpportunities.ts used to derive the margin in
+ * the first place, just run in reverse). source_price_gbp is only ever
+ * read here server-side for this calculation — it's never included in
+ * what gets returned to the caller unless they've already won it.
  */
-export async function POST(req: NextRequest) {
+function withEstimatedResale<T extends { estimated_resale_price_gbp?: number | null; source_price_gbp?: number | null; expected_margin_gbp?: number | null }>(
+  o: T,
+): number | null {
+  if (typeof o.estimated_resale_price_gbp === "number") return o.estimated_resale_price_gbp;
+  if (typeof o.source_price_gbp === "number" && typeof o.expected_margin_gbp === "number") {
+    return Math.round((o.source_price_gbp + o.expected_margin_gbp) * 100) / 100;
+  }
+  return null;
+}
+
+/**
+ * GET /api/opportunities — the live feed (Section 2 step 4, Section 5 blind teaser).
+ * - Redacts source_retailer / source_url / source_price_gbp unless the caller won it.
+ * - Enforces the Pro/Elite early-access window (Section 7): Standard tier
+ *   doesn't see an opportunity until pro_early_access_until has passed.
+ * - Strips ai_reasoning for tiers without AI explainability (Section 11.3 modal feature).
+ *
+ * GET /api/opportunities?won=true — a different mode entirely: the caller's
+ * own won opportunities (any status), fields unredacted since they own
+ * them. Powers /sell/new, where a seller turns a win into a listing.
+ */
+export async function GET(req: NextRequest) {
+  const supabase = await createSupabaseServerClient();
   const auth = await getCurrentProfile();
-  if (!auth) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
 
-  const body = await req.json().catch(() => ({}));
-  const tier = body?.tier;
-  if (!UPGRADABLE_TIERS.has(tier)) {
-    return NextResponse.json({ error: "tier must be one of: standard, pro, elite." }, { status: 400 });
+  if (req.nextUrl.searchParams.get("won") === "true") {
+    if (!auth) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+    const { data, error } = await supabase
+      .from("opportunities")
+      .select("*, categories(name, slug)")
+      .eq("won_by", auth.userId)
+      .order("created_at", { ascending: false });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    const opportunities = (data ?? []).map((o) => ({ ...o, estimated_resale_price_gbp: withEstimatedResale(o) }));
+    return NextResponse.json({ opportunities });
   }
 
-  if (!isTierBillingConfigured(tier)) {
-    return NextResponse.json(
-      {
-        error: `Billing for the ${tier} tier isn't set up yet. An admin can set your tier manually at /admin/sellers in the meantime — see INFRASTRUCTURE_TODO.md to turn on real card payments.`,
-      },
-      { status: 503 },
-    );
-  }
+  const { data, error } = await supabase
+    .from("opportunities")
+    .select("*, categories(name, slug)")
+    .eq("status", "live")
+    .order("created_at", { ascending: false });
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Need the auth user's email (not stored on profiles) plus any existing
-  // Stripe customer id, so a returning subscriber re-uses one Stripe
-  // customer across tier changes instead of creating a new one each time.
-  const supabase = createSupabaseServiceClient();
-  const [{ data: userRes }, { data: profileRow }] = await Promise.all([
-    supabase.auth.admin.getUserById(auth.userId),
-    supabase.from("profiles").select("stripe_customer_id").eq("id", auth.userId).single(),
-  ]);
-  const email = userRes?.user?.email;
-  if (!email) return NextResponse.json({ error: "Could not resolve your account email." }, { status: 500 });
+  const tier = auth?.profile.subscriptionTier ?? "free";
+  const entitlements = TIER_ENTITLEMENTS[tier];
+  const now = Date.now();
 
-  try {
-    const origin = req.nextUrl.origin;
-    const session = await createTierCheckoutSession({
-      tier,
-      profileId: auth.userId,
-      email,
-      existingStripeCustomerId: profileRow?.stripe_customer_id,
-      successUrl: `${origin}/upgrade?checkout=success`,
-      cancelUrl: `${origin}/upgrade?checkout=cancelled`,
-    });
-    return NextResponse.json({ url: session.url });
-  } catch (err) {
-    return NextResponse.json({ error: (err as Error).message }, { status: 503 });
-  }
+  const visible = (data ?? []).filter((o) => {
+    if (!o.pro_early_access_until) return true;
+    const stillInEarlyAccess = new Date(o.pro_early_access_until).getTime() > now;
+    return !stillInEarlyAccess || entitlements.earlyAccessSeconds > 0;
+  });
+
+  const redacted = visible.map((o) => {
+    const wonByMe = auth && o.won_by === auth.userId;
+    const estimatedResalePriceGBP = withEstimatedResale(o);
+    const { source_retailer, source_url, source_price_gbp, ai_reasoning, ...teaser } = o;
+    return {
+      ...teaser,
+      estimated_resale_price_gbp: estimatedResalePriceGBP,
+      ...(wonByMe ? { source_retailer, source_url, source_price_gbp } : {}),
+      ai_reasoning: entitlements.aiExplainability ? ai_reasoning : null,
+    };
+  });
+
+  return NextResponse.json({ opportunities: redacted });
 }

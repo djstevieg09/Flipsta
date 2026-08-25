@@ -5,6 +5,7 @@ import { releaseEscrow } from "./jobs/releaseEscrow.js";
 import { flagRiskSignals } from "./jobs/flagRiskSignals.js";
 import { crossPostListings } from "./jobs/crossPostListings.js";
 import { mockAdapter } from "./adapters/mockAdapter.js";
+import { claudeSearchAdapter, isClaudeSearchConfigured } from "./adapters/claudeSearchAdapter.js";
 
 /**
  * Deliberately simple interval-based scheduler rather than a job queue
@@ -15,8 +16,23 @@ import { mockAdapter } from "./adapters/mockAdapter.js";
  * Deploys as its own Render background worker service (render.yaml) so it
  * scales independently of the web app.
  */
+
+// Section 9 / INFRASTRUCTURE_TODO.md #6 — real discovery via Claude's own
+// web search (claudeSearchAdapter.ts) turns on automatically the moment
+// ANTHROPIC_API_KEY is set, the same "stub until configured" pattern as
+// aiScoring.ts (which reuses that same key). Falls back to the free mock
+// adapter with no key set, so the pipeline is always runnable.
+const discoveryAdapter = isClaudeSearchConfigured() ? claudeSearchAdapter : mockAdapter;
+
+// Real discovery does billed web searches every run (~$10/1,000 searches +
+// tokens — see claudeSearchAdapter.ts) — run it far less often than the
+// free mock path. Override with DISCOVERY_INTERVAL_MINUTES once you've seen
+// real costs in the Anthropic console and want a different cadence.
+const DEFAULT_DISCOVERY_MINUTES = isClaudeSearchConfigured() ? 120 : 5; // Section 9.2: start at 3-5 opportunities/day
+const discoveryIntervalMs = (Number(process.env.DISCOVERY_INTERVAL_MINUTES) || DEFAULT_DISCOVERY_MINUTES) * 60 * 1000;
+
 const INTERVALS_MS = {
-  discovery: 5 * 60 * 1000, // Section 9.2: start at 3-5 opportunities/day, so this can be infrequent
+  discovery: discoveryIntervalMs,
   closeAuctions: 30 * 1000, // action clocks are as short as 20 minutes (Section 11.1) — check often
   batchRelist: 10 * 60 * 1000,
   releaseEscrow: 60 * 60 * 1000,
@@ -34,16 +50,20 @@ async function tick(name: string, fn: () => Promise<unknown>) {
 }
 
 async function main() {
-  console.log("[worker] Flipsta worker starting. Source adapter: mock (see adapters/keepaAdapter.ts to go live).");
+  console.log(
+    `[worker] Flipsta worker starting. Discovery source: ${discoveryAdapter.name}` +
+      (discoveryAdapter === mockAdapter ? " (set ANTHROPIC_API_KEY for real Claude-web-search discovery)" : "") +
+      `, every ${INTERVALS_MS.discovery / 60000}min.`,
+  );
 
-  await tick("discoverOpportunities", () => discoverOpportunities(mockAdapter));
+  await tick("discoverOpportunities", () => discoverOpportunities(discoveryAdapter));
   await tick("closeExpiredAuctions", closeExpiredAuctions);
   await tick("evaluateBatchRelisting", evaluateBatchRelisting);
   await tick("releaseEscrow", releaseEscrow);
   await tick("flagRiskSignals", flagRiskSignals);
   await tick("crossPostListings", crossPostListings);
 
-  setInterval(() => tick("discoverOpportunities", () => discoverOpportunities(mockAdapter)), INTERVALS_MS.discovery);
+  setInterval(() => tick("discoverOpportunities", () => discoverOpportunities(discoveryAdapter)), INTERVALS_MS.discovery);
   setInterval(() => tick("closeExpiredAuctions", closeExpiredAuctions), INTERVALS_MS.closeAuctions);
   setInterval(() => tick("evaluateBatchRelisting", evaluateBatchRelisting), INTERVALS_MS.batchRelist);
   setInterval(() => tick("releaseEscrow", releaseEscrow), INTERVALS_MS.releaseEscrow);

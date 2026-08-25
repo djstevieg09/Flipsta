@@ -29,6 +29,7 @@ exactly, not to introduce new accounts you didn't ask for.
 | Business doc section | Implementation |
 |---|---|
 | 2 — Theory of Operation | `apps/worker/src/jobs/discoverOpportunities.ts` (discovery → verification → packaging), `apps/web/app/api/opportunities/route.ts` (distribution, redaction) |
+| 2 step 1 — Discovery source | `apps/worker/src/adapters/claudeSearchAdapter.ts` (real, via Claude web search — default once `ANTHROPIC_API_KEY` is set), `mockAdapter.ts` (fallback), `keepaAdapter.ts` (alternative real source, unimplemented stub) |
 | 5 — Blind Teaser | Field redaction in `GET /api/opportunities`, binding payment on bid/instant-win |
 | 8.1 — Marketplace Commission | `packages/shared/src/pricing.ts: getMarketplaceCommissionRate` |
 | 8.3 — Buyback pricing formula | `packages/shared/src/pricing.ts: calculateBuybackPremium` (unit tested against the doc's worked examples) |

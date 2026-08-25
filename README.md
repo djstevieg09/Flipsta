@@ -61,10 +61,18 @@ doc it implements, so the code and the plan stay traceable to each other.
   out of the box, so checkout is exercisable before Stripe is even connected).
 - A discovery worker that actually inserts live opportunities on a schedule,
   using a mock data source so it's demonstrable without a paid API key.
-- **A real, pluggable AI scoring step (Section 9.1)** — set `ANTHROPIC_API_KEY`
-  on the worker and every newly discovered deal is scored by a real Claude
-  call instead of the margin/volatility heuristic; falls back automatically
-  with no key set or if the call fails.
+- **Real deal discovery via Claude's own web search (Section 2 step 1)** —
+  set `ANTHROPIC_API_KEY` and `apps/worker/src/adapters/claudeSearchAdapter.ts`
+  takes over from the mock adapter automatically: it finds genuine current
+  discount/clearance offers, then searches a resale site for real evidence
+  of what the item actually sells for, rather than inventing a margin. Not
+  scraping, doesn't bypass any site's bot-detection. Does real, billed web
+  searches each run, so the discovery interval widens automatically once
+  this is on (tune with `DISCOVERY_INTERVAL_MINUTES`).
+- **A real, pluggable AI scoring step (Section 9.1)** — the same
+  `ANTHROPIC_API_KEY` above also gets every newly discovered deal scored by
+  a real Claude call instead of the margin/volatility heuristic; falls back
+  automatically with no key set or if the call fails.
 - **Multi-platform listing (Section 7)** at `/sell/new` — AI-prefilled
   title/price from a won opportunity, a real auto cross-post switch to
   eBay/Depop/Etsy/Whatnot/StockX, a real per-channel DB

@@ -39,6 +39,20 @@ exactly where that line sits.
   real reasoning text, the moment `ANTHROPIC_API_KEY` is set. Falls back to
   the existing margin/volatility heuristic with no key set, or if the AI
   call itself fails — discovery never goes down because of it.
+- **Real deal discovery via Claude's own web search (Section 2 step 1)** —
+  `apps/worker/src/adapters/claudeSearchAdapter.ts` finds products currently
+  on genuine discount/clearance, then searches a resale site for what the
+  same item actually sells for, so the estimated margin is grounded in a
+  real second search result rather than invented. Turns on automatically
+  the moment `ANTHROPIC_API_KEY` is set (reuses the same key as AI scoring
+  above, no separate account) — `apps/worker/src/index.ts` picks it over
+  the mock adapter and widens the discovery interval accordingly, since
+  this does real, billed web searches each run. This is the alternative to
+  Keepa built at Steven's request instead of relying on Amazon pricing
+  alone — it is not scraping and doesn't attempt to bypass any site's
+  bot-detection, only reading what an ordinary web search already surfaces.
+  Falls back to the mock adapter with no key set, same pattern as
+  everything else in this codebase.
 - **Working API layer** for the core flows: browse opportunities (with
   correct redaction + tier-gated early access + AI-explainability gating),
   bid, instant-win, post/offer on Buyer Wants, browse the pooled marketplace
@@ -111,11 +125,13 @@ exactly where that line sits.
 
 ## Deliberately stubbed (clearly labelled in the code, not hidden)
 
-- **AI discovery source** — `mockAdapter.ts` generates plausible fake deals
-  so the pipeline runs end to end. `keepaAdapter.ts` is a scaffolded stub
-  that throws until you add a Keepa key and fill in the real API calls. The
-  AI *scoring* step is real (see above) — it's finding real deals in the
-  first place that still needs Keepa.
+- **AI discovery source without `ANTHROPIC_API_KEY` set** — `mockAdapter.ts`
+  generates plausible fake deals so the pipeline is exercisable end to end
+  with no keys configured at all. `keepaAdapter.ts` is a scaffolded stub
+  that throws until you add a Keepa key and fill in the real API calls, if
+  you'd rather use Keepa specifically — but note it's no longer the only
+  real option (see "Fully implemented" above): `claudeSearchAdapter.ts` is
+  real and wired in as the default the moment `ANTHROPIC_API_KEY` exists.
 - **AI scoring is single-tier, not the doc's two-tier design** — one Haiku
   call per candidate today, where Section 9.1 describes a cheap model
   screening volume and a stronger model deep-verifying shortlisted
@@ -174,12 +190,16 @@ that's what you actually want before it's load-bearing for real transactions.
 1. Work through INFRASTRUCTURE_TODO.md #1-2 (GitHub + Supabase) so there's a
    real database to test sign-up/login against, then manually set one
    profile's `role` to `'admin'` to reach `/admin`. — **done, confirmed live.**
-2. Set `ANTHROPIC_API_KEY` on the worker to turn on real AI scoring — the
-   single highest-leverage env var in this codebase for demo purposes.
+2. Set `ANTHROPIC_API_KEY` on the worker — the single highest-leverage env
+   var in this codebase, since it turns on both real AI scoring *and* real
+   deal discovery via web search at once (see "Fully implemented" above).
 3. If the unified `/dashboard` isn't differentiated enough, port the three
    mockups' distinct visual treatments into it — the design tokens are
    already in `tailwind.config.ts`.
 4. Build the seller tax-info onboarding form against `seller_tax_info`.
 5. Wire a real courier (or Shippo/EasyPost aggregator), then real
    eBay/Depop/Etsy/Whatnot/StockX API credentials for cross-posting.
-6. Replace the mock discovery adapter with Keepa once that account exists.
+6. Spot-check the Claude-search discovery adapter's first real runs (its
+   resale-evidence URLs print to the worker logs), and tune
+   `DISCOVERY_INTERVAL_MINUTES` once real search costs are visible in the
+   Anthropic console. Keepa remains an option instead, if preferred.

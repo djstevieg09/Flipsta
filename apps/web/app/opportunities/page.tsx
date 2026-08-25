@@ -96,25 +96,19 @@ export default function OpportunitiesPage() {
       {message && <div className="card text-sm">{message}</div>}
       {loading && <p className="text-textDim">Loading…</p>}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-4 items-start">
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {opportunities.map((o) => (
-            <OpportunityCard
-              key={o.id}
-              o={o}
-              now={now}
-              urgencyColorClass={urgencyColor[o.urgency_tier]}
-              onBid={() => placeBid(o.id, o.starting_bid_gbp)}
-              onInstantWin={() => instantWin(o.id)}
-            />
-          ))}
-        </div>
+      <ActivityTicker />
 
-        <div className="card">
-          <h3 className="font-bold text-sm">Live activity</h3>
-          <p className="text-xs text-textDim mb-2">Real-time bidding across the platform</p>
-          <ActivityFeed />
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {opportunities.map((o) => (
+          <OpportunityCard
+            key={o.id}
+            o={o}
+            now={now}
+            urgencyColorClass={urgencyColor[o.urgency_tier]}
+            onBid={() => placeBid(o.id, o.starting_bid_gbp)}
+            onInstantWin={() => instantWin(o.id)}
+          />
+        ))}
       </div>
 
       {celebration && <InstantWinCelebration priceGBP={celebration.priceGBP} exiting={celebration.exiting} />}
@@ -149,14 +143,26 @@ function OpportunityCard({
         <span className="text-xs text-textDim">{Math.round(o.confidence_score * 100)}% confidence</span>
       </div>
       <div className="text-sm text-textDim">{o.source_tier}</div>
-      <div className="font-bold">
-        Margin band {Math.round(o.margin_band_low * 100)}–{Math.round(o.margin_band_high * 100)}%
-      </div>
-      {typeof o.estimated_resale_price_gbp === "number" && (
-        <div className="text-xs text-textDim">
-          Est. resale value: <span className="text-text font-bold">£{o.estimated_resale_price_gbp.toFixed(2)}</span>
+
+      {/* Outlay/returns — what you'd pay vs. what it's expected to sell
+          for, side by side, so both numbers are visible at a glance. */}
+      <div className="grid grid-cols-2 gap-2 py-2 border-y border-border">
+        <div>
+          <div className="text-[10px] text-textDim uppercase tracking-wide">Outlay</div>
+          <div className="font-bold">£{o.instant_win_price_gbp.toFixed(2)}</div>
+          <div className="text-[10px] text-textDim">or bid from £{(o.starting_bid_gbp + 2).toFixed(2)}</div>
         </div>
-      )}
+        <div>
+          <div className="text-[10px] text-textDim uppercase tracking-wide">Returns</div>
+          <div className="font-bold text-green">
+            {typeof o.estimated_resale_price_gbp === "number" ? `£${o.estimated_resale_price_gbp.toFixed(2)}` : "—"}
+          </div>
+          <div className="text-[10px] text-textDim">
+            est. resale · {Math.round(o.margin_band_low * 100)}–{Math.round(o.margin_band_high * 100)}% margin
+          </div>
+        </div>
+      </div>
+
       <div className="text-xs text-textDim">~{o.estimated_stock_units} units available</div>
       {o.ai_reasoning && <div className="text-xs text-textDim italic">{o.ai_reasoning}</div>}
       {remainingSeconds !== null && o.status === "live" && (
@@ -165,18 +171,12 @@ function OpportunityCard({
         </div>
       )}
       <div className="flex gap-2 pt-2">
-        <div className="flex flex-col flex-1">
-          <span className="text-[10px] text-textDim uppercase">Buy in from</span>
-          <button className="btn btn-ghost" onClick={onBid}>
-            Bid £{(o.starting_bid_gbp + 2).toFixed(2)}
-          </button>
-        </div>
-        <div className="flex flex-col flex-1">
-          <span className="text-[10px] text-textDim uppercase">Skip the auction</span>
-          <button className="btn btn-primary" onClick={onInstantWin}>
-            Instant win £{o.instant_win_price_gbp.toFixed(2)}
-          </button>
-        </div>
+        <button className="btn btn-ghost flex-1" onClick={onBid}>
+          Bid £{(o.starting_bid_gbp + 2).toFixed(2)}
+        </button>
+        <button className="btn btn-primary flex-1" onClick={onInstantWin}>
+          Instant win £{o.instant_win_price_gbp.toFixed(2)}
+        </button>
       </div>
     </div>
   );
@@ -189,11 +189,12 @@ function formatCountdown(totalSeconds: number): string {
 }
 
 /**
- * Steven's "real community stuff" ask — the signed-off mockups faked this
- * with random names (mockups/*.html: addFeedItem()); this reads the actual
- * bids table via /api/activity, polling rather than inventing anything.
+ * Steven's "real community stuff" ask, now as a stock-ticker style marquee
+ * across the top instead of a sidebar card. Still reads the real bids
+ * table via /api/activity (the signed-off mockups faked this with random
+ * names — mockups/*.html: addFeedItem()) — only the presentation changed.
  */
-function ActivityFeed() {
+function ActivityTicker() {
   const [items, setItems] = useState<ActivityItem[]>([]);
 
   useEffect(() => {
@@ -215,36 +216,36 @@ function ActivityFeed() {
   }, []);
 
   if (items.length === 0) {
-    return <p className="text-xs text-textDim">No bidding activity yet — be the first.</p>;
+    return (
+      <div className="card py-2 px-4 text-xs text-textDim">No bidding activity yet — be the first.</div>
+    );
   }
 
+  // Duplicated once so the CSS loop (translateX -50%) is seamless.
+  const track = [...items, ...items];
+
   return (
-    <div className="flex flex-col gap-2 max-h-[520px] overflow-y-auto">
-      {items.map((a) => (
-        <div key={a.id} className="feed-item text-xs bg-surface2 border border-border rounded-lg px-2.5 py-2">
-          <div>
-            {a.urgencyTier === "hot" && <span className="flame-icon mr-1">🔥</span>}
-            <b className="text-brand2">{a.displayName}</b>{" "}
+    <div className="ticker-wrap card p-0">
+      <div className="ticker-track">
+        {track.map((a, i) => (
+          <span key={`${a.id}-${i}`} className="ticker-item border-r border-border">
+            {a.urgencyTier === "hot" && <span className="flame-icon">🔥</span>}
+            <span className="text-textFaint uppercase text-[10px] tracking-wide">{a.categoryName}</span>
+            <b className="text-brand2">{a.displayName}</b>
             {a.isInstantWin ? (
-              <>instant-won a {a.categoryName} opportunity for £{a.amountGBP.toFixed(2)}</>
+              <span className="text-gold font-bold">
+                WON £{a.amountGBP.toFixed(2)} 🏆
+              </span>
             ) : (
-              <>bid £{a.amountGBP.toFixed(2)} on a {a.categoryName} opportunity</>
+              <span className="text-green font-bold">
+                £{a.amountGBP.toFixed(2)} ▲
+              </span>
             )}
-          </div>
-          <div className="text-textFaint mt-0.5">{timeAgo(a.createdAt)}</div>
-        </div>
-      ))}
+          </span>
+        ))}
+      </div>
     </div>
   );
-}
-
-function timeAgo(iso: string): string {
-  const seconds = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
-  if (seconds < 60) return "just now";
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.round(minutes / 60);
-  return `${hours}h ago`;
 }
 
 const CONFETTI = ["🎉", "✨", "🔥", "💷", "🎊"];

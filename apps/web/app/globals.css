@@ -44,6 +44,34 @@ body {
   animation: feed-slide-in 0.35s ease;
 }
 
+/* Stock-market-style scrolling activity ticker across the top of the live
+   feed. The track is rendered with its item list duplicated once, so an
+   infinite linear scroll to -50% loops seamlessly. */
+.ticker-wrap {
+  overflow: hidden;
+  white-space: nowrap;
+}
+.ticker-track {
+  display: inline-flex;
+  width: max-content;
+  animation: ticker-scroll 32s linear infinite;
+}
+.ticker-wrap:hover .ticker-track {
+  animation-play-state: paused;
+}
+@keyframes ticker-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.ticker-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 /* Instant-win celebration overlay. */
 @keyframes win-pop-in {
   0% { opacity: 0; transform: scale(0.6) rotate(-8deg); }

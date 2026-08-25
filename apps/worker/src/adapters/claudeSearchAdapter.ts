@@ -5,21 +5,39 @@ import { SourceAdapter, CandidateDeal } from "./sourceAdapter.js";
  * Real deal discovery via Claude's own web search — the alternative to
  * Keepa (INFRASTRUCTURE_TODO.md #6) Steven asked for: "search the web for
  * a product that is currently on offer and then also search selling sites
- * for the selling price". This uses Anthropic's server-side web_search
- * tool — the same mechanism as an ordinary Claude web search — run against
- * public retailer and marketplace pages. It is not scraping and does not
- * attempt to defeat any site's bot-detection; it only ever reads what a
- * normal web search already surfaces.
+ * for the selling price". It is not scraping and does not attempt to
+ * defeat any site's bot-detection; it only ever reads what a normal web
+ * fetch/search already surfaces.
+ *
+ * 25 Aug 2026 redesign: Steven, after 6 rounds of patching an open-ended
+ * "go search the whole internet" prompt (it kept fixating on LEGO,
+ * reasoning about collectible appreciation instead of resale value,
+ * quitting early, spreading across categories instead of committing) —
+ * "is this realy the best way to do this, the Bot is way too cautious."
+ * Fair challenge. Leaving discovery itself (which page to even look at) up
+ * to the model was the actual root cause underneath every one of those
+ * bugs: an open-ended task gives it endless room to hedge, second-guess,
+ * and default to whatever's most familiar. So the "where do I look"
+ * decision has been taken out of its hands entirely — CURATED_SOURCES
+ * below is a fixed, hand-picked list of real, currently-live UK retailer
+ * clearance/outlet pages, one per category, verified by direct web search
+ * on 25 Aug 2026. Each run is handed one exact URL and told to fetch it
+ * directly (web_fetch — see focusSourceForRun) rather than going and
+ * finding a page itself. Much less room to be "cautious" about, because
+ * there's much less left to decide.
  *
  * Reuses ANTHROPIC_API_KEY, the same key that already powers aiScoring.ts
  * — no new env var. index.ts picks this adapter automatically the moment
  * that key is set, falling back to mockAdapter otherwise, same "stub until
  * configured" pattern as every other integration in this codebase.
  *
- * Cost note: unlike the free mock adapter, every run here does real,
- * billed web searches (~$10 per 1,000 searches, plus normal token cost for
- * a capable model) — see the discovery interval logic in index.ts, which
- * runs this far less often than the mock path for exactly that reason.
+ * Cost note: web_fetch (used to read the curated clearance page itself)
+ * has NO per-fetch charge on the Claude API — only standard token cost
+ * for the page content that gets pulled into context, capped further by
+ * max_content_tokens below. web_search (used only afterwards, to check
+ * resale evidence for a specific candidate) is the billed piece, ~$10 per
+ * 1,000 searches — its budget has been cut from 32 to 10 per run now that
+ * it's no longer doing the discovery work too.
  */
 const apiKey = process.env.ANTHROPIC_API_KEY;
 const client = apiKey ? new Anthropic({ apiKey }) : null;
@@ -48,24 +66,42 @@ const VALID_CATEGORY_SLUGS = [
   "gaming",
 ] as const;
 
-// Steven, 25 Aug 2026: "its only really looking at lego sets." Root cause —
-// the old prompt's only concrete example anywhere was "a collector
-// price-tracker like BrickEconomy for LEGO", in an otherwise-abstract list
-// of 10 categories with no other named verification source. Given a choice
-// under uncertainty, the model rationally kept reaching for the one
-// category it had a spelled-out way to verify. The fix isn't "ask it more
-// firmly to vary" — it's to stop leaving that choice to the model at all.
-// Each run now gets a specific category assigned in code, rotating through
-// all 10 on a clock (see focusCategoryForRun below), with its own
-// resale-evidence hint so every category gets the same kind of concrete
-// guidance LEGO used to get exclusively.
+interface CuratedSource {
+  category: (typeof VALID_CATEGORY_SLUGS)[number];
+  retailer: string;
+  url: string;
+  domain: string; // used to scope web_fetch's allowed_domains for this run
+}
+
+// One real, currently-live UK retailer clearance/outlet page per category —
+// every URL below was confirmed by direct web search on 25 Aug 2026, not
+// guessed. This replaces "go find a clearance page" with "here's the exact
+// page" — the actual fix for the LEGO fixation (LEGO was never a rule the
+// model was following, it was the one thing it knew how to find under an
+// open-ended search task) and for the general over-caution Steven flagged:
+// there's no longer a "which page should I even look at" decision to hedge
+// over. If a retailer changes its clearance URL structure, update the
+// affected row here — nothing else needs to change.
+const CURATED_SOURCES: CuratedSource[] = [
+  { category: "collectibles", retailer: "Zavvi", url: "https://www.zavvi.com/c/offers/clearance/all/", domain: "zavvi.com" },
+  { category: "footwear", retailer: "Clarks Outlet", url: "https://www.clarksoutlet.co.uk/clearance/clearance_uko-c", domain: "clarksoutlet.co.uk" },
+  { category: "tech", retailer: "Currys", url: "https://www.currys.co.uk/clearance", domain: "currys.co.uk" },
+  { category: "home-kitchen", retailer: "The Range", url: "https://www.therange.co.uk/clearance/kitchen-and-household-clearance/", domain: "therange.co.uk" },
+  { category: "beauty", retailer: "Boots", url: "https://www.boots.com/all-clearance", domain: "boots.com" },
+  { category: "toys-games", retailer: "Smyths Toys", url: "https://www.smythstoys.com/uk/en-gb/toys/clearance/c/SM060109", domain: "smythstoys.com" },
+  { category: "fashion-accessories", retailer: "ASOS", url: "https://www.asos.com/discover/asos-outlet/", domain: "asos.com" },
+  { category: "sports-outdoors", retailer: "Decathlon", url: "https://www.decathlon.co.uk/deals", domain: "decathlon.co.uk" },
+  { category: "baby-kids", retailer: "Mamas & Papas", url: "https://www.mamasandpapas.com/collections/baby-sale-clearance", domain: "mamasandpapas.com" },
+  { category: "gaming", retailer: "GAME", url: "https://www.game.co.uk/deals/clearance", domain: "game.co.uk" },
+];
+
 const RESALE_EVIDENCE_HINTS: Record<(typeof VALID_CATEGORY_SLUGS)[number], string> = {
-  collectibles: "eBay UK sold listings first — that's the real near-term resale price. LEGO IS OFF-LIMITS THIS RUN (see the note below) — instead try trading cards (Pokemon, Match Attax, football/basketball cards), designer collectible figures (Funko Pop, Sonny Angels, blind-box toys), retro/vintage games consoles, commemorative coins, or vinyl records.",
+  collectibles: "eBay UK sold listings — that's the real near-term resale price. A collector tracker like BrickEconomy is fine as a secondary GBP-only sanity check, never a USD price and never an 'investment growth' figure — see the note below on why.",
   footwear: "eBay sold listings, StockX, or GOAT",
   tech: "eBay sold listings, or CeX's own trade-in/resale pricing",
   "home-kitchen": "eBay sold listings or Vinted",
   beauty: "eBay sold listings or Vinted — check it's sealed/unused, resale value collapses fast on opened beauty items",
-  "toys-games": "eBay UK sold listings first — that's the real near-term resale price. LEGO IS OFF-LIMITS THIS RUN (see the note below) — instead try board games, radio-control toys, outdoor/garden play equipment, arts-and-crafts sets, or other construction-toy brands (Mega Bloks, Playmobil).",
+  "toys-games": "eBay UK sold listings — that's the real near-term resale price. A collector tracker like BrickEconomy is fine as a secondary GBP-only sanity check, never a USD price and never an 'investment growth' figure — see the note below on why.",
   "fashion-accessories": "eBay sold listings, Vinted, or Depop",
   "sports-outdoors": "eBay sold listings or Vinted",
   "baby-kids": "eBay sold listings or Vinted",
@@ -73,13 +109,13 @@ const RESALE_EVIDENCE_HINTS: Record<(typeof VALID_CATEGORY_SLUGS)[number], strin
 };
 
 // Deterministic rotation, not random or model-chosen — advances to the next
-// category roughly every 12h (matching the twice-a-day interval in
-// index.ts) purely from wall-clock time, so it needs no stored state and
-// naturally cycles through all 10 categories over 5 days regardless of how
-// many times the worker gets restarted in between.
-function focusCategoryForRun(): (typeof VALID_CATEGORY_SLUGS)[number] {
+// source roughly every 12h (matching the twice-a-day interval in index.ts)
+// purely from wall-clock time, so it needs no stored state and naturally
+// cycles through all 10 sources over 5 days regardless of how many times
+// the worker gets restarted in between.
+function focusSourceForRun(): CuratedSource {
   const twelveHourBuckets = Math.floor(Date.now() / (12 * 60 * 60 * 1000));
-  return VALID_CATEGORY_SLUGS[twelveHourBuckets % VALID_CATEGORY_SLUGS.length];
+  return CURATED_SOURCES[twelveHourBuckets % CURATED_SOURCES.length];
 }
 
 const REPORT_TOOL = {
@@ -137,22 +173,19 @@ const REPORT_TOOL = {
   },
 };
 
-function buildPrompt(focusCategory: (typeof VALID_CATEGORY_SLUGS)[number]): string {
-  return `You're sourcing real resale opportunities for a UK reselling marketplace. Use web search to find products that are:
+function buildPrompt(source: CuratedSource): string {
+  return `You're sourcing real resale opportunities for a UK reselling marketplace. The discovery step is already done for you — don't go searching for a clearance page, use this exact one:
 
-1. Currently on genuine discount/clearance/overstock at a real UK (or reputable online) retailer right now, with a specific current price you can point to. A "best deals" roundup or clearance-page article is a GOOD place to START looking — it's an efficient way to surface leads — but don't report the roundup itself as the deal. Pick one specific product it names, then go confirm that product's own page: the exact current price, and ideally that it still shows as in stock/purchasable right now (deals do go out of stock — if the retailer's own page shows it unavailable, drop it and try another lead).
-2. Resellable at a real profit — search a second-hand or marketplace site for what the same or equivalent item is actually selling for, so the margin is based on real evidence, not a guess. For this run's category, good resale-evidence sources are: ${RESALE_EVIDENCE_HINTS[focusCategory]}. Amazon is NOT always the cheapest source — check independent retailers and other marketplaces too, not just Amazon. Note eBay's own search results sometimes fail to load for automated tools — if that happens, try a different resale evidence source rather than giving up on the candidate.
+FETCH THIS URL FIRST, using web_fetch: ${source.url}
+That's ${source.retailer}'s real, live "${source.category}" clearance/outlet page. It'll show several products with a current price and usually a was/RRP price right on the page — that's your discount evidence, already real, no need to re-verify it exists.
 
-THIS IS RETAIL ARBITRAGE, NOT COLLECTIBLE INVESTING — an important distinction that's caused real mistakes before. The profit here comes from buying BELOW an item's normal price and reselling AT OR NEAR that normal price, quickly (days to weeks) — NOT from the item appreciating in value over months or years the way a collectible investor thinks about it. Concretely: an item at £120 with a normal/RRP price around £200+ is a genuinely good candidate even if a collector-investment site says it "hasn't appreciated" or is "still at retail value" — that phrase describes long-term collectible growth, which is irrelevant here, not resale viability. NEVER use a long-term appreciation figure ("X% growth after retirement," "investment return," a holding-period analysis, an article about a set's value over years) as your resale evidence, and never let one talk you out of an otherwise-solid discount-to-RRP margin — that is a different question to the one you're answering. Your resale evidence must be an actual current selling/sold price on a resale marketplace. Also check currency carefully: if a site shows a price in USD or another currency (BrickEconomy defaults to USD unless you can confirm it's showing GBP), either convert it explicitly and say so, or find a GBP source instead — never compare a GBP cost against a non-GBP figure as if they were the same currency.
-3. THIS RUN'S CATEGORY IS: **${focusCategory}**. Search specifically within this category. The full approved list (for reference only — do not search other categories this run) is: collectibles, footwear, tech, home-kitchen, beauty, toys-games, fashion-accessories, sports-outdoors, baby-kids, gaming — categories are rotated across runs in code so every one gets covered over time; only branch outside ${focusCategory} if a genuine, sustained effort inside it turns up nothing viable at all.
+From what you see there:
+1. Pick 1-2 products with a genuine, clearly-marked discount and (if shown) in-stock availability. If the page looks thin on real content (some retailer sites don't render properly for a plain fetch), use web_search restricted to ${source.domain} instead, e.g. "site:${source.domain} clearance" — don't burn time on that fallback if the fetch worked.
+2. For each one, use web_search to find real resale evidence — what the same or equivalent item is actually selling for right now. Good sources for this category: ${RESALE_EVIDENCE_HINTS[source.category]}.
 
-LEGO IS OFF-LIMITS THIS RUN, NO EXCEPTIONS. Every real run so far has defaulted to LEGO sets specifically, regardless of which category it was pointed at — that's a known bias in you, not a reflection of where the real deals are, and this business needs proof the discovery engine works for other products before LEGO is allowed back in rotation. If you notice a LEGO deal while browsing a roundup or clearance page, skip straight past it and keep looking — do not verify it, do not report it, do not mention it as a fallback. This applies in every category, not just toys-games/collectibles.
+THIS IS RETAIL ARBITRAGE, NOT COLLECTIBLE INVESTING. Profit comes from buying BELOW an item's normal price and reselling AT OR NEAR that normal price, soon (days to weeks) — not from it appreciating over months/years like a collector holding it. A £120 item with a ~£200+ normal price is a good candidate even if some tracker site says it "hasn't appreciated" — that phrase is about long-term collectible growth and is irrelevant here; never use it as a reason to drop a candidate, and never use it as your resale evidence. Check currency too — if a site shows USD or another non-GBP currency, convert explicitly or find a GBP source instead.
 
-DEPTH OVER BREADTH — this is the most important instruction here. Fully closing out ONE candidate (its current price confirmed on the retailer's own page, its stock confirmed, and real resale evidence found) typically takes 4-6 searches on its own. Pick a lead, then commit to it: verify price, verify stock, find resale evidence, confirm resale evidence — all before you go looking for a different lead. Do NOT sample many products broadly and leave every one of them half-verified — that produces zero reportable candidates, which has been happening. A run that fully verifies just 1 or 2 real candidates is a completely successful run, better than a run that touches 6 leads and finishes none of them. Only move to a different lead once you've either fully closed out a candidate or genuinely exhausted a promising one. You have a budget of up to 32 searches for the ENTIRE run — 5-10 searches in, you are nowhere near that limit, so do not abandon a promising lead by claiming you're "running low on searches" this early. If you can't immediately confirm which retailer has a price you found in a roundup, try 2-3 more specific searches for it (e.g. searching the exact retailer's site directly) before giving up on that lead — that's normal, expected effort, not a sign to switch products.
-
-There's no quota to hit — 1 genuine, fully-verified candidate is a good outcome, more is a bonus. Fewer real candidates is always better than making anything up, and always better than reporting nothing because you spread too thin. For each candidate, you must have an actual source URL for the current offer and an actual URL you checked for the resale price evidence.
-
-Call report_candidate_deals with what you found once you're done searching. If you genuinely find nothing after fully committing to a few leads within ${focusCategory}, call it with an empty deals array — but that should be rare if you're closing out leads one at a time instead of sampling broadly.`;
+Report what you find with report_candidate_deals — category_slug should be "${source.category}". An empty deals array is a completely fine outcome if nothing on the page genuinely clears a real margin; don't invent a candidate to avoid reporting zero.`;
 }
 
 export const claudeSearchAdapter: SourceAdapter = {
@@ -164,24 +197,29 @@ export const claudeSearchAdapter: SourceAdapter = {
 
     // Streaming, not .create() — the Anthropic SDK refuses to run a
     // non-streaming request that it estimates could take longer than 10
-    // minutes (a real risk here: max_tokens 24000 + up to 32 web searches
-    // to reason over), and throws client-side before ever calling the API
-    // at all. .stream().finalMessage() waits for the same complete
-    // response with no such cap.
-    //
-    // Search budget raised alongside doubling the category count (5 -> 10)
-    // so per-category coverage doesn't get thinner just because there's
-    // more ground to cover in one run — this only runs twice a day
-    // (index.ts), not every 2 hours, so each run matters more.
+    // minutes, and throws client-side before ever calling the API at all.
+    // .stream().finalMessage() waits for the same complete response with
+    // no such cap. Less of a real risk now than when this budget was 32
+    // searches for open-ended discovery, but cheap insurance to keep.
+    const WEB_SEARCH_MAX_USES = 10; // resale-evidence checks only now, not discovery — see file header
+    const WEB_FETCH_MAX_USES = 4; // the curated page itself, plus room for a product page or a fallback fetch
+
+    // Computed once per run (not per continuation) so a paused-and-resumed
+    // run stays on the same source throughout — see focusSourceForRun.
+    const source = focusSourceForRun();
     const tools: Anthropic.Messages.MessageCreateParams["tools"] = [
-      { type: "web_search_20250305", name: "web_search", max_uses: 32 },
+      {
+        type: "web_fetch_20250910",
+        name: "web_fetch",
+        max_uses: WEB_FETCH_MAX_USES,
+        allowed_domains: [source.domain, `www.${source.domain}`],
+        max_content_tokens: 50000,
+      },
+      { type: "web_search_20250305", name: "web_search", max_uses: WEB_SEARCH_MAX_USES },
       REPORT_TOOL,
     ];
-    // Computed once per run (not per continuation) so a paused-and-resumed
-    // run stays on the same category throughout — see focusCategoryForRun.
-    const focusCategory = focusCategoryForRun();
-    const prompt = buildPrompt(focusCategory);
-    console.log(`[claudeSearchAdapter] This run's focus category: ${focusCategory}`);
+    const prompt = buildPrompt(source);
+    console.log(`[claudeSearchAdapter] This run's source: ${source.retailer} (${source.category}) — ${source.url}`);
     let messages: Anthropic.Messages.MessageParam[] = [{ role: "user", content: prompt }];
     let response = await client.messages.stream({ model: "claude-sonnet-4-5", max_tokens: 24000, tools, messages }).finalMessage();
 
@@ -208,14 +246,12 @@ export const claudeSearchAdapter: SourceAdapter = {
       console.warn(`[claudeSearchAdapter] Still paused after ${MAX_CONTINUATIONS} continuations — giving up on this run.`);
     }
 
-    // Diagnostic logging — every real run so far has come back with zero
-    // candidates despite genuinely spending money, which isn't normal even
-    // for a strict "only report verified deals" instruction. This makes the
-    // actual reason visible in Render's logs on the next run: did it hit
-    // max_tokens mid-search (truncated before ever calling
-    // report_candidate_deals), how many searches did it actually use out of
-    // the 32 available, and what did it say in its own words.
+    // Diagnostic logging — kept from the earlier debugging rounds since it's
+    // what actually found every bug fixed today. Now also tracks web_fetch
+    // usage (free, but worth seeing whether the curated-page fetch actually
+    // worked or fell back to search every time).
     const searchesUsed = response.content.filter((b: any) => b.type === "server_tool_use" && b.name === "web_search").length;
+    const fetchesUsed = response.content.filter((b: any) => b.type === "server_tool_use" && b.name === "web_fetch").length;
     const toolCallNames = response.content.filter((b: any) => b.type === "tool_use").map((b: any) => b.name);
     const textPreview = response.content
       .filter((b: any) => b.type === "text")
@@ -223,7 +259,7 @@ export const claudeSearchAdapter: SourceAdapter = {
       .join(" ")
       .slice(0, 800);
     console.log(
-      `[claudeSearchAdapter] stop_reason=${response.stop_reason} searches_used=${searchesUsed}/32 output_tokens=${response.usage?.output_tokens} tool_calls=[${toolCallNames.join(", ")}] text_preview=${JSON.stringify(textPreview)}`,
+      `[claudeSearchAdapter] stop_reason=${response.stop_reason} fetches_used=${fetchesUsed}/${WEB_FETCH_MAX_USES} searches_used=${searchesUsed}/${WEB_SEARCH_MAX_USES} output_tokens=${response.usage?.output_tokens} tool_calls=[${toolCallNames.join(", ")}] text_preview=${JSON.stringify(textPreview)}`,
     );
     if (response.stop_reason === "max_tokens") {
       console.warn(
@@ -292,8 +328,13 @@ const VERIFY_TOOL = {
 /**
  * Steven's re-run ask: an opportunity that lapsed with zero bids gets
  * re-checked the next day rather than just discarded — but only actually
- * re-listed if the underlying retailer deal still looks real. Reuses the
- * same ANTHROPIC_API_KEY / web_search setup as findCandidates() above.
+ * re-listed if the underlying retailer deal still looks real.
+ *
+ * Unlike findCandidates() above, this already has an exact known URL to
+ * check — no discovery step needed — so web_fetch (free, direct) is a
+ * better fit than a web_search re-lookup, with web_search kept as a small
+ * fallback for the rare case the fetch fails (page moved, blocks plain
+ * fetches, etc.).
  *
  * Stub-until-configured, same as the rest of this file: with no key set,
  * this assumes "still active" so relistLapsedOpportunities.ts is
@@ -308,15 +349,27 @@ export async function verifyDealStillActive(deal: {
 }): Promise<boolean> {
   if (!client) return true;
 
+  let allowedDomains: string[] | undefined;
+  try {
+    const host = new URL(deal.sourceUrl).hostname;
+    allowedDomains = [host, host.replace(/^www\./, "")];
+  } catch {
+    allowedDomains = undefined; // malformed URL — let web_fetch's own validation handle it
+  }
+
   try {
     const response = await client.messages.create({
       model: "claude-sonnet-4-5",
       max_tokens: 512,
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 2 }, VERIFY_TOOL],
+      tools: [
+        { type: "web_fetch_20250910", name: "web_fetch", max_uses: 2, allowed_domains: allowedDomains, max_content_tokens: 20000 },
+        { type: "web_search_20250305", name: "web_search", max_uses: 1 },
+        VERIFY_TOOL,
+      ],
       messages: [
         {
           role: "user",
-          content: `Check whether this specific resale deal is still live and purchasable right now: retailer "${deal.sourceRetailer}", approx £${deal.sourcePriceGBP}, listing at ${deal.sourceUrl}. Use web search to check the actual page or a very recent reference to it, then call confirm_deal_status with your finding.`,
+          content: `Check whether this specific resale deal is still live and purchasable right now: retailer "${deal.sourceRetailer}", approx £${deal.sourcePriceGBP}, listing at ${deal.sourceUrl}. Fetch that exact URL directly with web_fetch first — only fall back to web_search if the fetch fails or the page has clearly moved. Then call confirm_deal_status with your finding.`,
         },
       ],
     });

@@ -67,7 +67,11 @@ const VALID_CATEGORY_SLUGS = [
 ] as const;
 
 interface CuratedSource {
-  category: (typeof VALID_CATEGORY_SLUGS)[number];
+  // "any" — Temu-style general marketplace sources sell across every
+  // category on one page, so there's no single right answer to pin the
+  // source to; the model picks the real category_slug per product instead
+  // (see buildPrompt).
+  category: (typeof VALID_CATEGORY_SLUGS)[number] | "any";
   retailer: string;
   url: string;
   domain: string; // used to scope web_fetch's allowed_domains for this run
@@ -93,6 +97,23 @@ const CURATED_SOURCES: CuratedSource[] = [
   { category: "sports-outdoors", retailer: "Decathlon", url: "https://www.decathlon.co.uk/deals", domain: "decathlon.co.uk" },
   { category: "baby-kids", retailer: "Mamas & Papas", url: "https://www.mamasandpapas.com/collections/baby-sale-clearance", domain: "mamasandpapas.com" },
   { category: "gaming", retailer: "GAME", url: "https://www.game.co.uk/deals/clearance", domain: "game.co.uk" },
+  // 26 Aug 2026, Steven: "What about alibaba and temu sites... These are
+  // people looking to buy bulk items and reselling them?" Temu added —
+  // it's individual consumer items at low prices, the same "buy one item,
+  // resell it for more" shape as everything above, so it fits this
+  // adapter as-is. Alibaba deliberately NOT added: it's wholesale/bulk-lot
+  // buying (minimum order quantities, real capital tied up in stock,
+  // splitting one bulk purchase into many resale listings) — a genuinely
+  // different business model Flipsta's one-item-per-opportunity design
+  // doesn't support today, not a same-day addition here. Real caveats on
+  // Temu itself, worth knowing: shipping is typically 1-3 weeks (not
+  // days), and quality/authenticity is less consistent than an
+  // established UK retailer — both are on top of the usual verification
+  // this file already does, not a reason to skip it. Its site is heavily
+  // JS-rendered, so web_fetch will likely come back thin — the existing
+  // "fall back to web_search" instruction in buildPrompt already covers
+  // that, same as it does for The Range/Boots today.
+  { category: "any", retailer: "Temu", url: "https://www.temu.com/uk/c.html", domain: "temu.com" },
 ];
 
 const RESALE_EVIDENCE_HINTS: Record<(typeof VALID_CATEGORY_SLUGS)[number], string> = {
@@ -107,6 +128,11 @@ const RESALE_EVIDENCE_HINTS: Record<(typeof VALID_CATEGORY_SLUGS)[number], strin
   "baby-kids": "eBay sold listings or Vinted",
   gaming: "eBay sold listings, CeX, or PriceCharting for game/console resale value",
 };
+
+// General-purpose fallback for a source (Temu) that isn't tied to one
+// fixed category — the specific hint above is still better when a source
+// has one, this is only used when source.category is "any".
+const GENERAL_RESALE_EVIDENCE_HINT = "eBay sold listings, or Vinted/Depop/CeX depending on what kind of item it is";
 
 // Deterministic rotation, not random or model-chosen — advances to the next
 // source roughly every 12h (matching the twice-a-day interval in index.ts)
@@ -174,20 +200,35 @@ const REPORT_TOOL = {
 };
 
 function buildPrompt(source: CuratedSource): string {
+  const isGeneral = source.category === "any";
+  const pageDescription = isGeneral
+    ? `That's ${source.retailer}'s real, live deals page, selling across many categories at once — it'll show several products with a current price (may or may not show a "was" price on this kind of site) — that's your discount evidence where shown, already real, no need to re-verify it exists.`
+    : `That's ${source.retailer}'s real, live "${source.category}" clearance/outlet page. It'll show several products with a current price and usually a was/RRP price right on the page — that's your discount evidence, already real, no need to re-verify it exists.`;
+  const categoryInstruction = isGeneral
+    ? `Pick whichever category_slug from this list actually fits each product you report: ${VALID_CATEGORY_SLUGS.join(", ")}.`
+    : `category_slug should be "${source.category}".`;
+  const resaleHint = source.category === "any" ? GENERAL_RESALE_EVIDENCE_HINT : RESALE_EVIDENCE_HINTS[source.category];
+
   return `You're sourcing real resale opportunities for a UK reselling marketplace. The discovery step is already done for you — don't go searching for a clearance page, use this exact one:
 
 FETCH THIS URL FIRST, using web_fetch: ${source.url}
-That's ${source.retailer}'s real, live "${source.category}" clearance/outlet page. It'll show several products with a current price and usually a was/RRP price right on the page — that's your discount evidence, already real, no need to re-verify it exists.
+${pageDescription}
 
 From what you see there:
 1. Pick 1-2 products with a genuine, clearly-marked discount and (if shown) in-stock availability. If the page looks thin on real content (some retailer sites don't render properly for a plain fetch), use web_search restricted to ${source.domain} instead, e.g. "site:${source.domain} clearance" — don't burn time on that fallback if the fetch worked.
-2. For each one, use web_search to find real resale evidence — what the same or equivalent item is actually selling for right now. Good sources for this category: ${RESALE_EVIDENCE_HINTS[source.category]}.
+2. For each one, use web_search to find real resale evidence — what the same or equivalent item is actually selling for right now. Good sources: ${resaleHint}.
 
 ON RESALE EVIDENCE — a true "sold/completed" eBay listing is the gold standard, but it's genuinely often invisible to a plain web search (eBay's own sold-items filter isn't reliably exposed to automated tools — this is a known limitation, not something to burn your whole search budget chasing). If you can't find one after 2-3 real attempts, ONE current live listing (eBay, Vinted, or another marketplace) at a comparable price is an acceptable substitute — you don't need several. What's NEVER acceptable, no matter how healthy the discount looks: reporting a candidate with NO independent resale check at all, just because the retailer's own "was £X" price implies a big enough gap — retailers' own reference prices are sometimes inflated and are not, on their own, evidence of what the item actually resells for. You always need at least one real URL, independent of the source retailer, backing the resale price. Also not acceptable: a single unrelated price on the SAME retailer site you're sourcing from (that's not independent), or inventing a plausible-sounding number with no real URL behind it.
 
-THIS IS RETAIL ARBITRAGE, NOT COLLECTIBLE INVESTING. Profit comes from buying BELOW an item's normal price and reselling AT OR NEAR that normal price, soon (days to weeks) — not from it appreciating over months/years like a collector holding it. A £120 item with a ~£200+ normal price is a good candidate even if some tracker site says it "hasn't appreciated" — that phrase is about long-term collectible growth and is irrelevant here; never use it as a reason to drop a candidate, and never use it as your resale evidence. Check currency too — if a site shows USD or another non-GBP currency, convert explicitly or find a GBP source instead.
+THIS IS RETAIL ARBITRAGE, NOT COLLECTIBLE INVESTING. Profit comes from buying BELOW an item's normal price and reselling AT OR NEAR that normal price, soon (days to weeks) — not from it appreciating over months/years like a collector holding it. A £120 item with a ~£200+ normal price is a good candidate even if some tracker site says it "hasn't appreciated" — that phrase is about long-term collectible growth and is irrelevant here; never use it as a reason to drop a candidate, and never use it as your resale evidence. Check currency too — if a site shows USD or another non-GBP currency, convert explicitly or find a GBP source instead.${
+    isGeneral
+      ? `
 
-Report what you find with report_candidate_deals — category_slug should be "${source.category}". An empty deals array is a completely fine outcome if nothing on the page genuinely clears a real margin; don't invent a candidate to avoid reporting zero.`;
+COUNTERFEIT/REPLICA CHECK (this source specifically) — ${source.retailer} carries genuine branded items alongside generic/unbranded ones and, sometimes, unlicensed replicas of branded products (this is well documented for things like "LEGO-compatible" building sets, which are frequently unlicensed clones, not genuine LEGO). Never report a candidate where the product listing itself doesn't clearly claim to be the genuine branded item, and never resell-evidence a generic/clone product against a genuine brand's resale prices (e.g. don't price a "building block set" against real LEGO eBay sold prices unless the actual listing says LEGO). When genuinely unsure whether something is the real branded product, skip it rather than guess.`
+      : ""
+  }
+
+Report what you find with report_candidate_deals — ${categoryInstruction} An empty deals array is a completely fine outcome if nothing on the page genuinely clears a real margin; don't invent a candidate to avoid reporting zero.`;
 }
 
 // 25-26 Aug 2026, Steven, while testing: a single run now tries multiple
@@ -202,8 +243,23 @@ Report what you find with report_candidate_deals — category_slug should be "${
 // MAX_SOURCES_PER_RUN is always a hard safety cap either way — a run can
 // never silently work through more than this many sources' full search
 // budgets in one go, however far the real target is from being met.
+//
+// 26 Aug 2026: a real run tried all 5 (the cap at the time) and correctly
+// found zero opportunities — every candidate it checked across Clarks,
+// Currys, The Range, Boots, and Smyths turned out to already be priced at
+// or near real resale value once actual market prices were checked, not a
+// bug, just genuinely no margin that day. Steven, filling the dashboard
+// for the first time: "keep goint to start with until its got 1
+// oppotunity." Raised to all 10 curated sources so a run that comes up
+// empty on the first few keeps going through the rest instead of
+// stopping, since the whole curated list is still much cheaper than the
+// old open-ended search approach either way.
 const TARGET_CANDIDATES_PER_RUN = 3;
-const MAX_SOURCES_PER_RUN = 5;
+// Tied to CURATED_SOURCES.length rather than a hardcoded number — Steven
+// wants a run to try the whole curated list before giving up, so as
+// sources get added (Temu, 26 Aug) or removed, this stays "all of them"
+// automatically instead of silently capping below the full list again.
+const MAX_SOURCES_PER_RUN = CURATED_SOURCES.length;
 
 async function discoverFromSource(source: CuratedSource): Promise<CandidateDeal[]> {
   if (!client) {

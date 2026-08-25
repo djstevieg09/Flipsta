@@ -35,7 +35,7 @@ doc it implements, so the code and the plan stay traceable to each other.
 
 1. `npm install` (root — this is an npm workspaces monorepo, one install covers everything)
 2. Copy `apps/web/.env.example` to `apps/web/.env.local` and `apps/worker/.env.example` to `apps/worker/.env.local`, and fill in your Supabase project's URL/keys (see `INFRASTRUCTURE_TODO.md` — none of this runs against real data until that's done)
-3. Run every migration against your Supabase project, **in order**: `0001_init.sql`, `0002_admin_ops.sql`, `0003_cross_posting.sql`, `0004_auth_profile_trigger.sql`, `0005_seller_order_visibility.sql`, `0006_subscription_billing.sql`, `0007_channel_connections.sql`, `0008_opportunity_lifecycle.sql`, then `supabase/seed.sql` for sample data
+3. Run every migration against your Supabase project, **in order**: `0001_init.sql`, `0002_admin_ops.sql`, `0003_cross_posting.sql`, `0004_auth_profile_trigger.sql`, `0005_seller_order_visibility.sql`, `0006_subscription_billing.sql`, `0007_channel_connections.sql`, `0008_opportunity_lifecycle.sql`, `0009_expand_categories.sql`, then `supabase/seed.sql` for sample data
 4. `npm run dev:web` — the site at localhost:3000. Sign up at `/signup` (in Supabase Auth settings, consider disabling "Confirm email" for local testing so you don't need a real inbox)
 5. To reach the admin dashboard, manually set your profile's `role` column to `'admin'` in the Supabase table editor after signing up — there's no self-service way to become staff, deliberately
 6. `npm run dev:worker` — the background jobs, in a separate terminal. Set `ANTHROPIC_API_KEY` here to turn on real AI scoring for newly discovered deals (see STATUS.md)

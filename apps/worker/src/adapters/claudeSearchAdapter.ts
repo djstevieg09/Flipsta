@@ -122,14 +122,38 @@ export const claudeSearchAdapter: SourceAdapter = {
 
     const response = await client.messages.create({
       model: "claude-sonnet-4-5",
-      max_tokens: 12000, // raised alongside max_uses — more searches means more room needed for the final response
-      // Search budget raised again alongside doubling the category count
-      // (5 -> 10) so per-category coverage doesn't get thinner just
-      // because there's more ground to cover in one run — this now only
-      // runs twice a day (index.ts), not every 2 hours, so each run matters more.
+      max_tokens: 24000, // raised again — see the diagnostic logging below; a truncated (max_tokens) response before it
+      // ever reaches report_candidate_deals is one of the leading suspects for "candidatesFound: 0" every real run so far.
+      // Search budget raised alongside doubling the category count (5 -> 10)
+      // so per-category coverage doesn't get thinner just because there's
+      // more ground to cover in one run — this only runs twice a day
+      // (index.ts), not every 2 hours, so each run matters more.
       tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 32 }, REPORT_TOOL],
       messages: [{ role: "user", content: PROMPT }],
     });
+
+    // Diagnostic logging — every real run so far has come back with zero
+    // candidates despite genuinely spending money, which isn't normal even
+    // for a strict "only report verified deals" instruction. This makes the
+    // actual reason visible in Render's logs on the next run: did it hit
+    // max_tokens mid-search (truncated before ever calling
+    // report_candidate_deals), how many searches did it actually use out of
+    // the 32 available, and what did it say in its own words.
+    const searchesUsed = response.content.filter((b: any) => b.type === "server_tool_use" && b.name === "web_search").length;
+    const toolCallNames = response.content.filter((b: any) => b.type === "tool_use").map((b: any) => b.name);
+    const textPreview = response.content
+      .filter((b: any) => b.type === "text")
+      .map((b: any) => b.text)
+      .join(" ")
+      .slice(0, 800);
+    console.log(
+      `[claudeSearchAdapter] stop_reason=${response.stop_reason} searches_used=${searchesUsed}/32 output_tokens=${response.usage?.output_tokens} tool_calls=[${toolCallNames.join(", ")}] text_preview=${JSON.stringify(textPreview)}`,
+    );
+    if (response.stop_reason === "max_tokens") {
+      console.warn(
+        "[claudeSearchAdapter] Response was CUT OFF by the max_tokens limit — it may never have reached report_candidate_deals. This is a strong candidate for why candidatesFound keeps coming back as 0.",
+      );
+    }
 
     const toolUse = response.content.find(
       (block): block is Anthropic.ToolUseBlock => block.type === "tool_use" && block.name === "report_candidate_deals",

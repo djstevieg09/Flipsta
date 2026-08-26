@@ -82,6 +82,8 @@ function ShopPageInner() {
   const [products, setProducts] = useState<Product[]>([]);
 
   const [categories, setCategories] = useState<Category[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [categoriesError, setCategoriesError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(initialCategory);
   const [query, setQuery] = useState(initialQuery);
 
@@ -104,10 +106,25 @@ function ShopPageInner() {
     setFlipstaLoading(false);
   }
 
+  // 26 Aug 2026, Steven: "i cant see the categories on the shop." The
+  // original version of this effect swallowed any fetch failure silently —
+  // the filter row would just never appear with no visible sign of why.
+  // Now every outcome (loading / error / genuinely zero categories / real
+  // data) renders something, so a real problem shows up as readable text
+  // instead of a blank space that's indistinguishable from "nothing to see
+  // here by design."
   useEffect(() => {
     fetch("/api/categories")
-      .then((r) => r.json())
-      .then((d) => setCategories(d.categories ?? []));
+      .then(async (r) => {
+        if (!r.ok) {
+          const body = await r.json().catch(() => ({}));
+          throw new Error(body.error ?? `Server returned ${r.status}`);
+        }
+        return r.json();
+      })
+      .then((d) => setCategories(d.categories ?? []))
+      .catch((err) => setCategoriesError(err.message ?? "Couldn't load categories."))
+      .finally(() => setCategoriesLoading(false));
     loadWishlist();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -247,6 +264,12 @@ function ShopPageInner() {
           placeholder="Search this page's items…"
           className="w-full max-w-sm bg-surface2 border border-border rounded-full py-2 px-4 text-sm text-text placeholder:text-textFaint focus:outline-none focus:border-brand2"
         />
+        {categoriesError && (
+          <p className="text-xs text-red">Couldn&apos;t load categories: {categoriesError}</p>
+        )}
+        {!categoriesLoading && !categoriesError && categories.length === 0 && (
+          <p className="text-xs text-textFaint">No categories are set up yet.</p>
+        )}
         {categories.length > 0 && (
           <div className="flex flex-wrap gap-2">
             <button

@@ -41,7 +41,19 @@ export async function discoverOpportunities(adapter: SourceAdapter, targetOpport
 
     // Verification bar (Section 2 step 2) — discard weak candidates before
     // they ever reach a user, same as the doc specifies.
-    if (marginPct < 0.1) return false;
+    //
+    // 26 Aug 2026, Steven: a real candidate slipped through with a laptop
+    // that, once he checked by hand, had NO real margin at all (eBay was
+    // selling it cheaper than the "clearance" source price) — the AI's one
+    // resale-evidence listing was misleading. buildPrompt()'s "ON RESALE
+    // EVIDENCE" instructions now tell the model to actively check for a
+    // cheaper price elsewhere before ever reporting a candidate, but as a
+    // second, independent line of defence this bar is also raised from 10%
+    // to 20% — real headroom for eBay/marketplace fees (~10-13%), shipping,
+    // and plain estimation error, so a small mistake in the AI's resale
+    // estimate doesn't turn into a loss. Trade-off: fewer candidates will
+    // clear the bar. Revisit this number with Steven if that's a problem.
+    if (marginPct < 0.2) return false;
 
     const { data: category } = await db.from("categories").select("id, name").eq("slug", c.categorySlug).single();
     if (!category) return false;

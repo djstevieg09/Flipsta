@@ -5,6 +5,7 @@ import {
   classifyUrgencyTier,
   computeShopPricing,
   qualifiesForShop,
+  SHOP_ITEM_MAX_UNITS_LISTED,
 } from "@flipsta/shared";
 import { createDb } from "../db.js";
 import { CandidateDeal, DiscoveryBatch, ShopCandidate, SourceAdapter } from "../adapters/sourceAdapter.js";
@@ -139,43 +140,60 @@ export async function discoverOpportunities(adapter: SourceAdapter, targetOpport
   // "REAL FAILURE CASE" instructions) — this is the second, independent
   // line of defence, same role qualifiesForShop plays here that the 20%
   // margin floor plays for tryCreateOpportunity above.
-  async function tryCreateShopItem(c: ShopCandidate): Promise<boolean> {
+  // Returns how many rows actually got created (0 if the candidate didn't
+  // qualify or every insert failed).
+  async function tryCreateShopItem(c: ShopCandidate): Promise<number> {
     const pricingInput = { sourcePriceGBP: c.sourcePriceGBP, rrpGBP: c.rrpGBP };
     if (!qualifiesForShop(pricingInput)) {
       console.log(
         `[discoverOpportunities] Shop candidate didn't qualify (no real discount left vs RRP once fees are covered): ${c.productName} — source £${c.sourcePriceGBP}, RRP £${c.rrpGBP}`,
       );
-      return false;
+      return 0;
     }
 
     const { data: category } = await db.from("categories").select("id").eq("slug", c.categorySlug).single();
-    if (!category) return false;
+    if (!category) return 0;
 
     const pricing = computeShopPricing(pricingInput);
-    const { error: insertError } = await db.from("shop_items").insert({
-      category_id: category.id,
-      product_name: c.productName,
-      description: c.description,
-      image_url: c.imageUrl,
-      source_retailer: c.sourceRetailer,
-      source_url: c.sourceUrl,
-      source_price_gbp: c.sourcePriceGBP,
-      rrp_gbp: c.rrpGBP,
-      our_price_gbp: pricing.ourPriceGBP,
-      min_offer_accept_gbp: pricing.minOfferAcceptGBP,
-      fulfillment_reward_gbp: pricing.fulfillmentRewardGBP,
-      fulfiller_reimbursement_gbp: pricing.fulfillerReimbursementGBP,
-      estimated_stock_units: c.estimatedStockUnits,
-      status: "available",
-    });
-    if (insertError) {
-      console.error(
-        `[discoverOpportunities] shop_items INSERT FAILED for ${c.sourceRetailer} (${c.sourceUrl}): ${insertError.message}`,
-      );
-      return false;
+
+    // 26 Aug 2026, Steven: "if there is more than one item available to buy
+    // the items should not remove themselves from the store." Each unit of
+    // stock becomes its OWN row here — buying one only ever removes that
+    // one row, so the product stays visible on /shop as long as any
+    // sibling row (grouped for display in api/shop-items/route.ts) is
+    // still 'available'. Capped at SHOP_ITEM_MAX_UNITS_LISTED so an
+    // overenthusiastic AI stock estimate can't flood the table.
+    const unitsToList = Math.min(Math.max(1, c.estimatedStockUnits), SHOP_ITEM_MAX_UNITS_LISTED);
+    let created = 0;
+    for (let i = 0; i < unitsToList; i++) {
+      const { error: insertError } = await db.from("shop_items").insert({
+        category_id: category.id,
+        product_name: c.productName,
+        description: c.description,
+        image_url: c.imageUrl,
+        source_retailer: c.sourceRetailer,
+        source_url: c.sourceUrl,
+        source_price_gbp: c.sourcePriceGBP,
+        rrp_gbp: c.rrpGBP,
+        our_price_gbp: pricing.ourPriceGBP,
+        min_offer_accept_gbp: pricing.minOfferAcceptGBP,
+        fulfillment_reward_gbp: pricing.fulfillmentRewardGBP,
+        fulfiller_reimbursement_gbp: pricing.fulfillerReimbursementGBP,
+        estimated_stock_units: 1, // this row IS one unit now — see the comment above
+        status: "available",
+      });
+      if (insertError) {
+        console.error(
+          `[discoverOpportunities] shop_items INSERT FAILED (unit ${i + 1}/${unitsToList}) for ${c.sourceRetailer} (${c.sourceUrl}): ${insertError.message}`,
+        );
+        continue;
+      }
+      created++;
     }
-    console.log(`[discoverOpportunities] Listed on shop: ${c.productName} at £${pricing.ourPriceGBP} (RRP £${c.rrpGBP})`);
-    return true;
+    if (created > 0) {
+      console.log(`[discoverOpportunities] Listed on shop: ${c.productName} — ${created} unit(s) at £${pricing.ourPriceGBP} (RRP £${c.rrpGBP})`);
+    }
+    return created;
   }
 
   async function processBatch(batch: DiscoveryBatch): Promise<boolean> {
@@ -192,7 +210,7 @@ export async function discoverOpportunities(adapter: SourceAdapter, targetOpport
     for (const c of batch.shopCandidates) {
       if (processedShop.has(c)) continue;
       processedShop.add(c);
-      if (await tryCreateShopItem(c)) shopItemsCreated++;
+      shopItemsCreated += await tryCreateShopItem(c);
     }
     return created >= targetOpportunities;
   }

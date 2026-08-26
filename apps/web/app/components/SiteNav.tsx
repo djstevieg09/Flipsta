@@ -37,6 +37,7 @@ export default function SiteNav({
       )}
       {isAuthed && <a href="/wallet" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Wallet</a>}
       {isAuthed && <a href="/referrals" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Referrals</a>}
+      {isAuthed && <a href="/account" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Account</a>}
       {isAuthed && <a href="/settings/connections" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Connected accounts</a>}
     </nav>
   );

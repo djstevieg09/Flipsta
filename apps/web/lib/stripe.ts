@@ -120,3 +120,37 @@ export async function createBillingPortalSession(params: { stripeCustomerId: str
     return_url: params.returnUrl,
   });
 }
+
+/**
+ * 26 Aug 2026, Steven: "Need an accounts page so people can setup their
+ * payment methods." Until now a stripe_customer_id only ever got created
+ * as a side effect of subscribing to a paid tier (createTierCheckoutSession
+ * above) — so createBillingPortalSession's "No billing account on file yet"
+ * error (see POST /api/billing/portal) blocked a free-tier buyer from ever
+ * saving a card at all, even though they can already buy shop items and
+ * marketplace listings without subscribing to anything.
+ *
+ * This creates a bare Stripe Customer (no subscription attached) the first
+ * time someone visits their account page, so EVERY signed-in user — not
+ * just paid subscribers — has somewhere for the Billing Portal to manage a
+ * saved payment method. Never touches card details directly: the portal is
+ * Stripe's own hosted page, so no card number ever reaches Flipsta's
+ * server or database (the same PCI-safe boundary createEscrowPaymentIntent
+ * and Checkout already rely on).
+ */
+export async function getOrCreateStripeCustomer(params: {
+  existingStripeCustomerId?: string | null;
+  email: string;
+  profileId: string;
+}): Promise<string> {
+  if (!isStripeConfigured()) {
+    throw new Error("Billing isn't configured yet — set STRIPE_SECRET_KEY on Render (see INFRASTRUCTURE_TODO.md).");
+  }
+  if (params.existingStripeCustomerId) return params.existingStripeCustomerId;
+
+  const customer = await stripe.customers.create({
+    email: params.email,
+    metadata: { profile_id: params.profileId },
+  });
+  return customer.id;
+}

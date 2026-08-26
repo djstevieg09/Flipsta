@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/currentProfile";
 import { createEscrowPaymentIntent } from "@/lib/stripe";
+import { parseSizesParam, sizeOrFilter } from "@/lib/sizeFilter";
 
 // Force-dynamic: every route here reads live application data (bids, wallet
 // balances, opportunities, order status) straight from Supabase. Without this,
@@ -18,7 +19,7 @@ export const dynamic = "force-dynamic";
 // instead. Revealed only to the fulfiller once they've claimed the job
 // (see /api/fulfillment) — migration 0013's comments call this out too.
 const PUBLIC_SHOP_ITEM_COLUMNS =
-  "id, category_id, product_name, description, image_url, rrp_gbp, our_price_gbp, created_at, categories(name)";
+  "id, category_id, product_name, description, image_url, rrp_gbp, our_price_gbp, created_at, size, categories(name)";
 
 /**
  * GET /api/shop-items — AI-sourced deals, fulfilled by an independent
@@ -85,6 +86,12 @@ export async function GET(req: NextRequest) {
     .not("image_url", "is", null)
     .order("created_at", { ascending: true }); // oldest-first within a group keeps the representative row stable across refreshes
   if (categoryId) query = query.eq("category_id", categoryId);
+
+  // 26 Aug 2026: "who are you shopping for" — see lib/sizeFilter.ts for why
+  // an unset size always passes rather than getting hidden.
+  const sizes = parseSizesParam(req.nextUrl.searchParams.get("sizes"));
+  if (sizes.length > 0) query = query.or(sizeOrFilter(sizes));
+
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

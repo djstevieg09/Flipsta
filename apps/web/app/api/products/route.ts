@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { parseSizesParam, sizeOrFilter } from "@/lib/sizeFilter";
 
 // Force-dynamic: every route here reads live application data (bids, wallet
 // balances, opportunities, order status) straight from Supabase. Without this,
@@ -31,8 +32,14 @@ export async function GET(req: NextRequest) {
     // listings.id added 26 Aug 2026 for the basket — "Add to basket" needs a
     // specific listingId to hand to POST /api/orders later (each listing is
     // a distinct seller's ask, unlike shop_items' grouped-by-product rows).
-    .select("id, title, condition, description, image_url, category_id, categories(name), listings(id, price_gbp, sold_at)");
+    .select("id, title, condition, description, image_url, category_id, categories(name), listings(id, price_gbp, sold_at), size");
   if (categoryId) query = query.eq("category_id", categoryId);
+
+  // 26 Aug 2026: "who are you shopping for" — see lib/sizeFilter.ts for why
+  // an unset size always passes rather than getting hidden.
+  const sizes = parseSizesParam(req.nextUrl.searchParams.get("sizes"));
+  if (sizes.length > 0) query = query.or(sizeOrFilter(sizes));
+
   const { data: products, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

@@ -3,6 +3,8 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useBasket } from "../BasketProvider";
+import CategorySidebar from "../components/CategorySidebar";
+import ShopperSwitch from "../components/ShopperSwitch";
 
 type ShopItem = {
   id: string;
@@ -86,6 +88,11 @@ function ShopPageInner() {
   const [categoriesError, setCategoriesError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(initialCategory);
   const [query, setQuery] = useState(initialQuery);
+  // 26 Aug 2026: "who are you shopping for" — the selected shopper
+  // profile's non-blank sizes, passed straight through to both catalogue
+  // fetches as ?sizes=. Empty array (no profile picked, or none of its
+  // fields are filled in) means no size filtering at all.
+  const [sizes, setSizes] = useState<string[]>([]);
 
   // Maps "type:productName|price" -> wishlist row id, so a remove click can
   // target DELETE /api/wishlist/[id] without a second lookup round-trip.
@@ -94,9 +101,12 @@ function ShopPageInner() {
 
   const basket = useBasket();
 
-  async function loadCatalogue(categorySlug: string | null) {
+  async function loadCatalogue(categorySlug: string | null, activeSizes: string[]) {
     setFlipstaLoading(true);
-    const qs = categorySlug ? `?category=${encodeURIComponent(categorySlug)}` : "";
+    const params = new URLSearchParams();
+    if (categorySlug) params.set("category", categorySlug);
+    if (activeSizes.length > 0) params.set("sizes", activeSizes.join(","));
+    const qs = params.toString() ? `?${params.toString()}` : "";
     const [shopRes, productsRes] = await Promise.all([
       fetch(`/api/shop-items${qs}`).then((r) => r.json()),
       fetch(`/api/products${qs}`).then((r) => r.json()),
@@ -130,9 +140,9 @@ function ShopPageInner() {
   }, []);
 
   useEffect(() => {
-    loadCatalogue(selectedCategory);
+    loadCatalogue(selectedCategory, sizes);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCategory]);
+  }, [selectedCategory, sizes]);
 
   function loadWishlist() {
     fetch("/api/wishlist")
@@ -167,7 +177,7 @@ function ShopPageInner() {
     setBusy((b) => ({ ...b, [item.id]: false }));
     if (res.ok) {
       setExpanded(null);
-      loadCatalogue(selectedCategory);
+      loadCatalogue(selectedCategory, sizes);
     }
   }
 
@@ -250,53 +260,36 @@ function ShopPageInner() {
   }, [products, query]);
 
   return (
-    <div className="space-y-10">
-      <div>
-        <h1 className="text-2xl font-bold">Shop</h1>
-        <p className="text-textDim text-sm">Buy AI-sourced deals, or from other Flipsta sellers, all in one place.</p>
-      </div>
+    <div className="flex flex-col md:flex-row gap-6">
+      <CategorySidebar
+        categories={categories}
+        categoriesLoading={categoriesLoading}
+        categoriesError={categoriesError}
+        selectedCategory={selectedCategory}
+        onSelect={setSelectedCategory}
+      />
 
-      <div className="space-y-3">
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search this page's items…"
-          className="w-full max-w-sm bg-surface2 border border-border rounded-full py-2 px-4 text-sm text-text placeholder:text-textFaint focus:outline-none focus:border-brand2"
-        />
-        {categoriesError && (
-          <p className="text-xs text-red">Couldn&apos;t load categories: {categoriesError}</p>
-        )}
-        {!categoriesLoading && !categoriesError && categories.length === 0 && (
-          <p className="text-xs text-textFaint">No categories are set up yet.</p>
-        )}
-        {categories.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => setSelectedCategory(null)}
-              className={`text-xs font-bold rounded-full px-3 py-1.5 border transition ${
-                selectedCategory === null ? "border-brand2 text-brand2" : "border-border text-textDim hover:text-text"
-              }`}
-            >
-              All categories
-            </button>
-            {categories.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => setSelectedCategory(c.slug)}
-                className={`text-xs font-bold rounded-full px-3 py-1.5 border transition ${
-                  selectedCategory === c.slug ? "border-brand2 text-brand2" : "border-border text-textDim hover:text-text"
-                }`}
-              >
-                {c.name}
-              </button>
-            ))}
+      <div className="flex-1 min-w-0 space-y-10">
+        <div>
+          <h1 className="text-2xl font-bold">Shop</h1>
+          <p className="text-textDim text-sm">Buy AI-sourced deals, or from other Flipsta sellers, all in one place.</p>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search this page's items…"
+              className="w-full max-w-sm bg-surface2 border border-border rounded-full py-2 px-4 text-sm text-text placeholder:text-textFaint focus:outline-none focus:border-brand2"
+            />
+            <ShopperSwitch onSizesChange={setSizes} />
           </div>
-        )}
-        {messages.wishlist && <p className="text-xs text-gold">{messages.wishlist}</p>}
-      </div>
+          {messages.wishlist && <p className="text-xs text-gold">{messages.wishlist}</p>}
+        </div>
 
-      <section className="space-y-3">
+        <section className="space-y-3">
         <div>
           <h2 className="font-bold text-lg">AI-Sourced Deals</h2>
           <p className="text-textDim text-sm">Genuine discounts off RRP. {FULFILLED_BY_RESELLER_NOTE}</p>
@@ -440,6 +433,7 @@ function ShopPageInner() {
           {filteredProducts.length === 0 && <p className="text-textDim text-sm col-span-full">No peer listings match right now.</p>}
         </div>
       </section>
+      </div>
 
       {expanded && (
         <div

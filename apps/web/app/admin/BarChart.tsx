@@ -7,11 +7,20 @@
  */
 export default function BarChart({
   data,
-  formatValue,
   color = "#5b7cfa",
 }: {
-  data: { date: string; value: number }[];
-  formatValue: (v: number) => string;
+  // 26 Aug 2026 real production bug: this used to take a `formatValue`
+  // function prop, filled in by the server component that renders this
+  // (admin/page.tsx) with an inline arrow function. That's invalid — a
+  // Server Component can't pass a function as a prop into a Client
+  // Component ("use client" above), since props have to cross the
+  // server/client boundary as serializable data; only data ever made it
+  // through builds locally because typecheck/build don't catch this (it's
+  // a runtime RSC serialization rule, not a TypeScript one) — it only
+  // surfaced once Steven actually loaded /admin against a real deploy.
+  // Fixed by having the caller pre-format each point's tooltip text
+  // server-side instead, so only a plain string crosses the boundary.
+  data: { date: string; value: number; label: string }[];
   color?: string;
 }) {
   const max = Math.max(1, ...data.map((d) => d.value));
@@ -33,7 +42,7 @@ export default function BarChart({
               rx={0.4}
             >
               <title>
-                {d.date}: {formatValue(d.value)}
+                {d.date}: {d.label}
               </title>
             </rect>
           );

@@ -79,11 +79,25 @@ export default async function AdminOverviewPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="card">
           <div className="text-xs text-textDim uppercase tracking-wide mb-2">New signups — last 14 days</div>
-          <BarChart data={metrics.dailySignups.map((d) => ({ date: d.date, value: d.count }))} formatValue={(v) => `${v} signup${v === 1 ? "" : "s"}`} color="#22d3ee" />
+          {/* 26 Aug 2026 real production bug, first time Steven actually
+              loaded /admin against a live deploy: this used to pass a
+              `formatValue` function prop straight from this server
+              component into BarChart (a Client Component) — Next.js can't
+              serialize a function across that boundary, so the whole page
+              500'd. Fixed by pre-formatting each point's tooltip text here
+              instead, so only a plain string crosses the boundary — see
+              BarChart.tsx's comment for the full explanation. */}
+          <BarChart
+            data={metrics.dailySignups.map((d) => ({ date: d.date, value: d.count, label: `${d.count} signup${d.count === 1 ? "" : "s"}` }))}
+            color="#22d3ee"
+          />
         </div>
         <div className="card">
           <div className="text-xs text-textDim uppercase tracking-wide mb-2">Revenue (GMV) — last 14 days</div>
-          <BarChart data={metrics.dailyRevenueGBP.map((d) => ({ date: d.date, value: d.gbp }))} formatValue={(v) => `£${v.toFixed(2)}`} color="#5b7cfa" />
+          <BarChart
+            data={metrics.dailyRevenueGBP.map((d) => ({ date: d.date, value: d.gbp, label: `£${d.gbp.toFixed(2)}` }))}
+            color="#5b7cfa"
+          />
         </div>
       </div>
     </div>

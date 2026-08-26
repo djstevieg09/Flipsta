@@ -15,6 +15,11 @@ export const TIER_ENTITLEMENTS: Record<
     syndicateLeadership: boolean;
     aiExplainability: boolean;
     multiPlatformListing: boolean;
+    /** 26 Aug 2026, Steven: "the order is then passed onto the pro and
+     * elite opptunites as a free button to press to fulfill the order" —
+     * whether this tier can claim a shop_items fulfillment job. See
+     * apps/web/app/api/fulfillment/route.ts and migration 0013. */
+    canFulfill: boolean;
   }
 > = {
   free: {
@@ -25,6 +30,7 @@ export const TIER_ENTITLEMENTS: Record<
     syndicateLeadership: false,
     aiExplainability: false,
     multiPlatformListing: false,
+    canFulfill: false,
   },
   standard: {
     canBid: true,
@@ -34,6 +40,7 @@ export const TIER_ENTITLEMENTS: Record<
     syndicateLeadership: false,
     aiExplainability: false,
     multiPlatformListing: false,
+    canFulfill: false,
   },
   pro: {
     canBid: true,
@@ -43,6 +50,7 @@ export const TIER_ENTITLEMENTS: Record<
     syndicateLeadership: false,
     aiExplainability: true,
     multiPlatformListing: true,
+    canFulfill: true,
   },
   elite: {
     canBid: true,
@@ -52,6 +60,7 @@ export const TIER_ENTITLEMENTS: Record<
     syndicateLeadership: true,
     aiExplainability: true,
     multiPlatformListing: true,
+    canFulfill: true,
   },
 };
 

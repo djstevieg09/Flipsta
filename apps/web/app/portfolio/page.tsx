@@ -25,6 +25,19 @@ type Listing = {
   listing_channel_posts: { channel: string; status: string; external_url: string | null }[];
 };
 type Order = { id: string; price_gbp: number; status: string; created_at: string; listings: { products: { title: string } | null } | null };
+type ShopPurchase = {
+  id: string;
+  product_name: string;
+  description: string | null;
+  image_url: string | null;
+  rrp_gbp: number;
+  sold_price_gbp: number | null;
+  status: string;
+  paid_at: string | null;
+  shipped_at: string | null;
+  delivered_at: string | null;
+  categories: { name: string } | null;
+};
 
 /**
  * Section 12.1's "self serving" ask, made real: everything a seller needs
@@ -36,7 +49,16 @@ export default function PortfolioPage() {
   const [listings, setListings] = useState<Listing[]>([]);
   const [ordersAsBuyer, setOrdersAsBuyer] = useState<Order[]>([]);
   const [ordersAsSeller, setOrdersAsSeller] = useState<Order[]>([]);
+  const [shopPurchases, setShopPurchases] = useState<ShopPurchase[]>([]);
   const [signedIn, setSignedIn] = useState(true);
+  const [confirmMessage, setConfirmMessage] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<Record<string, boolean>>({});
+
+  function loadShopPurchases() {
+    fetch("/api/shop-items?mine=true")
+      .then((r) => r.json())
+      .then((d) => setShopPurchases(d.items ?? []));
+  }
 
   useEffect(() => {
     fetch("/api/opportunities?won=true").then(async (r) => {
@@ -56,7 +78,21 @@ export default function PortfolioPage() {
         setOrdersAsBuyer(d.asBuyer ?? []);
         setOrdersAsSeller(d.asSeller ?? []);
       });
+    loadShopPurchases();
   }, []);
+
+  // 26 Aug 2026, Steven: "number one the money does not get released until
+  // the item has been delivered" — this is the buyer action that actually
+  // triggers it, both the Stripe capture and the fulfiller's payout (see
+  // api/shop-items/[id]/confirm-delivery/route.ts).
+  async function confirmDelivery(id: string) {
+    setConfirming((c) => ({ ...c, [id]: true }));
+    const res = await fetch(`/api/shop-items/${id}/confirm-delivery`, { method: "POST" });
+    const data = await res.json();
+    setConfirmMessage(res.ok ? "Delivery confirmed — thanks!" : data.error);
+    setConfirming((c) => ({ ...c, [id]: false }));
+    loadShopPurchases();
+  }
 
   if (!signedIn) {
     return (
@@ -140,6 +176,44 @@ export default function PortfolioPage() {
           ))}
         </div>
 
+        {shopPurchases.length > 0 && (
+          <div className="pt-2">
+            <h3 className="font-bold text-sm text-textDim mb-2">Bought directly from Flipsta</h3>
+            {confirmMessage && <p className="text-xs text-brand2 mb-2">{confirmMessage}</p>}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {shopPurchases.map((p) => (
+                <div key={p.id} className="card space-y-1">
+                  {p.image_url && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={p.image_url} alt={p.product_name} className="w-full h-28 object-cover rounded-lg border border-border mb-1" />
+                  )}
+                  <div className="flex justify-between items-start gap-2">
+                    <div className="font-bold text-sm">{p.product_name}</div>
+                    <div className="text-right shrink-0">
+                      <div className="font-bold">£{(p.sold_price_gbp ?? 0).toFixed(2)}</div>
+                      <div className="text-[10px] text-textDim capitalize">{p.status.replace(/_/g, " ")}</div>
+                    </div>
+                  </div>
+                  {p.status === "sold_awaiting_fulfillment" && (
+                    <div className="text-[10px] text-textDim">Waiting for a fulfiller to claim and ship this.</div>
+                  )}
+                  {p.status === "shipped" && (
+                    <button
+                      onClick={() => confirmDelivery(p.id)}
+                      disabled={confirming[p.id]}
+                      className="w-full rounded-lg py-2 text-sm font-bold text-white disabled:opacity-50 mt-1"
+                      style={{ background: "linear-gradient(135deg,#5b7cfa,#22d3ee)" }}
+                    >
+                      Confirm delivery
+                    </button>
+                  )}
+                  {p.status === "delivered" && <div className="text-[10px] text-green">Delivered — order complete.</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {ordersAsBuyer.length > 0 && (
           <div className="pt-2">
             <h3 className="font-bold text-sm text-textDim mb-2">Bought from other sellers</h3>
@@ -147,8 +221,8 @@ export default function PortfolioPage() {
           </div>
         )}
 
-        {won.length === 0 && ordersAsBuyer.length === 0 && (
-          <p className="text-textDim text-sm">No purchases yet — browse Live Opportunities.</p>
+        {won.length === 0 && ordersAsBuyer.length === 0 && shopPurchases.length === 0 && (
+          <p className="text-textDim text-sm">No purchases yet — browse Live Opportunities or the Shop.</p>
         )}
       </section>
 

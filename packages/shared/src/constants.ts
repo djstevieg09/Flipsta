@@ -119,3 +119,24 @@ export const HMRC_DE_MINIMIS = {
 /** Section 12.4 — Reviews & Seller Ratings. */
 export const REVIEW_RATING_MIN = 1;
 export const REVIEW_RATING_MAX = 5;
+
+/**
+ * AI-sourced shop items + crowd fulfillment (26 Aug 2026). Steven: "when the
+ * bot... finds an item that has a good margin on it but rejects it as
+ * cannot find proof of selling then i want it to... post the item on our
+ * shop." These candidates have a genuine retailer discount but no
+ * independent resale evidence to back a reseller opportunity, so instead of
+ * a bidder buying the right to resell, Flipsta lists and sells the item
+ * itself — priced off the retailer's own RRP — and pays a Pro/Elite member
+ * to go buy and ship it once it sells. See packages/shared/src/shopPricing.ts.
+ */
+export const SHOP_ITEM_PAYMENT_PROCESSING_RATE = 0.029; // card processing cut taken off our_price
+export const SHOP_ITEM_ESTIMATED_SHIPPING_GBP = 4.99; // typical UK parcel — reimbursed to the fulfiller alongside source cost
+export const SHOP_ITEM_FULFILLMENT_REWARD_GBP = 8; // flat "free button to press" incentive per job, on top of reimbursement
+export const SHOP_ITEM_PLATFORM_MARGIN_GBP = 5; // what Flipsta keeps once reimbursement + reward + fees are covered
+export const SHOP_ITEM_MIN_DISCOUNT_VS_RRP_PCT = 0.08; // must land at least 8% below RRP or there's no real deal to offer
+export const SHOP_ITEM_MIN_OFFER_ACCEPT_PCT_OF_OUR_PRICE = 0.9; // Make an Offer auto-accepts at or above 90% of Buy Now
+// Fairness (Steven: "make sure this is fair so one person isnt bashing all
+// the orders as they come in. maybe put a time delay or limit or something"):
+export const SHOP_ITEM_FULFILLMENT_CLAIM_WINDOW_HOURS = 48; // a claimed job with no shipment past this auto-releases
+export const SHOP_ITEM_MAX_CONCURRENT_CLAIMS_PER_USER = 2; // cap on jobs one person can hold claimed at once

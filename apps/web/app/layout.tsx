@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { getCurrentProfile } from "@/lib/currentProfile";
+import { TIER_ENTITLEMENTS } from "@/lib/tierGuard";
 
 export const metadata: Metadata = {
   title: "Flipsta",
@@ -63,7 +64,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <a href="/shop" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Shop</a>
             <a href="/sell/new" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">List an item</a>
             {auth && <a href="/portfolio" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Portfolio</a>}
+            {/* 26 Aug 2026, Steven: "the order is then passed onto the pro
+                and elite opptunites as a free button to press to fulfill
+                the order" — only shown to tiers actually entitled to
+                claim a job (see tierGuard.ts's canFulfill). */}
+            {auth && TIER_ENTITLEMENTS[auth.profile.subscriptionTier].canFulfill && (
+              <a href="/fulfillment" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Fulfillment jobs</a>
+            )}
             {auth && <a href="/wallet" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Wallet</a>}
+            {auth && <a href="/settings/connections" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Connected accounts</a>}
           </nav>
         </header>
         <main className="max-w-6xl mx-auto px-6 py-8">{children}</main>

@@ -21,6 +21,10 @@ export interface CandidateDeal {
   estimatedStockUnits: number;
   perCustomerCap: number | null;
   priceVolatility: number; // 0-1
+  /** The seasonal_events.name this product matches, if the adapter was
+   * given seasonal guidance and the product fits one — else null. See
+   * DiscoveryContext.seasonalGuidance below and migration 0019. */
+  seasonalEventName: string | null;
 }
 
 /**
@@ -52,6 +56,48 @@ export interface ShopCandidate {
    * since there's no independent resale evidence for this candidate. */
   rrpGBP: number;
   estimatedStockUnits: number;
+  /** Same as CandidateDeal.seasonalEventName above. */
+  seasonalEventName: string | null;
+  /** 26 Aug 2026, Steven, after the AI added shoes to the shop with no size
+   * shown: "it needs to read the sizes available on the sites and add
+   * those to the listing." Real sizes read off the source page (shoe UK
+   * sizes, clothing sizes, etc.) — empty array if the product genuinely
+   * has no size variants (electronics, homeware) or the page didn't show
+   * any, never invented. discoverOpportunities.ts spreads these across the
+   * individual shop_items rows this candidate becomes (see migration 0018's
+   * shop_items.size column) so each unit's size is filterable via
+   * lib/sizeFilter.ts. Deals/CandidateDeal doesn't get this field — there's
+   * no size column on opportunities to hold it yet; a reseller's own
+   * listing size is set by them at /sell/new, same as today. */
+  sizes: string[];
+}
+
+/**
+ * 26 Aug 2026, Steven's "tonight's list": admin-editable steering for what
+ * discovery should (and shouldn't) go looking for, plus what it's already
+ * found recently. discoverOpportunities.ts builds this once per run (from
+ * migration 0019's discovery_focus/seasonal_events tables, plus recent
+ * opportunities/shop_items) and hands it to the adapter — an adapter that
+ * doesn't use context (mockAdapter) can just ignore the parameter entirely.
+ */
+export interface DiscoveryContext {
+  /** category_slug values an admin has paused — the adapter should skip
+   * sources tied to these categories rather than spend budget on them. */
+  pausedCategorySlugs: string[];
+  /** category_slug -> a short admin free-text note steering that
+   * category's search (e.g. "push winter coats, ignore trainers this
+   * week"). Only present for categories an admin actually left a note on. */
+  focusNotes: Record<string, string>;
+  /** Seasonal events currently inside their search window (today between
+   * search_starts_on and search_ends_on) — the adapter should actively
+   * favour matching products from these categories right now, and tag any
+   * match with the event's exact `name` via seasonalEventName above. */
+  seasonalGuidance: { name: string; categorySlugs: string[]; searchEndsOn: string }[];
+  /** Normalized product names sourced in roughly the last 30 days — the
+   * adapter should avoid re-reporting the same or a near-identical product,
+   * so the shop doesn't fill up with duplicates (Steven: "is the AI
+   * learning what its already found... not search over old ground"). */
+  recentProductNames: string[];
 }
 
 /** One adapter run's full output — the two different outcomes of the same search. */
@@ -87,5 +133,8 @@ export interface SourceAdapter {
    * candidate found gets processed regardless, per Steven: "that way any
    * credit used isnt wasted as a missed oppotunity."
    */
-  findCandidates(onBatch?: (batch: DiscoveryBatch) => Promise<boolean>): Promise<DiscoveryResult>;
+  findCandidates(
+    onBatch?: (batch: DiscoveryBatch) => Promise<boolean>,
+    context?: DiscoveryContext,
+  ): Promise<DiscoveryResult>;
 }

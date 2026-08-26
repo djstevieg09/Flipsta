@@ -8,8 +8,85 @@ import {
   SHOP_ITEM_MAX_UNITS_LISTED,
 } from "@flipsta/shared";
 import { createDb } from "../db.js";
-import { CandidateDeal, DiscoveryBatch, ShopCandidate, SourceAdapter } from "../adapters/sourceAdapter.js";
+import { CandidateDeal, DiscoveryBatch, DiscoveryContext, ShopCandidate, SourceAdapter } from "../adapters/sourceAdapter.js";
 import { scoreOpportunity } from "../aiScoring.js";
+
+// 26 Aug 2026, Steven: "is the AI learning what its found... needs to be
+// learning what its already found and not search over old ground" +
+// "chosse what the AI should focus on when finding deals" + the seasonal
+// calendar ask. Loose normalization (lowercase, collapsed whitespace) is
+// deliberate — the goal is catching "Nike Air Max 90" vs "nike air max 90 "
+// as the same product, not a strict dedupe key; a genuinely different
+// product with a similar name is an acceptable rare miss here, favouring
+// simplicity over a fuzzy-match library for a first pass.
+function normalizeProductName(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+const RECENT_HISTORY_DAYS = 30;
+
+/**
+ * Builds this run's DiscoveryContext (see sourceAdapter.ts) from migration
+ * 0019's admin tables plus recent sourcing history — one read at the start
+ * of a run, handed to the adapter so it can steer its search, and also used
+ * below as a second, independent dedup check (the adapter is asked not to
+ * repeat these, but a candidate that slips through anyway is still caught
+ * here before it's ever inserted). Also returns a name->id lookup for
+ * seasonal_events, so a candidate's seasonalEventName can be turned into
+ * the real shop_items.seasonal_event_id foreign key.
+ */
+async function loadDiscoveryContext(
+  db: ReturnType<typeof createDb>,
+): Promise<{ context: DiscoveryContext; seasonalEventIdByName: Map<string, string> }> {
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const recentSinceIso = new Date(Date.now() - RECENT_HISTORY_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
+  const [focusResult, seasonalResult, recentOppsResult, recentShopResult] = await Promise.all([
+    db.from("discovery_focus").select("category_slug, status, focus_note"),
+    db
+      .from("seasonal_events")
+      .select("id, name, category_slugs, search_ends_on")
+      .lte("search_starts_on", todayIso)
+      .gte("search_ends_on", todayIso),
+    db.from("opportunities").select("product_name").gte("created_at", recentSinceIso),
+    db.from("shop_items").select("product_name").gte("created_at", recentSinceIso),
+  ]);
+
+  const pausedCategorySlugs = (focusResult.data ?? [])
+    .filter((row: { status: string }) => row.status === "paused")
+    .map((row: { category_slug: string }) => row.category_slug);
+
+  const focusNotes: Record<string, string> = {};
+  for (const row of (focusResult.data ?? []) as { category_slug: string; focus_note: string | null }[]) {
+    if (row.focus_note && row.focus_note.trim()) focusNotes[row.category_slug] = row.focus_note.trim();
+  }
+
+  const seasonalEventIdByName = new Map<string, string>();
+  const seasonalGuidance = ((seasonalResult.data ?? []) as { id: string; name: string; category_slugs: string[]; search_ends_on: string }[]).map(
+    (row) => {
+      seasonalEventIdByName.set(row.name, row.id);
+      return { name: row.name, categorySlugs: row.category_slugs ?? [], searchEndsOn: row.search_ends_on };
+    },
+  );
+
+  const recentNamesSet = new Set<string>();
+  for (const row of (recentOppsResult.data ?? []) as { product_name: string | null }[]) {
+    if (row.product_name) recentNamesSet.add(normalizeProductName(row.product_name));
+  }
+  for (const row of (recentShopResult.data ?? []) as { product_name: string | null }[]) {
+    if (row.product_name) recentNamesSet.add(normalizeProductName(row.product_name));
+  }
+
+  return {
+    context: {
+      pausedCategorySlugs,
+      focusNotes,
+      seasonalGuidance,
+      recentProductNames: Array.from(recentNamesSet),
+    },
+    seasonalEventIdByName,
+  };
+}
 
 // 26 Aug 2026, Steven, filling the dashboard for the first time: "i need it
 // to keep goint to start with until its got 1 oppotunity. then stop once
@@ -24,6 +101,14 @@ const TARGET_OPPORTUNITIES_PER_RUN = 1;
 /** Section 2 steps 1-3: Discovery -> Verification -> Packaging as an opportunity. */
 export async function discoverOpportunities(adapter: SourceAdapter, targetOpportunities = TARGET_OPPORTUNITIES_PER_RUN) {
   const db = createDb();
+  const { context, seasonalEventIdByName } = await loadDiscoveryContext(db);
+  // Mutable across the whole run (not just context.recentProductNames,
+  // which is a snapshot from before this run started) — a duplicate found
+  // and created earlier IN THIS run also gets added here, so two
+  // near-identical candidates from the same run (e.g. the same shoe found
+  // via two different sources) don't both get created either.
+  const recentNames = new Set(context.recentProductNames);
+
   const { data: run } = await db
     .from("discovery_runs")
     .insert({ source_adapter: adapter.name })
@@ -42,6 +127,17 @@ export async function discoverOpportunities(adapter: SourceAdapter, targetOpport
   const processedShop = new Set<ShopCandidate>();
 
   async function tryCreateOpportunity(c: CandidateDeal): Promise<boolean> {
+    // 26 Aug 2026, Steven: "is the AI learning what its found... not search
+    // over old ground" — independent of the prompt-level hint in
+    // buildContextSections, this is the hard backstop: a product sourced in
+    // roughly the last 30 days (or already created earlier this same run)
+    // never gets created a second time.
+    const normalizedName = normalizeProductName(c.productName);
+    if (recentNames.has(normalizedName)) {
+      console.log(`[discoverOpportunities] Skipped duplicate deal (already sourced in roughly the last ${RECENT_HISTORY_DAYS} days): ${c.productName}`);
+      return false;
+    }
+
     const marginGBP = c.estimatedResalePriceGBP - c.sourcePriceGBP;
     const marginPct = marginGBP / c.sourcePriceGBP;
 
@@ -127,6 +223,7 @@ export async function discoverOpportunities(adapter: SourceAdapter, targetOpport
       );
       return false;
     }
+    recentNames.add(normalizedName);
     return true;
   }
 
@@ -143,6 +240,12 @@ export async function discoverOpportunities(adapter: SourceAdapter, targetOpport
   // Returns how many rows actually got created (0 if the candidate didn't
   // qualify or every insert failed).
   async function tryCreateShopItem(c: ShopCandidate): Promise<number> {
+    const normalizedName = normalizeProductName(c.productName);
+    if (recentNames.has(normalizedName)) {
+      console.log(`[discoverOpportunities] Skipped duplicate shop candidate (already sourced in roughly the last ${RECENT_HISTORY_DAYS} days): ${c.productName}`);
+      return 0;
+    }
+
     const pricingInput = { sourcePriceGBP: c.sourcePriceGBP, rrpGBP: c.rrpGBP };
     if (!qualifiesForShop(pricingInput)) {
       console.log(
@@ -155,6 +258,7 @@ export async function discoverOpportunities(adapter: SourceAdapter, targetOpport
     if (!category) return 0;
 
     const pricing = computeShopPricing(pricingInput);
+    const seasonalEventId = c.seasonalEventName ? seasonalEventIdByName.get(c.seasonalEventName) ?? null : null;
 
     // 26 Aug 2026, Steven: "if there is more than one item available to buy
     // the items should not remove themselves from the store." Each unit of
@@ -166,6 +270,13 @@ export async function discoverOpportunities(adapter: SourceAdapter, targetOpport
     const unitsToList = Math.min(Math.max(1, c.estimatedStockUnits), SHOP_ITEM_MAX_UNITS_LISTED);
     let created = 0;
     for (let i = 0; i < unitsToList; i++) {
+      // 26 Aug 2026, Steven, after the AI added shoes with no size shown:
+      // sizes read off the source page are spread one-per-unit (cycling if
+      // there are fewer sizes than units) — each row is one physical unit,
+      // so each unit's size should reflect one real size, not every size
+      // available. null (not filtered on) if the AI found no sizes at all
+      // for this product — see lib/sizeFilter.ts.
+      const size = c.sizes.length > 0 ? c.sizes[i % c.sizes.length] : null;
       const { error: insertError } = await db.from("shop_items").insert({
         category_id: category.id,
         product_name: c.productName,
@@ -181,6 +292,8 @@ export async function discoverOpportunities(adapter: SourceAdapter, targetOpport
         fulfiller_reimbursement_gbp: pricing.fulfillerReimbursementGBP,
         estimated_stock_units: 1, // this row IS one unit now — see the comment above
         status: "available",
+        size,
+        seasonal_event_id: seasonalEventId,
       });
       if (insertError) {
         console.error(
@@ -191,6 +304,7 @@ export async function discoverOpportunities(adapter: SourceAdapter, targetOpport
       created++;
     }
     if (created > 0) {
+      recentNames.add(normalizedName);
       console.log(`[discoverOpportunities] Listed on shop: ${c.productName} — ${created} unit(s) at £${pricing.ourPriceGBP} (RRP £${c.rrpGBP})`);
     }
     return created;
@@ -215,7 +329,7 @@ export async function discoverOpportunities(adapter: SourceAdapter, targetOpport
     return created >= targetOpportunities;
   }
 
-  const candidates = await adapter.findCandidates(processBatch);
+  const candidates = await adapter.findCandidates(processBatch, context);
   // Catch-all: process anything the adapter returned but never actually
   // ran through the callback (adapters like mockAdapter ignore onBatch
   // entirely and just return everything at once) — processed/processedShop's

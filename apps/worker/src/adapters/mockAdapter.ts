@@ -17,6 +17,7 @@ const SAMPLE_POOL: Omit<CandidateDeal, "sourcePriceGBP" | "estimatedResalePriceG
     estimatedStockUnits: 15,
     perCustomerCap: 3,
     priceVolatility: 0.6,
+    seasonalEventName: null,
   },
   {
     categorySlug: "tech",
@@ -28,6 +29,7 @@ const SAMPLE_POOL: Omit<CandidateDeal, "sourcePriceGBP" | "estimatedResalePriceG
     estimatedStockUnits: 80,
     perCustomerCap: null,
     priceVolatility: 0.1,
+    seasonalEventName: null,
   },
   {
     categorySlug: "footwear",
@@ -39,6 +41,7 @@ const SAMPLE_POOL: Omit<CandidateDeal, "sourcePriceGBP" | "estimatedResalePriceG
     estimatedStockUnits: 12,
     perCustomerCap: 2,
     priceVolatility: 0.4,
+    seasonalEventName: null,
   },
 ];
 

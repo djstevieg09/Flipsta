@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { SourceAdapter, CandidateDeal, ShopCandidate, DiscoveryBatch, DiscoveryResult } from "./sourceAdapter.js";
+import { SourceAdapter, CandidateDeal, ShopCandidate, DiscoveryBatch, DiscoveryResult, DiscoveryContext } from "./sourceAdapter.js";
 
 /**
  * Real deal discovery via Claude's own web search — the alternative to
@@ -38,6 +38,21 @@ import { SourceAdapter, CandidateDeal, ShopCandidate, DiscoveryBatch, DiscoveryR
  * resale evidence for a specific candidate) is the billed piece, ~$10 per
  * 1,000 searches — its budget has been cut from 32 to 10 per run now that
  * it's no longer doing the discovery work too.
+ *
+ * 26 Aug 2026, Steven: "tokens are burning way too fast... if you use a
+ * slower engine will that save money per search?" Model speed itself
+ * doesn't set the price — token count does — but a cheaper-per-token model
+ * does, and there's genuinely no rush on this data (discovery already runs
+ * twice a day on a schedule, nothing here is latency-sensitive). Two real
+ * changes: every discovery call below now uses claude-sonnet-5 instead of
+ * claude-sonnet-4-5 (same quality tier, ~33% cheaper per Anthropic's
+ * published pricing: $2/$10 per MTok in/out vs $3/$15), and
+ * verifyDealStillActive — a much simpler "is this still live" check, not
+ * open-ended discovery — now uses claude-haiku-4-5 ($1/$5 per MTok), per
+ * Steven's explicit "test Haiku on the re-verification step." WEB_SEARCH_MAX_USES
+ * is also trimmed (see below) — real runs almost always stop after the
+ * first source once one opportunity clears the bar, so most of that budget
+ * was headroom that rarely got used.
  */
 const apiKey = process.env.ANTHROPIC_API_KEY;
 const client = apiKey ? new Anthropic({ apiKey }) : null;
@@ -139,9 +154,9 @@ const GENERAL_RESALE_EVIDENCE_HINT = "eBay sold listings, or Vinted/Depop/CeX de
 // purely from wall-clock time, so it needs no stored state and naturally
 // cycles through all 10 sources over 5 days regardless of how many times
 // the worker gets restarted in between.
-function focusSourceForRun(): CuratedSource {
+function focusSourceForRun(sources: CuratedSource[] = CURATED_SOURCES): CuratedSource {
   const twelveHourBuckets = Math.floor(Date.now() / (12 * 60 * 60 * 1000));
-  return CURATED_SOURCES[twelveHourBuckets % CURATED_SOURCES.length];
+  return sources[twelveHourBuckets % sources.length];
 }
 
 const REPORT_TOOL = {
@@ -190,6 +205,11 @@ const REPORT_TOOL = {
               maximum: 1,
               description: "0 = very stable price, 1 = highly volatile/likely to change fast.",
             },
+            seasonal_event_name: {
+              type: ["string", "null"],
+              description:
+                "If the prompt gave you a seasonal priority (a 'SEASONAL PRIORITY' section) and this product genuinely matches one, put that event's EXACT name here, character for character. Otherwise null — never invent an event name.",
+            },
           },
           required: [
             "category_slug",
@@ -234,6 +254,17 @@ const REPORT_TOOL = {
               description: "The retailer's own genuine RRP/was-price for this exact item, as shown on the page. Never invented or estimated — if the page doesn't show one, this item doesn't belong in shop_candidates at all.",
             },
             estimated_stock_units: { type: "integer", minimum: 1 },
+            seasonal_event_name: {
+              type: ["string", "null"],
+              description:
+                "Same as deals.seasonal_event_name — the exact matching seasonal event name from the prompt's 'SEASONAL PRIORITY' section if this product genuinely matches one, else null.",
+            },
+            sizes: {
+              type: "array",
+              items: { type: "string" },
+              description:
+                "Sizes actually shown as available on the source page for this exact product — UK shoe sizes (e.g. 'UK 7'), clothing sizes (e.g. 'M', 'UK 12'), etc. Read them off the page, don't invent a standard range. Empty array if this product has no size variants (electronics, homeware) or the page didn't show any.",
+            },
           },
           required: ["category_slug", "product_name", "source_retailer", "source_url", "source_price_gbp", "rrp_gbp", "estimated_stock_units"],
         },
@@ -243,7 +274,41 @@ const REPORT_TOOL = {
   },
 };
 
-function buildPrompt(source: CuratedSource): string {
+// 26 Aug 2026, Steven: an admin-editable focus note and/or a currently-live
+// seasonal event should actively steer what a run looks for, and recently
+// found products should actively be avoided. Builds the extra prompt
+// sections for whichever of those actually apply to this source — none of
+// them add anything to the prompt when context is undefined/empty, so this
+// stays a no-op for a run with no admin config set yet.
+function buildContextSections(source: CuratedSource, context: DiscoveryContext | undefined): string {
+  if (!context) return "";
+  const sections: string[] = [];
+
+  const focusNote = source.category !== "any" ? context.focusNotes[source.category] : undefined;
+  if (focusNote) {
+    sections.push(`ADMIN FOCUS NOTE for this category — an admin left this steering note, follow it as long as it doesn't conflict with the real-discount rules above: "${focusNote}"`);
+  }
+
+  const matchingEvents = context.seasonalGuidance.filter(
+    (e) => source.category === "any" || e.categorySlugs.includes(source.category),
+  );
+  if (matchingEvents.length > 0) {
+    const lines = matchingEvents.map((e) => `- "${e.name}" (search window ends ${e.searchEndsOn}) — actively favour genuine seasonal products for this if you see any on the page.`);
+    sections.push(`SEASONAL PRIORITY — one or more seasonal events are currently active for this category:\n${lines.join("\n")}\nIf a product you report genuinely matches one of these, set seasonal_event_name to that event's exact name (character for character). This doesn't relax the real-discount/margin rules above — a seasonal item still needs a genuine discount and (for deals) real resale evidence.`);
+  }
+
+  if (context.recentProductNames.length > 0) {
+    // Capped so the prompt doesn't balloon on a busy history — the most
+    // recent ~40 names is plenty to steer away from near-term repeats
+    // without meaningfully growing token cost.
+    const recent = context.recentProductNames.slice(0, 40);
+    sections.push(`ALREADY FOUND RECENTLY — Flipsta has sourced these products in roughly the last 30 days, don't report the same or a near-identical product again (a different colour/size of the exact same model still counts as the same product): ${recent.join("; ")}`);
+  }
+
+  return sections.length > 0 ? `\n\n${sections.join("\n\n")}` : "";
+}
+
+function buildPrompt(source: CuratedSource, context?: DiscoveryContext): string {
   const isGeneral = source.category === "any";
   const pageDescription = isGeneral
     ? `That's ${source.retailer}'s real, live deals page, selling across many categories at once — it'll show several products with a current price (may or may not show a "was" price on this kind of site) — that's your discount evidence where shown, already real, no need to re-verify it exists.`
@@ -252,6 +317,7 @@ function buildPrompt(source: CuratedSource): string {
     ? `Pick whichever category_slug from this list actually fits each product you report: ${VALID_CATEGORY_SLUGS.join(", ")}.`
     : `category_slug should be "${source.category}".`;
   const resaleHint = source.category === "any" ? GENERAL_RESALE_EVIDENCE_HINT : RESALE_EVIDENCE_HINTS[source.category];
+  const contextSections = buildContextSections(source, context);
 
   return `You're sourcing real resale opportunities for a UK reselling marketplace. The discovery step is already done for you — don't go searching for a clearance page, use this exact one:
 
@@ -275,6 +341,8 @@ THIS IS RETAIL ARBITRAGE, NOT COLLECTIBLE INVESTING. Profit comes from buying BE
 COUNTERFEIT/REPLICA CHECK (this source specifically) — ${source.retailer} carries genuine branded items alongside generic/unbranded ones and, sometimes, unlicensed replicas of branded products (this is well documented for things like "LEGO-compatible" building sets, which are frequently unlicensed clones, not genuine LEGO). Never report a candidate where the product listing itself doesn't clearly claim to be the genuine branded item, and never resell-evidence a generic/clone product against a genuine brand's resale prices (e.g. don't price a "building block set" against real LEGO eBay sold prices unless the actual listing says LEGO). When genuinely unsure whether something is the real branded product, skip it rather than guess.`
       : ""
   }
+
+SIZES — for footwear, clothing, or anything else that comes in sizes: if the page shows which sizes are currently available for a product, read them off and list them in shop_candidates' sizes field (e.g. ["UK 7", "UK 8", "UK 9"]). Don't invent a standard size range if the page doesn't actually show one — leave sizes empty in that case, and always leave it empty for products that don't come in sizes at all.${contextSections}
 
 Report what you find with report_candidate_deals — ${categoryInstruction} Both deals and shop_candidates are required arrays; either or both can be empty. Empty is a completely fine outcome if nothing on the page genuinely clears a real discount; don't invent a candidate for either array to avoid reporting zero.`;
 }
@@ -309,7 +377,7 @@ const TARGET_CANDIDATES_PER_RUN = 3;
 // automatically instead of silently capping below the full list again.
 const MAX_SOURCES_PER_RUN = CURATED_SOURCES.length;
 
-async function discoverFromSource(source: CuratedSource): Promise<DiscoveryBatch> {
+async function discoverFromSource(source: CuratedSource, context?: DiscoveryContext): Promise<DiscoveryBatch> {
   if (!client) {
     throw new Error("claudeSearchAdapter needs ANTHROPIC_API_KEY set — see INFRASTRUCTURE_TODO.md #6.");
   }
@@ -328,7 +396,16 @@ async function discoverFromSource(source: CuratedSource): Promise<DiscoveryBatch
   // Raised the budget a bit so a genuinely hard resale-evidence search
   // isn't cut short by budget alone, alongside relaxing what counts as
   // acceptable evidence (see buildPrompt's "ON RESALE EVIDENCE" note).
-  const WEB_SEARCH_MAX_USES = 14; // resale-evidence checks only now, not discovery — see file header
+  // 26 Aug 2026, Steven: "tokens are burning way too fast." Trimmed from 14
+  // — real runs almost always stop after the first source the moment one
+  // opportunity clears verification (see onBatch/TARGET_OPPORTUNITIES_PER_RUN
+  // in discoverOpportunities.ts), and a genuine resale-evidence search
+  // rarely needs more than a handful of tries before either finding
+  // evidence or correctly giving up. 8 keeps real headroom for a hard
+  // search without paying for the old worst-case budget on every run. If
+  // real runs start getting cut short mid-evidence-search, raise this back
+  // up rather than guessing — check the logs' searches_used first.
+  const WEB_SEARCH_MAX_USES = 8; // resale-evidence checks only now, not discovery — see file header
   const WEB_FETCH_MAX_USES = 4; // the curated page itself, plus room for a product page or a fallback fetch
 
   const tools: Anthropic.Messages.MessageCreateParams["tools"] = [
@@ -342,10 +419,10 @@ async function discoverFromSource(source: CuratedSource): Promise<DiscoveryBatch
     { type: "web_search_20250305", name: "web_search", max_uses: WEB_SEARCH_MAX_USES },
     REPORT_TOOL,
   ];
-    const prompt = buildPrompt(source);
+    const prompt = buildPrompt(source, context);
     console.log(`[claudeSearchAdapter] Fetching from: ${source.retailer} (${source.category}) — ${source.url}`);
     let messages: Anthropic.Messages.MessageParam[] = [{ role: "user", content: prompt }];
-    let response = await client.messages.stream({ model: "claude-sonnet-4-5", max_tokens: 24000, tools, messages }).finalMessage();
+    let response = await client.messages.stream({ model: "claude-sonnet-5", max_tokens: 24000, tools, messages }).finalMessage();
 
     // stop_reason "pause_turn" is Anthropic's server-side sampling loop
     // hitting its own internal iteration cap mid-way through a server tool
@@ -364,7 +441,7 @@ async function discoverFromSource(source: CuratedSource): Promise<DiscoveryBatch
       continuations++;
       console.log(`[claudeSearchAdapter] stop_reason=pause_turn — continuing (${continuations}/${MAX_CONTINUATIONS})`);
       messages = [{ role: "user", content: prompt }, { role: "assistant", content: response.content }];
-      response = await client.messages.stream({ model: "claude-sonnet-4-5", max_tokens: 24000, tools, messages }).finalMessage();
+      response = await client.messages.stream({ model: "claude-sonnet-5", max_tokens: 24000, tools, messages }).finalMessage();
     }
     if (response.stop_reason === "pause_turn") {
       console.warn(`[claudeSearchAdapter] Still paused after ${MAX_CONTINUATIONS} continuations — giving up on this run.`);
@@ -464,6 +541,7 @@ async function discoverFromSource(source: CuratedSource): Promise<DiscoveryBatch
         perCustomerCap:
           typeof d.per_customer_cap === "number" && Number.isFinite(d.per_customer_cap) ? Math.round(d.per_customer_cap) : null,
         priceVolatility: Math.max(0, Math.min(1, Number(d.price_volatility) || 0.5)),
+        seasonalEventName: typeof d.seasonal_event_name === "string" && d.seasonal_event_name.trim() ? d.seasonal_event_name.trim() : null,
       });
     }
 
@@ -515,6 +593,8 @@ async function discoverFromSource(source: CuratedSource): Promise<DiscoveryBatch
         sourcePriceGBP,
         rrpGBP,
         estimatedStockUnits: Math.max(1, Math.round(Number(d.estimated_stock_units) || 1)),
+        seasonalEventName: typeof d.seasonal_event_name === "string" && d.seasonal_event_name.trim() ? d.seasonal_event_name.trim() : null,
+        sizes: Array.isArray(d.sizes) ? d.sizes.filter((s): s is string => typeof s === "string" && Boolean(s.trim())).map((s) => s.trim()) : [],
       });
     }
 
@@ -529,23 +609,42 @@ async function discoverFromSource(source: CuratedSource): Promise<DiscoveryBatch
 
 export const claudeSearchAdapter: SourceAdapter = {
   name: "claude-search",
-  async findCandidates(onBatch?: (batch: DiscoveryBatch) => Promise<boolean>): Promise<DiscoveryResult> {
+  async findCandidates(
+    onBatch?: (batch: DiscoveryBatch) => Promise<boolean>,
+    context?: DiscoveryContext,
+  ): Promise<DiscoveryResult> {
+    // 26 Aug 2026, Steven's admin-focus ask: a source whose category has
+    // been paused from the admin dashboard is skipped entirely for this
+    // run — no point spending search budget on a category an admin
+    // deliberately turned off. "any"-category sources (Temu) are never
+    // skipped this way since they aren't tied to one category. If pausing
+    // would leave nothing to search at all (every real category paused),
+    // fall back to the full list rather than running a dead adapter — that
+    // combination is almost certainly a misconfiguration, not intent.
+    const pausedSlugs = context?.pausedCategorySlugs ?? [];
+    let activeSources = CURATED_SOURCES.filter((s) => s.category === "any" || !pausedSlugs.includes(s.category));
+    if (activeSources.length === 0) {
+      console.warn("[claudeSearchAdapter] Every curated category is paused — ignoring the pause for this run rather than searching nothing.");
+      activeSources = CURATED_SOURCES;
+    }
+
     // Starts at the normal 12h-rotation source, then walks forward through
-    // CURATED_SOURCES (wrapping around) so repeated runs within the same
-    // 12h window don't all hammer the exact same page — see
+    // activeSources (wrapping around) so repeated runs within the same 12h
+    // window don't all hammer the exact same page — see
     // TARGET_CANDIDATES_PER_RUN / MAX_SOURCES_PER_RUN above.
-    const startIndex = CURATED_SOURCES.indexOf(focusSourceForRun());
+    const startIndex = activeSources.indexOf(focusSourceForRun(activeSources));
     const allCandidates: CandidateDeal[] = [];
     const allShopCandidates: ShopCandidate[] = [];
+    const maxSources = Math.min(MAX_SOURCES_PER_RUN, activeSources.length);
     let sourcesTried = 0;
 
-    for (let i = 0; i < MAX_SOURCES_PER_RUN; i++) {
-      const source = CURATED_SOURCES[(startIndex + i) % CURATED_SOURCES.length];
+    for (let i = 0; i < maxSources; i++) {
+      const source = activeSources[(startIndex + i) % activeSources.length];
       sourcesTried++;
       console.log(
-        `[claudeSearchAdapter] Source ${sourcesTried}/${MAX_SOURCES_PER_RUN}: ${source.retailer} (${source.category}) — ${source.url} — have ${allCandidates.length}/${TARGET_CANDIDATES_PER_RUN} deal candidates, ${allShopCandidates.length} shop candidates so far`,
+        `[claudeSearchAdapter] Source ${sourcesTried}/${maxSources}: ${source.retailer} (${source.category}) — ${source.url} — have ${allCandidates.length}/${TARGET_CANDIDATES_PER_RUN} deal candidates, ${allShopCandidates.length} shop candidates so far`,
       );
-      const found = await discoverFromSource(source);
+      const found = await discoverFromSource(source, context);
       allCandidates.push(...found.deals);
       allShopCandidates.push(...found.shopCandidates);
 
@@ -569,7 +668,7 @@ export const claudeSearchAdapter: SourceAdapter = {
     }
 
     console.log(
-      `[claudeSearchAdapter] Run finished: ${allCandidates.length} deal candidate(s), ${allShopCandidates.length} shop candidate(s) from ${sourcesTried} source(s) (cap was ${MAX_SOURCES_PER_RUN} sources).`,
+      `[claudeSearchAdapter] Run finished: ${allCandidates.length} deal candidate(s), ${allShopCandidates.length} shop candidate(s) from ${sourcesTried} source(s) (cap was ${maxSources} sources).`,
     );
     return { deals: allCandidates, shopCandidates: allShopCandidates };
   },
@@ -621,8 +720,13 @@ export async function verifyDealStillActive(deal: {
   }
 
   try {
+    // 26 Aug 2026, Steven: "Also test Haiku on the re-verification step" —
+    // this check is a narrow yes/no ("is this specific known URL still
+    // live") not open-ended discovery, exactly the kind of task Haiku
+    // handles fine at a fraction of Sonnet's cost ($1/$5 vs $2/$10 per
+    // MTok). Discovery itself (discoverFromSource above) stays on Sonnet 5.
     const response = await client.messages.create({
-      model: "claude-sonnet-4-5",
+      model: "claude-haiku-4-5",
       max_tokens: 512,
       tools: [
         { type: "web_fetch_20250910", name: "web_fetch", max_uses: 2, allowed_domains: allowedDomains, max_content_tokens: 20000 },

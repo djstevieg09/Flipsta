@@ -2,7 +2,19 @@
 
 import { useEffect, useState } from "react";
 
-type WonOpportunity = { id: string; categories: { name: string } | null; source_tier: string; status: string };
+type WonOpportunity = {
+  id: string;
+  categories: { name: string } | null;
+  source_tier: string;
+  status: string;
+  source_retailer?: string | null;
+  source_url?: string | null;
+  source_price_gbp?: number | null;
+  instant_win_price_gbp: number;
+  estimated_resale_price_gbp: number | null;
+  expected_margin_gbp: number;
+  created_at: string;
+};
 type Listing = {
   id: string;
   price_gbp: number;
@@ -58,8 +70,15 @@ export default function PortfolioPage() {
     <div className="space-y-8">
       <h1 className="text-2xl font-bold">Portfolio</h1>
 
+      {/* 26 Aug 2026, Steven: "need them to show in purchases with the
+          details of the items" — won opportunities (paid Flipsta to win
+          the right to buy from the retailer) and orders bought from other
+          Flipsta sellers are two different underlying things, but from a
+          buyer's point of view they're both "things I've purchased," so
+          this section shows both together instead of splitting a won
+          opportunity off into its own separate area above the fold. */}
       <section className="space-y-2">
-        <h2 className="font-bold text-lg">Won opportunities</h2>
+        <h2 className="font-bold text-lg">My purchases</h2>
         {unlistedWins.length > 0 && (
           <p className="text-xs text-gold">
             {unlistedWins.length} won and not listed yet — <a className="underline" href="/sell/new">list one now</a>.
@@ -67,14 +86,60 @@ export default function PortfolioPage() {
         )}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {won.map((o) => (
-            <div key={o.id} className="card">
-              <div className="font-bold text-sm">{o.categories?.name ?? "Item"}</div>
-              <div className="text-xs text-textDim">{o.source_tier}</div>
-              <div className="text-xs mt-1 capitalize">{o.status}</div>
+            <div key={o.id} className="card space-y-1">
+              <div className="flex justify-between items-start gap-2">
+                <div>
+                  <div className="font-bold text-sm">{o.categories?.name ?? "Item"}</div>
+                  <div className="text-xs text-textDim">{o.source_tier}</div>
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="font-bold">£{o.instant_win_price_gbp.toFixed(2)}</div>
+                  <div className="text-[10px] text-textDim capitalize">{o.status}</div>
+                </div>
+              </div>
+              <div className="text-xs text-green">
+                Est. profit £{o.expected_margin_gbp.toFixed(2)}
+                {typeof o.estimated_resale_price_gbp === "number" && ` · resells ~£${o.estimated_resale_price_gbp.toFixed(2)}`}
+              </div>
+              {/* Section 5's blind-teaser reveal, made visible: everything below
+                  this line is redacted on the public feed and only ever comes
+                  back from the API once you've actually won the opportunity. */}
+              {o.source_retailer ? (
+                <div className="mt-2 pt-2 border-t border-border space-y-0.5">
+                  <div className="text-xs font-bold">{o.source_retailer}</div>
+                  {typeof o.source_price_gbp === "number" && (
+                    <div className="text-xs text-textDim">Buy from retailer for: £{o.source_price_gbp.toFixed(2)}</div>
+                  )}
+                  {o.source_url && (
+                    <a
+                      href={o.source_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs underline text-brand2 break-all inline-block mt-0.5"
+                    >
+                      Go to purchase link →
+                    </a>
+                  )}
+                </div>
+              ) : (
+                <div className="text-[10px] text-textDim mt-2 pt-2 border-t border-border">
+                  Retailer and purchase link will appear here once this win is confirmed.
+                </div>
+              )}
             </div>
           ))}
-          {won.length === 0 && <p className="text-textDim text-sm">No wins yet — browse Live Opportunities.</p>}
         </div>
+
+        {ordersAsBuyer.length > 0 && (
+          <div className="pt-2">
+            <h3 className="font-bold text-sm text-textDim mb-2">Bought from other sellers</h3>
+            <OrdersTable orders={ordersAsBuyer} />
+          </div>
+        )}
+
+        {won.length === 0 && ordersAsBuyer.length === 0 && (
+          <p className="text-textDim text-sm">No purchases yet — browse Live Opportunities.</p>
+        )}
       </section>
 
       <section className="space-y-2">
@@ -117,11 +182,6 @@ export default function PortfolioPage() {
       <section className="space-y-2">
         <h2 className="font-bold text-lg">My sales</h2>
         <OrdersTable orders={ordersAsSeller} />
-      </section>
-
-      <section className="space-y-2">
-        <h2 className="font-bold text-lg">My purchases</h2>
-        <OrdersTable orders={ordersAsBuyer} />
       </section>
     </div>
   );

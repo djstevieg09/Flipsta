@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { SourceAdapter, CandidateDeal } from "./sourceAdapter.js";
+import { SourceAdapter, CandidateDeal, ShopCandidate, DiscoveryBatch, DiscoveryResult } from "./sourceAdapter.js";
 
 /**
  * Real deal discovery via Claude's own web search — the alternative to
@@ -147,7 +147,7 @@ function focusSourceForRun(): CuratedSource {
 const REPORT_TOOL = {
   name: "report_candidate_deals",
   description:
-    "Report the resale opportunities found by web search this run. Only include deals with real, currently-live evidence for both the source listing and a comparable resale price elsewhere — omit anything you couldn't verify with an actual search result.",
+    "Report what this run's web search found. Two different arrays for two different outcomes of the same search: `deals` for a genuine reseller opportunity with independent resale evidence, `shop_candidates` for a genuine retailer discount you couldn't find independent resale evidence for (see the instructions below for exactly which bucket a given find belongs in). Omit anything from both that you couldn't verify with an actual search result.",
   input_schema: {
     type: "object" as const,
     properties: {
@@ -205,8 +205,41 @@ const REPORT_TOOL = {
           ],
         },
       },
+      shop_candidates: {
+        type: "array",
+        description:
+          "Items with a genuine, verifiable retailer discount (real was/RRP price vs current price, and you actively checked it's not cheaper elsewhere — same cheapest-price check as `deals`) but where you could NOT find independent resale evidence after real attempts. These get listed directly on Flipsta's own shop instead of discarded.",
+        items: {
+          type: "object",
+          properties: {
+            category_slug: { type: "string", enum: [...VALID_CATEGORY_SLUGS] },
+            product_name: {
+              type: "string",
+              description: "The specific product's real name, as it appears on the source page — same bar as deals.product_name.",
+            },
+            description: {
+              type: ["string", "null"],
+              description: "A short, factual, customer-facing description built from what's actually on the page (key features, what's included) — null if the page didn't give you enough to write one honestly.",
+            },
+            image_url: {
+              type: ["string", "null"],
+              description: "A real product image URL for this exact item, if visible in the page content. null if you didn't see one.",
+            },
+            source_retailer: { type: "string" },
+            source_url: { type: "string", description: "The real product/listing URL." },
+            source_price_gbp: { type: "number", minimum: 0.01, description: "The current discounted price you'd actually pay at the retailer." },
+            rrp_gbp: {
+              type: "number",
+              minimum: 0.01,
+              description: "The retailer's own genuine RRP/was-price for this exact item, as shown on the page. Never invented or estimated — if the page doesn't show one, this item doesn't belong in shop_candidates at all.",
+            },
+            estimated_stock_units: { type: "integer", minimum: 1 },
+          },
+          required: ["category_slug", "product_name", "source_retailer", "source_url", "source_price_gbp", "rrp_gbp", "estimated_stock_units"],
+        },
+      },
     },
-    required: ["deals"],
+    required: ["deals", "shop_candidates"],
   },
 };
 
@@ -229,7 +262,9 @@ From what you see there:
 1. Pick 1-2 products with a genuine, clearly-marked discount and (if shown) in-stock availability. If the page looks thin on real content (some retailer sites don't render properly for a plain fetch), use web_search restricted to ${source.domain} instead, e.g. "site:${source.domain} clearance" — don't burn time on that fallback if the fetch worked.
 2. For each one, use web_search to find real resale evidence — what the same or equivalent item is actually selling for right now. Good sources: ${resaleHint}.
 
-ON RESALE EVIDENCE — a true "sold/completed" eBay listing is the gold standard, but it's genuinely often invisible to a plain web search (eBay's own sold-items filter isn't reliably exposed to automated tools — this is a known limitation, not something to burn your whole search budget chasing). If you can't find one after 2-3 real attempts, ONE current live listing (eBay, Vinted, or another marketplace) at a comparable price is an acceptable substitute — you don't need several. What's NEVER acceptable, no matter how healthy the discount looks: reporting a candidate with NO independent resale check at all, just because the retailer's own "was £X" price implies a big enough gap — retailers' own reference prices are sometimes inflated and are not, on their own, evidence of what the item actually resells for. You always need at least one real URL, independent of the source retailer, backing the resale price. Also not acceptable: a single unrelated price on the SAME retailer site you're sourcing from (that's not independent), or inventing a plausible-sounding number with no real URL behind it.
+ON RESALE EVIDENCE — a true "sold/completed" eBay listing is the gold standard, but it's genuinely often invisible to a plain web search (eBay's own sold-items filter isn't reliably exposed to automated tools — this is a known limitation, not something to burn your whole search budget chasing). If you can't find one after 2-3 real attempts, ONE current live listing (eBay, Vinted, or another marketplace) at a comparable price is an acceptable substitute — you don't need several. You always need at least one real URL, independent of the source retailer, backing a "deals" resale price — a single unrelated price on the SAME retailer site you're sourcing from doesn't count (not independent), and neither does inventing a plausible-sounding number with no real URL behind it.
+
+TWO WAYS TO REPORT A GENUINE DISCOUNT, NOT ONE — don't just drop a candidate because independent resale evidence didn't turn up. If, after real attempts (2-3 searches), you still can't find any independent evidence of what the item resells for, but the retailer discount itself is real and verified (a real was/RRP price vs current price, right there on the page, and — same cheapest-price check as below — you've confirmed it's not available cheaper elsewhere right now), report it in shop_candidates instead of discarding it entirely: Flipsta lists items like this directly on its own shop, priced off the RRP, rather than needing an independent resale estimate. Only use "deals" when you DO have that independent resale evidence — reporting a candidate as a "deals" opportunity on the strength of the retailer's own "was £X" price alone, with no independent check, is never acceptable; retailers' own reference prices are sometimes inflated and aren't, on their own, evidence of resale value. And a candidate with no genuine, verifiable discount at all — not even a real RRP gap — doesn't belong in either array.
 
 REAL FAILURE CASE, 26 Aug 2026 — a branded laptop sourced from a UK retailer's clearance page was reported as a margin opportunity on the strength of one eBay listing at a higher price. When Steven actually checked by hand, the retailer's clearance price turned out to be full retail (no real discount at all), AND eBay sellers were currently listing the same laptop for LESS than that "clearance" price. So: before reporting ANY candidate, actively check whether the item is available for the same price or cheaper somewhere else RIGHT NOW — search specifically for the cheapest current price (e.g. "[item name] cheapest price" or check 2-3 listings, not just the first one you find), not just evidence that a higher price also exists. A single live listing at a price that suits the story is not proof of the achievable resale value — a buyer always picks the cheapest genuine listing available, so that's the number that matters. If you find the item at or below your source price ANYWHERE (another retailer, a marketplace, a price-comparison site), that fully disqualifies the candidate — report zero, no matter how good the retailer's own discount claim looked. This check matters most for well-known branded electronics and other easily price-compared items, where a shopper can trivially find the true cheapest price in seconds — assume a savvy reseller would do that same check, and only report a candidate that would survive it.
 
@@ -241,7 +276,7 @@ COUNTERFEIT/REPLICA CHECK (this source specifically) — ${source.retailer} carr
       : ""
   }
 
-Report what you find with report_candidate_deals — ${categoryInstruction} An empty deals array is a completely fine outcome if nothing on the page genuinely clears a real margin; don't invent a candidate to avoid reporting zero.`;
+Report what you find with report_candidate_deals — ${categoryInstruction} Both deals and shop_candidates are required arrays; either or both can be empty. Empty is a completely fine outcome if nothing on the page genuinely clears a real discount; don't invent a candidate for either array to avoid reporting zero.`;
 }
 
 // 25-26 Aug 2026, Steven, while testing: a single run now tries multiple
@@ -274,7 +309,7 @@ const TARGET_CANDIDATES_PER_RUN = 3;
 // automatically instead of silently capping below the full list again.
 const MAX_SOURCES_PER_RUN = CURATED_SOURCES.length;
 
-async function discoverFromSource(source: CuratedSource): Promise<CandidateDeal[]> {
+async function discoverFromSource(source: CuratedSource): Promise<DiscoveryBatch> {
   if (!client) {
     throw new Error("claudeSearchAdapter needs ANTHROPIC_API_KEY set — see INFRASTRUCTURE_TODO.md #6.");
   }
@@ -376,15 +411,17 @@ async function discoverFromSource(source: CuratedSource): Promise<CandidateDeal[
     const toolUse = response.content.find(
       (block): block is Anthropic.ToolUseBlock => block.type === "tool_use" && block.name === "report_candidate_deals",
     );
-    const deals = (toolUse?.input as { deals?: unknown[] } | undefined)?.deals;
-    if (!Array.isArray(deals)) {
+    const toolInput = toolUse?.input as { deals?: unknown[]; shop_candidates?: unknown[] } | undefined;
+    const deals = toolInput?.deals;
+    const shopCandidatesRaw = toolInput?.shop_candidates;
+    if (!Array.isArray(deals) && !Array.isArray(shopCandidatesRaw)) {
       console.warn("[claudeSearchAdapter] No report_candidate_deals call in the response — treating as zero candidates this run.");
       console.warn(`[claudeSearchAdapter] Full reasoning text for this zero-candidate run: ${JSON.stringify(fullText)}`);
-      return [];
+      return { deals: [], shopCandidates: [] };
     }
 
     const candidates: CandidateDeal[] = [];
-    for (const raw of deals) {
+    for (const raw of deals ?? []) {
       const d = raw as Record<string, unknown>;
       const categorySlug = typeof d.category_slug === "string" ? d.category_slug : "";
       if (!(VALID_CATEGORY_SLUGS as readonly string[]).includes(categorySlug)) {
@@ -430,41 +467,96 @@ async function discoverFromSource(source: CuratedSource): Promise<CandidateDeal[
       });
     }
 
-    if (candidates.length === 0) {
+    if (candidates.length === 0 && Array.isArray(deals) && deals.length > 0) {
       console.warn(
-        `[claudeSearchAdapter] Model called report_candidate_deals with ${deals.length} deal(s), but none survived validation, or it reported zero on purpose. Full reasoning text: ${JSON.stringify(fullText)}`,
+        `[claudeSearchAdapter] Model called report_candidate_deals with ${deals.length} deal(s), but none survived validation. Full reasoning text: ${JSON.stringify(fullText)}`,
       );
     }
 
-    return candidates;
+    // shop_candidates: same real-info bar as deals (real product_name,
+    // source_url, prices), but anchored on rrp_gbp instead of an
+    // independent resale estimate — see sourceAdapter.ts's ShopCandidate
+    // and shopPricing.ts for what happens to these downstream.
+    const shopCandidates: ShopCandidate[] = [];
+    for (const raw of shopCandidatesRaw ?? []) {
+      const d = raw as Record<string, unknown>;
+      const categorySlug = typeof d.category_slug === "string" ? d.category_slug : "";
+      if (!(VALID_CATEGORY_SLUGS as readonly string[]).includes(categorySlug)) {
+        console.warn(`[claudeSearchAdapter] Dropped a reported shop_candidate — bad/missing category_slug: ${JSON.stringify(d)}`);
+        continue;
+      }
+
+      const sourcePriceGBP = Number(d.source_price_gbp);
+      const rrpGBP = Number(d.rrp_gbp);
+      if (!(sourcePriceGBP > 0) || !(rrpGBP > 0)) {
+        console.warn(`[claudeSearchAdapter] Dropped a reported shop_candidate — invalid price(s): ${JSON.stringify(d)}`);
+        continue;
+      }
+      if (rrpGBP <= sourcePriceGBP) {
+        console.warn(`[claudeSearchAdapter] Dropped a reported shop_candidate — rrp_gbp not above source_price_gbp, no real discount: ${JSON.stringify(d)}`);
+        continue;
+      }
+      if (typeof d.source_url !== "string" || !d.source_url) {
+        console.warn(`[claudeSearchAdapter] Dropped a reported shop_candidate — missing source_url: ${JSON.stringify(d)}`);
+        continue;
+      }
+      if (typeof d.product_name !== "string" || !d.product_name.trim()) {
+        console.warn(`[claudeSearchAdapter] Dropped a reported shop_candidate — missing product_name: ${JSON.stringify(d)}`);
+        continue;
+      }
+
+      shopCandidates.push({
+        categorySlug,
+        productName: d.product_name.trim(),
+        description: typeof d.description === "string" && d.description.trim() ? d.description.trim() : null,
+        imageUrl: typeof d.image_url === "string" && d.image_url ? d.image_url : null,
+        sourceRetailer: typeof d.source_retailer === "string" ? d.source_retailer : "Unknown retailer",
+        sourceUrl: d.source_url,
+        sourcePriceGBP,
+        rrpGBP,
+        estimatedStockUnits: Math.max(1, Math.round(Number(d.estimated_stock_units) || 1)),
+      });
+    }
+
+    if (candidates.length === 0 && shopCandidates.length === 0 && ((deals?.length ?? 0) > 0 || (shopCandidatesRaw?.length ?? 0) > 0)) {
+      console.warn(
+        `[claudeSearchAdapter] Model reported ${deals?.length ?? 0} deal(s) and ${shopCandidatesRaw?.length ?? 0} shop_candidate(s), but none survived validation. Full reasoning text: ${JSON.stringify(fullText)}`,
+      );
+    }
+
+    return { deals: candidates, shopCandidates };
 }
 
 export const claudeSearchAdapter: SourceAdapter = {
   name: "claude-search",
-  async findCandidates(onBatch?: (batch: CandidateDeal[]) => Promise<boolean>): Promise<CandidateDeal[]> {
+  async findCandidates(onBatch?: (batch: DiscoveryBatch) => Promise<boolean>): Promise<DiscoveryResult> {
     // Starts at the normal 12h-rotation source, then walks forward through
     // CURATED_SOURCES (wrapping around) so repeated runs within the same
     // 12h window don't all hammer the exact same page — see
     // TARGET_CANDIDATES_PER_RUN / MAX_SOURCES_PER_RUN above.
     const startIndex = CURATED_SOURCES.indexOf(focusSourceForRun());
     const allCandidates: CandidateDeal[] = [];
+    const allShopCandidates: ShopCandidate[] = [];
     let sourcesTried = 0;
 
     for (let i = 0; i < MAX_SOURCES_PER_RUN; i++) {
       const source = CURATED_SOURCES[(startIndex + i) % CURATED_SOURCES.length];
       sourcesTried++;
       console.log(
-        `[claudeSearchAdapter] Source ${sourcesTried}/${MAX_SOURCES_PER_RUN}: ${source.retailer} (${source.category}) — ${source.url} — have ${allCandidates.length}/${TARGET_CANDIDATES_PER_RUN} candidates so far`,
+        `[claudeSearchAdapter] Source ${sourcesTried}/${MAX_SOURCES_PER_RUN}: ${source.retailer} (${source.category}) — ${source.url} — have ${allCandidates.length}/${TARGET_CANDIDATES_PER_RUN} deal candidates, ${allShopCandidates.length} shop candidates so far`,
       );
       const found = await discoverFromSource(source);
-      allCandidates.push(...found);
+      allCandidates.push(...found.deals);
+      allShopCandidates.push(...found.shopCandidates);
 
       // When the caller (discoverOpportunities.ts) hands us a real
       // verification callback, let IT decide when to stop — it knows
       // whether something has actually cleared the margin/confidence bar
       // and been created, which is the real "found 1" Steven means, not
       // just "the AI reported something." Without a callback (e.g. a
-      // standalone test), fall back to the old raw-count heuristic.
+      // standalone test), fall back to the old raw-count heuristic — which,
+      // same as onBatch, only ever counts deals; shop_candidates never
+      // factor into the stop-early decision (see sourceAdapter.ts).
       if (onBatch) {
         const satisfied = await onBatch(found);
         if (satisfied) {
@@ -477,9 +569,9 @@ export const claudeSearchAdapter: SourceAdapter = {
     }
 
     console.log(
-      `[claudeSearchAdapter] Run finished: ${allCandidates.length} candidate(s) from ${sourcesTried} source(s) (cap was ${MAX_SOURCES_PER_RUN} sources).`,
+      `[claudeSearchAdapter] Run finished: ${allCandidates.length} deal candidate(s), ${allShopCandidates.length} shop candidate(s) from ${sourcesTried} source(s) (cap was ${MAX_SOURCES_PER_RUN} sources).`,
     );
-    return allCandidates;
+    return { deals: allCandidates, shopCandidates: allShopCandidates };
   },
 };
 

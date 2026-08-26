@@ -3,9 +3,11 @@ import {
   calculateInstantWinPrice,
   calculateStartingBid,
   classifyUrgencyTier,
+  computeShopPricing,
+  qualifiesForShop,
 } from "@flipsta/shared";
 import { createDb } from "../db.js";
-import { CandidateDeal, SourceAdapter } from "../adapters/sourceAdapter.js";
+import { CandidateDeal, DiscoveryBatch, ShopCandidate, SourceAdapter } from "../adapters/sourceAdapter.js";
 import { scoreOpportunity } from "../aiScoring.js";
 
 // 26 Aug 2026, Steven, filling the dashboard for the first time: "i need it
@@ -28,12 +30,15 @@ export async function discoverOpportunities(adapter: SourceAdapter, targetOpport
     .single();
 
   let created = 0;
-  // Candidates already run through tryCreateOpportunity, keyed by object
-  // reference — lets the same candidate be safely processed either via the
-  // adapter's onBatch callback (as it's found) or the final catch-all pass
-  // below (for adapters like mockAdapter that ignore onBatch and just
-  // return everything at once) without double-processing it either way.
+  let shopItemsCreated = 0;
+  // Candidates already run through tryCreateOpportunity/tryCreateShopItem,
+  // keyed by object reference — lets the same candidate be safely processed
+  // either via the adapter's onBatch callback (as it's found) or the final
+  // catch-all pass below (for adapters like mockAdapter that ignore onBatch
+  // and just return everything at once) without double-processing it
+  // either way.
   const processed = new Set<CandidateDeal>();
+  const processedShop = new Set<ShopCandidate>();
 
   async function tryCreateOpportunity(c: CandidateDeal): Promise<boolean> {
     const marginGBP = c.estimatedResalePriceGBP - c.sourcePriceGBP;
@@ -124,12 +129,70 @@ export async function discoverOpportunities(adapter: SourceAdapter, targetOpport
     return true;
   }
 
-  async function processBatch(batch: CandidateDeal[]): Promise<boolean> {
-    for (const c of batch) {
+  // 26 Aug 2026, Steven: "We are missing a big trick here. When the bot
+  // does a search and finds an item that has a good margin on it but
+  // rejects it as cannot find proof of selling then i want it to capture
+  // all of the info including photos and then post the item on our shop...
+  // that way any credit used isnt wasted as a missed oppotunity." A
+  // ShopCandidate already passed claudeSearchAdapter's own real-discount
+  // check (see buildPrompt's "TWO WAYS TO REPORT A GENUINE DISCOUNT" and
+  // "REAL FAILURE CASE" instructions) — this is the second, independent
+  // line of defence, same role qualifiesForShop plays here that the 20%
+  // margin floor plays for tryCreateOpportunity above.
+  async function tryCreateShopItem(c: ShopCandidate): Promise<boolean> {
+    const pricingInput = { sourcePriceGBP: c.sourcePriceGBP, rrpGBP: c.rrpGBP };
+    if (!qualifiesForShop(pricingInput)) {
+      console.log(
+        `[discoverOpportunities] Shop candidate didn't qualify (no real discount left vs RRP once fees are covered): ${c.productName} — source £${c.sourcePriceGBP}, RRP £${c.rrpGBP}`,
+      );
+      return false;
+    }
+
+    const { data: category } = await db.from("categories").select("id").eq("slug", c.categorySlug).single();
+    if (!category) return false;
+
+    const pricing = computeShopPricing(pricingInput);
+    const { error: insertError } = await db.from("shop_items").insert({
+      category_id: category.id,
+      product_name: c.productName,
+      description: c.description,
+      image_url: c.imageUrl,
+      source_retailer: c.sourceRetailer,
+      source_url: c.sourceUrl,
+      source_price_gbp: c.sourcePriceGBP,
+      rrp_gbp: c.rrpGBP,
+      our_price_gbp: pricing.ourPriceGBP,
+      min_offer_accept_gbp: pricing.minOfferAcceptGBP,
+      fulfillment_reward_gbp: pricing.fulfillmentRewardGBP,
+      fulfiller_reimbursement_gbp: pricing.fulfillerReimbursementGBP,
+      estimated_stock_units: c.estimatedStockUnits,
+      status: "available",
+    });
+    if (insertError) {
+      console.error(
+        `[discoverOpportunities] shop_items INSERT FAILED for ${c.sourceRetailer} (${c.sourceUrl}): ${insertError.message}`,
+      );
+      return false;
+    }
+    console.log(`[discoverOpportunities] Listed on shop: ${c.productName} at £${pricing.ourPriceGBP} (RRP £${c.rrpGBP})`);
+    return true;
+  }
+
+  async function processBatch(batch: DiscoveryBatch): Promise<boolean> {
+    for (const c of batch.deals) {
       if (processed.has(c)) continue;
       processed.add(c);
       if (await tryCreateOpportunity(c)) created++;
       if (created >= targetOpportunities) break;
+    }
+    // Shop candidates are never gated behind the reseller-opportunity
+    // target (see sourceAdapter.ts) — every genuine one found gets
+    // listed regardless of whether this run's opportunity target has
+    // already been hit, per Steven's "any credit used isnt wasted" ask.
+    for (const c of batch.shopCandidates) {
+      if (processedShop.has(c)) continue;
+      processedShop.add(c);
+      if (await tryCreateShopItem(c)) shopItemsCreated++;
     }
     return created >= targetOpportunities;
   }
@@ -137,8 +200,8 @@ export async function discoverOpportunities(adapter: SourceAdapter, targetOpport
   const candidates = await adapter.findCandidates(processBatch);
   // Catch-all: process anything the adapter returned but never actually
   // ran through the callback (adapters like mockAdapter ignore onBatch
-  // entirely and just return everything at once) — processed's dedupe
-  // means anything the callback already handled is skipped here.
+  // entirely and just return everything at once) — processed/processedShop's
+  // dedupe means anything the callback already handled is skipped here.
   //
   // 26 Aug 2026 real-run bug: this used to run unconditionally, even when
   // the callback path had already hit the target and told the adapter to
@@ -147,20 +210,33 @@ export async function discoverOpportunities(adapter: SourceAdapter, targetOpport
   // satisfies the target leaves the second one never added to `processed`
   // — and this catch-all would then pick it up and create it anyway.
   // Real trigger: TARGET_OPPORTUNITIES_PER_RUN=1, a Zavvi batch reported 2
-  // real candidates, and both got created instead of stopping at 1. Now
-  // only runs the catch-all when the target genuinely hasn't been met yet
-  // — which is also exactly the case mockAdapter needs it for, since it
-  // never calls onBatch at all and `created` stays 0.
-  if (created < targetOpportunities) {
-    await processBatch(candidates);
-  }
+  // real candidates, and both got created instead of stopping at 1. Deals
+  // still only run the catch-all when the target genuinely hasn't been met
+  // yet — which is also exactly the case mockAdapter needs it for, since it
+  // never calls onBatch at all and `created` stays 0. shopCandidates are
+  // always passed through here regardless of `created`, since they're never
+  // subject to the opportunity target in the first place.
+  await processBatch({
+    deals: created < targetOpportunities ? candidates.deals : [],
+    shopCandidates: candidates.shopCandidates,
+  });
 
   if (run) {
     await db
       .from("discovery_runs")
-      .update({ candidates_found: candidates.length, opportunities_created: created, finished_at: new Date().toISOString() })
+      .update({
+        candidates_found: candidates.deals.length + candidates.shopCandidates.length,
+        opportunities_created: created,
+        shop_items_created: shopItemsCreated,
+        finished_at: new Date().toISOString(),
+      })
       .eq("id", run.id);
   }
 
-  return { candidatesFound: candidates.length, opportunitiesCreated: created };
+  return {
+    candidatesFound: candidates.deals.length,
+    opportunitiesCreated: created,
+    shopCandidatesFound: candidates.shopCandidates.length,
+    shopItemsCreated,
+  };
 }

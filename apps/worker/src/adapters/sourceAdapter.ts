@@ -23,6 +23,45 @@ export interface CandidateDeal {
   priceVolatility: number; // 0-1
 }
 
+/**
+ * 26 Aug 2026, Steven: "We are missing a big trick here. When the bot does a
+ * search and finds an item that has a good margin on it but rejects it as
+ * cannot find proof of selling then i want it to capture all of the info
+ * including photos and then post the item on our shop." A ShopCandidate is
+ * that second, lower-bar outcome of the same search: a genuine retailer
+ * discount was found, but nothing independent backs a resale estimate, so
+ * it can't become a reseller CandidateDeal — instead it's priced off the
+ * retailer's own RRP (see packages/shared/src/shopPricing.ts) and listed
+ * directly on Flipsta's own /shop, fulfilled by a Pro/Elite member. See
+ * migration 0013 for the shop_items table this becomes.
+ */
+export interface ShopCandidate {
+  categorySlug: string;
+  /** The specific product's real name — same bar as CandidateDeal.productName. */
+  productName: string;
+  /** A short customer-facing description. Null if nothing usable was found
+   * on the source page — the API/UI falls back to a generic line rather
+   * than inventing detail. */
+  description: string | null;
+  /** A real product image URL if one was found, else null — never invented. */
+  imageUrl: string | null;
+  sourceRetailer: string;
+  sourceUrl: string;
+  sourcePriceGBP: number;
+  /** The retailer's own listed RRP — the only price anchor available here,
+   * since there's no independent resale evidence for this candidate. */
+  rrpGBP: number;
+  estimatedStockUnits: number;
+}
+
+/** One adapter run's full output — the two different outcomes of the same search. */
+export interface DiscoveryBatch {
+  deals: CandidateDeal[];
+  shopCandidates: ShopCandidate[];
+}
+
+export type DiscoveryResult = DiscoveryBatch;
+
 export interface SourceAdapter {
   name: string;
   /**
@@ -41,6 +80,12 @@ export interface SourceAdapter {
    * that don't do multi-batch discovery (mockAdapter) can ignore this and
    * just return everything at once — the caller still processes whatever
    * comes back either way.
+   *
+   * shopCandidates in each batch are NEVER part of the stop-early decision
+   * — only deals count toward "found enough opportunities" (Steven's
+   * target above is about opportunities specifically). Every genuine shop
+   * candidate found gets processed regardless, per Steven: "that way any
+   * credit used isnt wasted as a missed oppotunity."
    */
-  findCandidates(onBatch?: (batch: CandidateDeal[]) => Promise<boolean>): Promise<CandidateDeal[]>;
+  findCandidates(onBatch?: (batch: DiscoveryBatch) => Promise<boolean>): Promise<DiscoveryResult>;
 }

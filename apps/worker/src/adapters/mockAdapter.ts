@@ -1,4 +1,4 @@
-import { SourceAdapter, CandidateDeal } from "./sourceAdapter.js";
+import { SourceAdapter, CandidateDeal, DiscoveryResult } from "./sourceAdapter.js";
 
 /**
  * Demo adapter so the discovery pipeline is exercisable end to end without
@@ -46,9 +46,12 @@ export const mockAdapter: SourceAdapter = {
   name: "mock",
   // Ignores onBatch — it's a single-shot demo adapter with nothing to
   // batch across, so the caller's own final catch-all pass over whatever
-  // this returns handles it (see discoverOpportunities.ts).
-  async findCandidates(): Promise<CandidateDeal[]> {
-    return SAMPLE_POOL.map((base) => {
+  // this returns handles it (see discoverOpportunities.ts). No sample shop
+  // candidates yet — the mock pool only demos the reseller-opportunity
+  // path; shopCandidates stays empty until there's a reason to demo that
+  // path without a real ANTHROPIC_API_KEY too.
+  async findCandidates(): Promise<DiscoveryResult> {
+    const deals: CandidateDeal[] = SAMPLE_POOL.map((base) => {
       const sourcePriceGBP = round2(10 + Math.random() * 80);
       const marginMultiplier = 1.15 + Math.random() * 0.25; // 15-40% uplift
       return {
@@ -57,6 +60,7 @@ export const mockAdapter: SourceAdapter = {
         estimatedResalePriceGBP: round2(sourcePriceGBP * marginMultiplier),
       };
     });
+    return { deals, shopCandidates: [] };
   },
 };
 

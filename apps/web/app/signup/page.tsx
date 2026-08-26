@@ -1,15 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { REFERRAL_REWARD_GBP } from "@flipsta/shared";
 
 /**
  * There was previously no way for a real user to create an account through
  * the UI at all — this and /login are the minimum needed to actually test
  * the app end to end. Profile creation itself happens via the
- * `on_auth_user_created` trigger (0004_auth_profile_trigger.sql), not here.
+ * `on_auth_user_created` trigger (0004_auth_profile_trigger.sql, redefined
+ * by 0016_referral_program.sql to also handle referral_code/referred_by),
+ * not here.
  */
 export default function SignupPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignupForm />
+    </Suspense>
+  );
+}
+
+function SignupForm() {
+  // 26 Aug 2026, Steven: "we need a referral program." /referrals shares a
+  // link shaped /signup?ref=CODE — passed through as referral_code in
+  // raw_user_meta_data so the signup trigger can resolve and credit it.
+  const searchParams = useSearchParams();
+  const refCode = searchParams.get("ref");
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -22,7 +40,12 @@ export default function SignupPage() {
     const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { display_name: displayName || email.split("@")[0] } },
+      options: {
+        data: {
+          display_name: displayName || email.split("@")[0],
+          ...(refCode ? { referral_code: refCode } : {}),
+        },
+      },
     });
     if (error) {
       setError(error.message);
@@ -47,6 +70,12 @@ export default function SignupPage() {
   return (
     <div className="max-w-sm space-y-4">
       <h1 className="text-2xl font-bold">Create your account</h1>
+      {refCode && (
+        <p className="text-xs text-gold bg-gold/10 border border-gold/40 rounded-lg px-3 py-2">
+          You were referred with code <span className="font-bold">{refCode}</span> — you&apos;ll both get £
+          {REFERRAL_REWARD_GBP.toFixed(2)} in your wallets once you sign up.
+        </p>
+      )}
       <div>
         <label className="block text-xs font-bold text-textDim uppercase tracking-wide mb-1">Display name</label>
         <input className="w-full bg-surface2 border border-border rounded-lg px-3 py-2 text-sm" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />

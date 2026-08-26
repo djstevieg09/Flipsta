@@ -17,6 +17,7 @@ type WonOpportunity = {
   expected_margin_gbp: number;
   product_name: string | null;
   image_url: string | null;
+  alreadyListed: boolean;
 };
 
 /**
@@ -43,9 +44,12 @@ export default function NewListingPage() {
   const [connections, setConnections] = useState<ChannelConnection[]>([]);
 
   useEffect(() => {
+    // 26 Aug 2026: instant-win now auto-lists on win (see
+    // lib/autoListOpportunity.ts) — exclude anything already listed here so
+    // this dropdown can't create a duplicate listing for the same win.
     fetch("/api/opportunities?won=true")
       .then((r) => r.json())
-      .then((d) => setWon(d.opportunities ?? []));
+      .then((d) => setWon((d.opportunities ?? []).filter((o: WonOpportunity) => !o.alreadyListed)));
     fetch("/api/me")
       .then((r) => r.json())
       .then((d) => setTier(d.profile?.subscriptionTier ?? null));

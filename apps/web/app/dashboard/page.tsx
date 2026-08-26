@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/currentProfile";
 import { TIER_ENTITLEMENTS } from "@/lib/tierGuard";
+import BecomeResellerBanner from "@/app/components/BecomeResellerBanner";
 
 /**
  * Section 7/12.1 — a real, tier-aware home base. Not a pixel port of the
@@ -21,7 +22,7 @@ export default async function DashboardPage() {
     { label: "Sniper mode (auto-bid)", on: entitlements.sniperMode, note: "Pro & Elite" },
     { label: "Early access window", on: entitlements.earlyAccessSeconds > 0, note: "Pro & Elite" },
     { label: "AI reasoning on opportunities", on: entitlements.aiExplainability, note: "Pro & Elite" },
-    { label: "Multi-platform listing (eBay/Amazon/Vinted/Facebook/Depop)", on: entitlements.multiPlatformListing, note: "Pro & Elite" },
+    { label: "Multi-platform listing (eBay/Depop/Etsy/Whatnot/StockX)", on: entitlements.multiPlatformListing, note: "Pro & Elite" },
     { label: "Syndicate leadership", on: entitlements.syndicateLeadership, note: "Elite only" },
   ];
 
@@ -36,10 +37,19 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Welcome back, {auth.profile.displayName}</h1>
-        <p className="text-textDim text-sm capitalize">{auth.profile.subscriptionTier} plan</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Welcome back, {auth.profile.displayName}</h1>
+          <p className="text-textDim text-sm capitalize">{auth.profile.subscriptionTier} plan</p>
+        </div>
+        <a href="/upgrade" className="btn btn-primary">
+          {auth.profile.subscriptionTier === "elite" ? "Manage billing" : "Upgrade plan"}
+        </a>
       </div>
+
+      {(auth.profile.subscriptionTier === "free" || auth.profile.subscriptionTier === "standard") && (
+        <BecomeResellerBanner />
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         {links.map((l) => (

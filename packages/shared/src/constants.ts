@@ -165,3 +165,13 @@ export const SHOP_ITEM_OFFER_WIGGLE_ROOM_PCT = 0.1;
 // the orders as they come in. maybe put a time delay or limit or something"):
 export const SHOP_ITEM_FULFILLMENT_CLAIM_WINDOW_HOURS = 48; // a claimed job with no shipment past this auto-releases
 export const SHOP_ITEM_MAX_CONCURRENT_CLAIMS_PER_USER = 2; // cap on jobs one person can hold claimed at once
+
+// 26 Aug 2026, Steven: "we need a referral program" — confirmed via a
+// clarifying question: wallet credit for both the referrer and the new
+// signup, paid immediately on signup. The actual crediting happens in SQL
+// (see migration 0016_referral_program.sql's handle_new_user trigger,
+// which hardcodes the same £5.00) — this export exists purely so the
+// /referrals page can display the real number instead of a copy that could
+// silently drift from what actually gets paid. If this number ever
+// changes, update BOTH this constant and the trigger's `reward_gbp`.
+export const REFERRAL_REWARD_GBP = 5;

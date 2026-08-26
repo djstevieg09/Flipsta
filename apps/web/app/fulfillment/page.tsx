@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import TradingFloorTicker from "./TradingFloorTicker";
 
 type ClaimableJob = {
   id: string;
@@ -108,6 +109,9 @@ export default function FulfillmentPage() {
 
   return (
     <div className="space-y-8">
+      <TradingFloorTicker
+        jobs={claimable.map((j) => ({ id: j.id, productName: j.product_name, rewardGBP: j.fulfillment_reward_gbp }))}
+      />
       <div>
         <h1 className="text-2xl font-bold">Fulfillment jobs</h1>
         <p className="text-textDim text-sm">

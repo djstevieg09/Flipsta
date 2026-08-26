@@ -1,5 +1,7 @@
 import { requireStaff } from "@/lib/adminGuard";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
+import { getBusinessMetrics } from "@/lib/businessMetrics";
+import BarChart from "./BarChart";
 
 /**
  * Section 12.1 — the one screen to check first. Server component: queries
@@ -11,7 +13,7 @@ export default async function AdminOverviewPage() {
   await requireStaff("support");
   const supabase = createSupabaseServiceClient();
 
-  const [{ count: sellerCount }, { count: openTickets }, { count: breachRiskTickets }, { count: openFlags }, { count: highFlags }, { count: pendingPartners }, { count: shopPhotosNeeded }, { data: escrowOrders }] =
+  const [{ count: sellerCount }, { count: openTickets }, { count: breachRiskTickets }, { count: openFlags }, { count: highFlags }, { count: pendingPartners }, { count: shopPhotosNeeded }, { data: escrowOrders }, metrics] =
     await Promise.all([
       supabase.from("profiles").select("id", { count: "exact", head: true }),
       supabase.from("tickets").select("id", { count: "exact", head: true }).neq("status", "resolved"),
@@ -23,12 +25,33 @@ export default async function AdminOverviewPage() {
       // to admin dashboard to add a picture before its uploaded to shop."
       supabase.from("shop_items").select("id", { count: "exact", head: true }).eq("status", "available").is("image_url", null),
       supabase.from("orders").select("price_gbp").is("funds_released_at", null),
+      // 26 Aug 2026, Steven: "need this to show me exactly where the
+      // buisness is" + "i need graphs, i need new signups."
+      getBusinessMetrics(supabase),
     ]);
 
   const escrowHeldGBP = (escrowOrders ?? []).reduce((sum: number, o: any) => sum + Number(o.price_gbp ?? 0), 0);
 
+  const signupsDeltaPct =
+    metrics.signupsPrev7 > 0 ? Math.round(((metrics.signupsLast7 - metrics.signupsPrev7) / metrics.signupsPrev7) * 100) : null;
+  const revenueDeltaPct =
+    metrics.revenuePrev7GBP > 0
+      ? Math.round(((metrics.revenueLast7GBP - metrics.revenuePrev7GBP) / metrics.revenuePrev7GBP) * 100)
+      : null;
+
   const tiles = [
+    {
+      label: "New signups (7d)",
+      value: metrics.signupsLast7,
+      sub: signupsDeltaPct === null ? undefined : `${signupsDeltaPct >= 0 ? "+" : ""}${signupsDeltaPct}% vs prior 7d`,
+    },
+    {
+      label: "Revenue (7d)",
+      value: `£${metrics.revenueLast7GBP.toFixed(2)}`,
+      sub: revenueDeltaPct === null ? undefined : `${revenueDeltaPct >= 0 ? "+" : ""}${revenueDeltaPct}% vs prior 7d`,
+    },
     { label: "Total sellers", value: sellerCount ?? 0 },
+    { label: "Active resellers", value: metrics.activeResellers, sub: "Pro/Elite" },
     { label: "Open tickets", value: openTickets ?? 0, sub: `${breachRiskTickets ?? 0} high priority` },
     { label: "Escrow held", value: `£${escrowHeldGBP.toFixed(2)}`, sub: `${escrowOrders?.length ?? 0} orders` },
     { label: "Open risk flags", value: openFlags ?? 0, sub: `${highFlags ?? 0} high severity` },
@@ -40,9 +63,10 @@ export default async function AdminOverviewPage() {
     <div className="space-y-4">
       <p className="text-textDim text-sm">
         Live counts from the real database — no mock data. See <code>/admin/tickets</code>,{" "}
-        <code>/admin/risk</code>, <code>/admin/partners</code>, and <code>/admin/shop-photos</code> to act on any of these.
+        <code>/admin/risk</code>, <code>/admin/partners</code>, <code>/admin/shop-photos</code>, and{" "}
+        <code>/admin/resellers</code> to act on any of these.
       </p>
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {tiles.map((t) => (
           <div key={t.label} className="card">
             <div className="text-xs text-textDim uppercase tracking-wide mb-2">{t.label}</div>
@@ -50,6 +74,17 @@ export default async function AdminOverviewPage() {
             {t.sub && <div className="text-xs text-textDim mt-1">{t.sub}</div>}
           </div>
         ))}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="card">
+          <div className="text-xs text-textDim uppercase tracking-wide mb-2">New signups — last 14 days</div>
+          <BarChart data={metrics.dailySignups.map((d) => ({ date: d.date, value: d.count }))} formatValue={(v) => `${v} signup${v === 1 ? "" : "s"}`} color="#22d3ee" />
+        </div>
+        <div className="card">
+          <div className="text-xs text-textDim uppercase tracking-wide mb-2">Revenue (GMV) — last 14 days</div>
+          <BarChart data={metrics.dailyRevenueGBP.map((d) => ({ date: d.date, value: d.gbp }))} formatValue={(v) => `£${v.toFixed(2)}`} color="#5b7cfa" />
+        </div>
       </div>
     </div>
   );

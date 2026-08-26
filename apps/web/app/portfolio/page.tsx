@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import BecomeResellerBanner from "@/app/components/BecomeResellerBanner";
 
 type WonOpportunity = {
   id: string;
@@ -16,6 +17,7 @@ type WonOpportunity = {
   estimated_resale_price_gbp: number | null;
   expected_margin_gbp: number;
   created_at: string;
+  alreadyListed?: boolean;
 };
 type Listing = {
   id: string;
@@ -53,6 +55,10 @@ export default function PortfolioPage() {
   const [signedIn, setSignedIn] = useState(true);
   const [confirmMessage, setConfirmMessage] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<Record<string, boolean>>({});
+  // 26 Aug 2026, Steven: "we need to try and convert customers into
+  // resellers" — right after seeing their own purchases is a natural
+  // moment to pitch fulfilling other people's orders for a reward.
+  const [tier, setTier] = useState<string | null>(null);
 
   function loadShopPurchases() {
     fetch("/api/shop-items?mine=true")
@@ -79,6 +85,9 @@ export default function PortfolioPage() {
         setOrdersAsSeller(d.asSeller ?? []);
       });
     loadShopPurchases();
+    fetch("/api/me")
+      .then((r) => r.json())
+      .then((d) => setTier(d.profile?.subscriptionTier ?? null));
   }, []);
 
   // 26 Aug 2026, Steven: "number one the money does not get released until
@@ -102,11 +111,17 @@ export default function PortfolioPage() {
     );
   }
 
-  const unlistedWins = won.filter((o) => o.status === "won");
+  // 26 Aug 2026: instant-win now auto-lists on win (see
+  // lib/autoListOpportunity.ts), so a "won" status alone no longer means
+  // unlisted — check alreadyListed too, or this count and the "list one
+  // now" prompt both lie for anything the auto-list flow already handled.
+  const unlistedWins = won.filter((o) => o.status === "won" && !o.alreadyListed);
 
   return (
     <div className="space-y-8">
       <h1 className="text-2xl font-bold">Portfolio</h1>
+
+      {(tier === "free" || tier === "standard") && <BecomeResellerBanner />}
 
       {/* 26 Aug 2026, Steven: "need them to show in purchases with the
           details of the items" — won opportunities (paid Flipsta to win

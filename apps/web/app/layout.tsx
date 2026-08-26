@@ -6,6 +6,7 @@ import { TIER_ENTITLEMENTS } from "@/lib/tierGuard";
 import { BasketProvider } from "./BasketProvider";
 import BasketIndicator from "./components/BasketIndicator";
 import HeaderSearch from "./components/HeaderSearch";
+import SiteNav from "./components/SiteNav";
 
 export const metadata: Metadata = {
   title: "Flipsta",
@@ -29,10 +30,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <BasketProvider>
           <header className="sticky top-0 z-50 flex flex-col border-b border-border bg-bg/90 backdrop-blur">
             <div className="flex items-center gap-5 h-15 px-6 py-3">
-              <a href="/" className="flex items-center gap-2 font-extrabold text-lg whitespace-nowrap">
-                <span className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-sm font-black"
-                      style={{ background: "linear-gradient(135deg,#5b7cfa,#22d3ee)" }}>F</span>
-                Flipsta
+              {/* 26 Aug 2026, Steven: "change the logo in top left to the
+                  attached file" — cropped to icon+wordmark (the tagline
+                  doesn't read at header scale) and saved to /public/logo.png. */}
+              <a href="/" className="flex items-center whitespace-nowrap shrink-0">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/logo.png" alt="Flipsta" className="h-9 w-auto" />
               </a>
               <div className="flex-1 flex justify-center">
                 {/* useSearchParams (inside HeaderSearch) requires a Suspense
@@ -63,28 +66,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 </div>
               )}
             </div>
-            <nav className="flex justify-center gap-1 text-sm px-6 border-t border-border overflow-x-auto">
-              {auth && <a href="/dashboard" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Dashboard</a>}
-              <a href="/opportunities" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Live Opportunities</a>
-              <a href="/wants" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Buyer Wants</a>
-              <a href="/shop" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Shop</a>
-              <a href="/sell/new" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">List an item</a>
-              {auth && <a href="/portfolio" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Portfolio</a>}
-              {/* 26 Aug 2026, Steven: "wishlist / save for later" — kept
-                  separate from Portfolio ("what I've done") since this is
-                  "what I might do", same reasoning as Fulfillment jobs
-                  getting its own tab rather than living under Portfolio. */}
-              {auth && <a href="/wishlist" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Wishlist</a>}
-              {/* 26 Aug 2026, Steven: "the order is then passed onto the pro
-                  and elite opptunites as a free button to press to fulfill
-                  the order" — only shown to tiers actually entitled to
-                  claim a job (see tierGuard.ts's canFulfill). */}
-              {auth && TIER_ENTITLEMENTS[auth.profile.subscriptionTier].canFulfill && (
-                <a href="/fulfillment" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Fulfillment jobs</a>
-              )}
-              {auth && <a href="/wallet" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Wallet</a>}
-              {auth && <a href="/settings/connections" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Connected accounts</a>}
-            </nav>
+            {/* 26 Aug 2026, Steven: "I dont need to see buyer wants, list an
+                item, Portfolio, Wishlist and all that [in the admin
+                dashboard]" — SiteNav hides itself on /admin/* routes, since
+                that section has its own nav (admin/layout.tsx). */}
+            <SiteNav
+              isAuthed={Boolean(auth)}
+              canFulfill={Boolean(auth && TIER_ENTITLEMENTS[auth.profile.subscriptionTier].canFulfill)}
+            />
           </header>
           <main className="max-w-6xl mx-auto px-6 py-8">{children}</main>
           <footer className="border-t border-border px-6 py-6 text-center text-xs text-textDim">

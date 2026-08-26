@@ -57,7 +57,27 @@ export async function GET(req: NextRequest) {
       .eq("won_by", auth.userId)
       .order("created_at", { ascending: false });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    const opportunities = (data ?? []).map((o) => ({ ...o, estimated_resale_price_gbp: withEstimatedResale(o) }));
+
+    // 26 Aug 2026: instant-win now auto-lists the moment a win is confirmed
+    // (see lib/autoListOpportunity.ts) — without this, /sell/new's dropdown
+    // and /portfolio's "won and not listed yet" count both still offered
+    // wins that were already listed, letting a seller create a real
+    // duplicate listing for the same opportunity.
+    const wonIds = (data ?? []).map((o) => o.id);
+    let listedOpportunityIds = new Set<string>();
+    if (wonIds.length > 0) {
+      const { data: listedRows } = await supabase
+        .from("listings")
+        .select("opportunity_id")
+        .in("opportunity_id", wonIds);
+      listedOpportunityIds = new Set((listedRows ?? []).map((r) => r.opportunity_id).filter(Boolean));
+    }
+
+    const opportunities = (data ?? []).map((o) => ({
+      ...o,
+      estimated_resale_price_gbp: withEstimatedResale(o),
+      alreadyListed: listedOpportunityIds.has(o.id),
+    }));
     return NextResponse.json({ opportunities });
   }
 

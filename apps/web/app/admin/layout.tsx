@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/currentProfile";
 import { STAFF_ROLE_RANK } from "@flipsta/shared";
+import SundayDealsReminder from "./SundayDealsReminder";
 
 /**
  * Section 12.1 — Ultimate Admin Dashboard. This layout is the frontend
@@ -29,6 +30,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <nav className="flex gap-1 text-sm border-b border-border mb-6 -mx-1">
         <a href="/admin" className="px-3 py-2 rounded-lg hover:bg-surface2">Overview</a>
         <a href="/admin/sellers" className="px-3 py-2 rounded-lg hover:bg-surface2">Sellers</a>
+        {/* 26 Aug 2026, Steven: "need to be able to manage resellers from
+            this panel." */}
+        <a href="/admin/resellers" className="px-3 py-2 rounded-lg hover:bg-surface2">Resellers</a>
         <a href="/admin/tickets" className="px-3 py-2 rounded-lg hover:bg-surface2">Tickets</a>
         <a href="/admin/partners" className="px-3 py-2 rounded-lg hover:bg-surface2">Partners</a>
         {/* 26 Aug 2026, Steven: "if any pictures missing from listings it
@@ -38,6 +42,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <a href="/admin/risk" className="px-3 py-2 rounded-lg hover:bg-surface2">Risk &amp; Fraud</a>
         <a href="/admin/audit" className="px-3 py-2 rounded-lg hover:bg-surface2">Audit Log</a>
       </nav>
+      <SundayDealsReminder />
       {children}
     </div>
   );

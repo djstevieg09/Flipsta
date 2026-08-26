@@ -74,9 +74,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Your current plan doesn't include selling on the marketplace." }, { status: 403 });
   }
 
-  const { opportunityId, title, description, imageUrl, priceGBP, condition, categoryId, autoCrossPost, channels } = await req.json();
+  const { opportunityId, title, description, imageUrl, priceGBP, condition, categoryId, autoCrossPost, channels, quantity } = await req.json();
   if (!opportunityId || !title || !priceGBP || !condition) {
     return NextResponse.json({ error: "opportunityId, title, priceGBP, and condition are required." }, { status: 400 });
+  }
+  const listedQuantity = quantity !== undefined ? Number(quantity) : 1;
+  if (!Number.isInteger(listedQuantity) || listedQuantity < 1) {
+    return NextResponse.json({ error: "quantity must be a positive whole number." }, { status: 400 });
   }
 
   const supabase = await createSupabaseServerClient();
@@ -89,6 +93,20 @@ export async function POST(req: NextRequest) {
   if (oppError || !opportunity) return NextResponse.json({ error: "Opportunity not found." }, { status: 404 });
   if (opportunity.won_by !== auth.userId) {
     return NextResponse.json({ error: "You can only list an opportunity you won." }, { status: 403 });
+  }
+
+  // 26 Aug 2026: instant-win now auto-lists the moment a win is confirmed
+  // (see lib/autoListOpportunity.ts), so by the time a seller could reach
+  // this manual form for the same opportunity it may already be listed.
+  // Without this guard that's a real duplicate listing, not just a
+  // theoretical one — same opportunity_id traceability migration 0017 adds.
+  const { data: existingListing } = await supabase
+    .from("listings")
+    .select("id")
+    .eq("opportunity_id", opportunityId)
+    .maybeSingle();
+  if (existingListing) {
+    return NextResponse.json({ error: "This opportunity has already been listed." }, { status: 409 });
   }
 
   // Find-or-create the canonical product row this listing pools onto (Section 11.4).
@@ -124,7 +142,14 @@ export async function POST(req: NextRequest) {
 
   const { data: listing, error: listingError } = await supabase
     .from("listings")
-    .insert({ product_id: productId, seller_id: auth.userId, price_gbp: priceGBP, auto_cross_post: wantsAutoCrossPost })
+    .insert({
+      product_id: productId,
+      seller_id: auth.userId,
+      price_gbp: priceGBP,
+      quantity: listedQuantity,
+      opportunity_id: opportunityId,
+      auto_cross_post: wantsAutoCrossPost,
+    })
     .select()
     .single();
   if (listingError) return NextResponse.json({ error: listingError.message }, { status: 500 });

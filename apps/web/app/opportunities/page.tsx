@@ -12,6 +12,7 @@ type Opportunity = {
   confidence_score: number;
   urgency_tier: "hot" | "standard" | "stable";
   estimated_stock_units: number;
+  per_customer_cap: number | null;
   starting_bid_gbp: number;
   instant_win_price_gbp: number;
   action_clock_expires_at: string | null;
@@ -84,11 +85,24 @@ export default function OpportunitiesPage() {
     load();
   }
 
-  async function instantWin(id: string) {
-    const res = await fetch(`/api/opportunities/${id}/instant-win`, { method: "POST" });
+  // 26 Aug 2026, Steven: "when someone buys an oppotunity it should list
+  // the item straight away once they have confirmed how many units they
+  // brought." quantity now travels with the instant-win request, and the
+  // response comes back already listed (or not, if auto-listing hit a
+  // snag — see the route's try/catch) rather than needing a second step.
+  async function instantWin(id: string, quantity: number) {
+    const res = await fetch(`/api/opportunities/${id}/instant-win`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ quantity }),
+    });
     const data = await res.json();
     if (res.ok) {
-      setMessage(`Won for £${data.priceGBP}.`);
+      setMessage(
+        data.autoListed
+          ? `Won for £${data.priceGBP} — listed on the marketplace automatically.`
+          : `Won for £${data.priceGBP}.`,
+      );
       triggerCelebration(data.priceGBP);
     } else {
       setMessage(data.error);
@@ -123,7 +137,7 @@ export default function OpportunitiesPage() {
             now={now}
             urgencyColorClass={urgencyColor[o.urgency_tier]}
             onBid={() => placeBid(o.id, o.starting_bid_gbp)}
-            onInstantWin={() => instantWin(o.id)}
+            onInstantWin={(quantity) => instantWin(o.id, quantity)}
           />
         ))}
       </div>
@@ -144,11 +158,19 @@ function OpportunityCard({
   now: number;
   urgencyColorClass: string;
   onBid: () => void;
-  onInstantWin: () => void;
+  onInstantWin: (quantity: number) => void;
 }) {
   const remainingSeconds = o.action_clock_expires_at
     ? Math.max(0, Math.round((new Date(o.action_clock_expires_at).getTime() - now) / 1000))
     : null;
+
+  // Steven's ask: "once they have confirmed how many units they brought" —
+  // only worth showing a picker when there's actually a choice to make.
+  // Capped by both how many units exist and (if set) how many one buyer's
+  // allowed to take, matching the same two checks the route validates.
+  const maxQuantity = Math.max(1, Math.min(o.estimated_stock_units, o.per_customer_cap ?? o.estimated_stock_units));
+  const showQuantityPicker = o.status === "live" && maxQuantity > 1;
+  const [quantity, setQuantity] = useState(1);
 
   return (
     <div className="card space-y-2">
@@ -194,12 +216,32 @@ function OpportunityCard({
           {remainingSeconds > 0 ? `Closes in ${formatCountdown(remainingSeconds)}` : "Closing…"}
         </div>
       )}
+      {showQuantityPicker && (
+        <div className="flex items-center justify-between text-xs">
+          <label htmlFor={`qty-${o.id}`} className="text-textDim">
+            Units to buy
+          </label>
+          <select
+            id={`qty-${o.id}`}
+            className="bg-surface2 border border-border rounded-lg px-2 py-1"
+            value={quantity}
+            onChange={(e) => setQuantity(Number(e.target.value))}
+          >
+            {Array.from({ length: maxQuantity }, (_, i) => i + 1).map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       <div className="flex gap-2 pt-2">
         <button className="btn btn-ghost flex-1" onClick={onBid}>
           Bid £{(o.starting_bid_gbp + 2).toFixed(2)}
         </button>
-        <button className="btn btn-primary flex-1" onClick={onInstantWin}>
-          Instant win £{o.instant_win_price_gbp.toFixed(2)}
+        <button className="btn btn-primary flex-1" onClick={() => onInstantWin(quantity)}>
+          Instant win £{(o.instant_win_price_gbp * quantity).toFixed(2)}
         </button>
       </div>
     </div>

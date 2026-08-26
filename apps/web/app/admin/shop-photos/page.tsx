@@ -75,12 +75,18 @@ export default function AdminShopPhotosPage() {
               </div>
             </div>
             {item.description && <div className="text-xs text-textDim line-clamp-2">{item.description}</div>}
-            <div className="text-xs text-textDim">
-              {item.source_retailer} —{" "}
-              <a href={item.source_url} target="_blank" rel="noopener noreferrer" className="underline text-brand2 break-all">
-                source link ↗
-              </a>
-            </div>
+            {/* 26 Aug 2026, Steven: "i will need the link for the item on
+                the admin dashboard so i know where to get the photos
+                from." Made this a full-width button rather than an inline
+                text link — it's the first thing to click on this card. */}
+            <a
+              href={item.source_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block w-full text-center text-xs font-bold border border-brand2 text-brand2 rounded-lg py-1.5 hover:bg-brand2/10"
+            >
+              Open on {item.source_retailer} ↗
+            </a>
             <div className="flex gap-2">
               <input
                 type="text"

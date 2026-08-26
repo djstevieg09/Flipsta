@@ -1,186 +1,105 @@
-"use client";
-
-import { useEffect, useState } from "react";
-
-type WonOpportunity = {
-  id: string;
-  categories: { name: string } | null;
-  source_tier: string;
-  status: string;
-  source_retailer?: string | null;
-  source_url?: string | null;
-  source_price_gbp?: number | null;
-};
-type Listing = {
-  id: string;
-  price_gbp: number;
-  sold_at: string | null;
-  products: { title: string; condition: string } | null;
-  listing_channel_posts: { channel: string; status: string; external_url: string | null }[];
-};
-type Order = { id: string; price_gbp: number; status: string; created_at: string; listings: { products: { title: string } | null } | null };
+import { requireStaff } from "@/lib/adminGuard";
+import { createSupabaseServiceClient } from "@/lib/supabase/server";
+import { getBusinessMetrics } from "@/lib/businessMetrics";
+import BarChart from "./BarChart";
 
 /**
- * Section 12.1's "self serving" ask, made real: everything a seller needs
- * to see about their own activity — wins, listings (with cross-post
- * status), and orders both bought and sold — without an admin in the loop.
+ * Section 12.1 — the one screen to check first. Server component: queries
+ * run once at request time using the service-role client (the same reason
+ * every other /api/admin/* route uses it — these tables have no RLS policy
+ * granting the plain "authenticated" role access, on purpose).
  */
-export default function PortfolioPage() {
-  const [won, setWon] = useState<WonOpportunity[]>([]);
-  const [listings, setListings] = useState<Listing[]>([]);
-  const [ordersAsBuyer, setOrdersAsBuyer] = useState<Order[]>([]);
-  const [ordersAsSeller, setOrdersAsSeller] = useState<Order[]>([]);
-  const [signedIn, setSignedIn] = useState(true);
+export default async function AdminOverviewPage() {
+  await requireStaff("support");
+  const supabase = createSupabaseServiceClient();
 
-  useEffect(() => {
-    fetch("/api/opportunities?won=true").then(async (r) => {
-      if (r.status === 401) {
-        setSignedIn(false);
-        return;
-      }
-      const d = await r.json();
-      setWon(d.opportunities ?? []);
-    });
-    fetch("/api/listings?mine=true")
-      .then((r) => r.json())
-      .then((d) => setListings(d.listings ?? []));
-    fetch("/api/orders")
-      .then((r) => r.json())
-      .then((d) => {
-        setOrdersAsBuyer(d.asBuyer ?? []);
-        setOrdersAsSeller(d.asSeller ?? []);
-      });
-  }, []);
+  const [{ count: sellerCount }, { count: openTickets }, { count: breachRiskTickets }, { count: openFlags }, { count: highFlags }, { count: pendingPartners }, { count: shopPhotosNeeded }, { data: escrowOrders }, metrics] =
+    await Promise.all([
+      supabase.from("profiles").select("id", { count: "exact", head: true }),
+      supabase.from("tickets").select("id", { count: "exact", head: true }).neq("status", "resolved"),
+      supabase.from("tickets").select("id", { count: "exact", head: true }).eq("priority", "high").neq("status", "resolved"),
+      supabase.from("risk_flags").select("id", { count: "exact", head: true }).eq("status", "open"),
+      supabase.from("risk_flags").select("id", { count: "exact", head: true }).eq("status", "open").eq("severity", "high"),
+      supabase.from("partners").select("id", { count: "exact", head: true }).eq("status", "pending"),
+      // 26 Aug 2026, Steven: "if any pictures missing from listings it goes
+      // to admin dashboard to add a picture before its uploaded to shop."
+      supabase.from("shop_items").select("id", { count: "exact", head: true }).eq("status", "available").is("image_url", null),
+      supabase.from("orders").select("price_gbp").is("funds_released_at", null),
+      // 26 Aug 2026, Steven: "need this to show me exactly where the
+      // buisness is" + "i need graphs, i need new signups."
+      getBusinessMetrics(supabase),
+    ]);
 
-  if (!signedIn) {
-    return (
+  const escrowHeldGBP = (escrowOrders ?? []).reduce((sum: number, o: any) => sum + Number(o.price_gbp ?? 0), 0);
+
+  const signupsDeltaPct =
+    metrics.signupsPrev7 > 0 ? Math.round(((metrics.signupsLast7 - metrics.signupsPrev7) / metrics.signupsPrev7) * 100) : null;
+  const revenueDeltaPct =
+    metrics.revenuePrev7GBP > 0
+      ? Math.round(((metrics.revenueLast7GBP - metrics.revenuePrev7GBP) / metrics.revenuePrev7GBP) * 100)
+      : null;
+
+  const tiles = [
+    {
+      label: "New signups (7d)",
+      value: metrics.signupsLast7,
+      sub: signupsDeltaPct === null ? undefined : `${signupsDeltaPct >= 0 ? "+" : ""}${signupsDeltaPct}% vs prior 7d`,
+    },
+    {
+      label: "Revenue (7d)",
+      value: `£${metrics.revenueLast7GBP.toFixed(2)}`,
+      sub: revenueDeltaPct === null ? undefined : `${revenueDeltaPct >= 0 ? "+" : ""}${revenueDeltaPct}% vs prior 7d`,
+    },
+    { label: "Total sellers", value: sellerCount ?? 0 },
+    { label: "Active resellers", value: metrics.activeResellers, sub: "Pro/Elite" },
+    { label: "Open tickets", value: openTickets ?? 0, sub: `${breachRiskTickets ?? 0} high priority` },
+    { label: "Escrow held", value: `£${escrowHeldGBP.toFixed(2)}`, sub: `${escrowOrders?.length ?? 0} orders` },
+    { label: "Open risk flags", value: openFlags ?? 0, sub: `${highFlags ?? 0} high severity` },
+    { label: "Partners pending", value: pendingPartners ?? 0 },
+    { label: "Shop photos needed", value: shopPhotosNeeded ?? 0 },
+  ];
+
+  return (
+    <div className="space-y-4">
       <p className="text-textDim text-sm">
-        <a className="underline" href="/login">Sign in</a> to see your portfolio.
+        Live counts from the real database — no mock data. See <code>/admin/tickets</code>,{" "}
+        <code>/admin/risk</code>, <code>/admin/partners</code>, <code>/admin/shop-photos</code>, and{" "}
+        <code>/admin/resellers</code> to act on any of these.
       </p>
-    );
-  }
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        {tiles.map((t) => (
+          <div key={t.label} className="card">
+            <div className="text-xs text-textDim uppercase tracking-wide mb-2">{t.label}</div>
+            <div className="text-2xl font-extrabold">{t.value}</div>
+            {t.sub && <div className="text-xs text-textDim mt-1">{t.sub}</div>}
+          </div>
+        ))}
+      </div>
 
-  const unlistedWins = won.filter((o) => o.status === "won");
-
-  return (
-    <div className="space-y-8">
-      <h1 className="text-2xl font-bold">Portfolio</h1>
-
-      <section className="space-y-2">
-        <h2 className="font-bold text-lg">Won opportunities</h2>
-        {unlistedWins.length > 0 && (
-          <p className="text-xs text-gold">
-            {unlistedWins.length} won and not listed yet — <a className="underline" href="/sell/new">list one now</a>.
-          </p>
-        )}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {won.map((o) => (
-            <div key={o.id} className="card">
-              <div className="font-bold text-sm">{o.categories?.name ?? "Item"}</div>
-              <div className="text-xs text-textDim">{o.source_tier}</div>
-              <div className="text-xs mt-1 capitalize">{o.status}</div>
-              {/* Section 5's blind-teaser reveal, made visible: everything below
-                  this line is redacted on the public feed and only ever comes
-                  back from the API once you've actually won the opportunity. */}
-              {o.source_retailer && (
-                <div className="mt-2 pt-2 border-t border-border space-y-0.5">
-                  <div className="text-xs font-bold">{o.source_retailer}</div>
-                  {typeof o.source_price_gbp === "number" && (
-                    <div className="text-xs text-textDim">Source price: £{o.source_price_gbp.toFixed(2)}</div>
-                  )}
-                  {o.source_url && (
-                    <a href={o.source_url} target="_blank" rel="noopener noreferrer" className="text-xs underline text-textDim break-all">
-                      {o.source_url}
-                    </a>
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
-          {won.length === 0 && <p className="text-textDim text-sm">No wins yet — browse Live Opportunities.</p>}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="card">
+          <div className="text-xs text-textDim uppercase tracking-wide mb-2">New signups — last 14 days</div>
+          {/* 26 Aug 2026 real production bug, first time Steven actually
+              loaded /admin against a live deploy: this used to pass a
+              `formatValue` function prop straight from this server
+              component into BarChart (a Client Component) — Next.js can't
+              serialize a function across that boundary, so the whole page
+              500'd. Fixed by pre-formatting each point's tooltip text here
+              instead, so only a plain string crosses the boundary — see
+              BarChart.tsx's comment for the full explanation. */}
+          <BarChart
+            data={metrics.dailySignups.map((d) => ({ date: d.date, value: d.count, label: `${d.count} signup${d.count === 1 ? "" : "s"}` }))}
+            color="#22d3ee"
+          />
         </div>
-      </section>
-
-      <section className="space-y-2">
-        <h2 className="font-bold text-lg">My listings</h2>
-        <div className="card p-0 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-textDim text-xs uppercase border-b border-border">
-                <th className="p-3">Item</th>
-                <th className="p-3">Price</th>
-                <th className="p-3">Status</th>
-                <th className="p-3">Cross-posted to</th>
-              </tr>
-            </thead>
-            <tbody>
-              {listings.map((l) => (
-                <tr key={l.id} className="border-b border-border last:border-0">
-                  <td className="p-3 font-bold">{l.products?.title ?? "—"}</td>
-                  <td className="p-3">£{Number(l.price_gbp).toFixed(2)}</td>
-                  <td className="p-3">{l.sold_at ? "Sold" : "Live"}</td>
-                  <td className="p-3 text-textDim">
-                    {l.listing_channel_posts.length === 0
-                      ? "—"
-                      : l.listing_channel_posts.map((c) => `${c.channel} (${c.status})`).join(", ")}
-                  </td>
-                </tr>
-              ))}
-              {listings.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="p-6 text-center text-textDim">
-                    No listings yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+        <div className="card">
+          <div className="text-xs text-textDim uppercase tracking-wide mb-2">Revenue (GMV) — last 14 days</div>
+          <BarChart
+            data={metrics.dailyRevenueGBP.map((d) => ({ date: d.date, value: d.gbp, label: `£${d.gbp.toFixed(2)}` }))}
+            color="#5b7cfa"
+          />
         </div>
-      </section>
-
-      <section className="space-y-2">
-        <h2 className="font-bold text-lg">My sales</h2>
-        <OrdersTable orders={ordersAsSeller} />
-      </section>
-
-      <section className="space-y-2">
-        <h2 className="font-bold text-lg">My purchases</h2>
-        <OrdersTable orders={ordersAsBuyer} />
-      </section>
-    </div>
-  );
-}
-
-function OrdersTable({ orders }: { orders: Order[] }) {
-  return (
-    <div className="card p-0 overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="text-left text-textDim text-xs uppercase border-b border-border">
-            <th className="p-3">Item</th>
-            <th className="p-3">Price</th>
-            <th className="p-3">Status</th>
-            <th className="p-3">Date</th>
-          </tr>
-        </thead>
-        <tbody>
-          {orders.map((o) => (
-            <tr key={o.id} className="border-b border-border last:border-0">
-              <td className="p-3 font-bold">{o.listings?.products?.title ?? "—"}</td>
-              <td className="p-3">£{Number(o.price_gbp).toFixed(2)}</td>
-              <td className="p-3 capitalize">{o.status.replace(/_/g, " ")}</td>
-              <td className="p-3 text-textDim">{new Date(o.created_at).toLocaleDateString()}</td>
-            </tr>
-          ))}
-          {orders.length === 0 && (
-            <tr>
-              <td colSpan={4} className="p-6 text-center text-textDim">
-                None yet.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+      </div>
     </div>
   );
 }

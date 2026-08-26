@@ -60,11 +60,32 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ items: data });
   }
 
-  const { data, error } = await supabase
+  // 26 Aug 2026, Steven: "catagories and basket and all that jazz" — ?category=slug
+  // filters to one category. Filtering by the categories table's slug (not
+  // id) keeps the URL human-readable and matches how /api/products filters
+  // too, so /shop can use the same query param for both sections.
+  const categorySlug = req.nextUrl.searchParams.get("category");
+  let categoryId: string | null = null;
+  if (categorySlug) {
+    const { data: category } = await supabase.from("categories").select("id").eq("slug", categorySlug).maybeSingle();
+    if (!category) return NextResponse.json({ items: [] }); // unknown slug — nothing can match, same as an empty result
+    categoryId = category.id;
+  }
+
+  // 26 Aug 2026, Steven: "if any pictures missing from listings it goes to
+  // admin dashboard to add a picture before its uploaded to shop." A row
+  // with no image_url (the AI sometimes can't find a usable product photo)
+  // stays out of this public listing entirely — see
+  // /admin/shop-items-missing-photos, which is the only place these rows
+  // show up until a photo is added (see PATCH /api/admin/shop-items/[id]).
+  let query = supabase
     .from("shop_items")
     .select(PUBLIC_SHOP_ITEM_COLUMNS)
     .eq("status", "available")
+    .not("image_url", "is", null)
     .order("created_at", { ascending: true }); // oldest-first within a group keeps the representative row stable across refreshes
+  if (categoryId) query = query.eq("category_id", categoryId);
+  const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   type Row = {
@@ -79,14 +100,19 @@ export async function GET(req: NextRequest) {
     categories: { name: string } | { name: string }[] | null;
   };
 
-  const groups = new Map<string, Row & { unitsAvailable: number }>();
+  // 26 Aug 2026, Steven: "one click, several linked charges" for the basket
+  // (confirmed via AskUserQuestion) — each group needs every available row
+  // id, not just one representative, so the basket can request N distinct
+  // units of the same product without a second round-trip per unit.
+  const groups = new Map<string, Row & { unitsAvailable: number; itemIds: string[] }>();
   for (const row of (data ?? []) as Row[]) {
     const key = `${row.product_name}|${row.our_price_gbp}`;
     const existing = groups.get(key);
     if (existing) {
       existing.unitsAvailable++;
+      existing.itemIds.push(row.id);
     } else {
-      groups.set(key, { ...row, unitsAvailable: 1 });
+      groups.set(key, { ...row, unitsAvailable: 1, itemIds: [row.id] });
     }
   }
 

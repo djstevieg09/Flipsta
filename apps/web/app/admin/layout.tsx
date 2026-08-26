@@ -31,6 +31,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <a href="/admin/sellers" className="px-3 py-2 rounded-lg hover:bg-surface2">Sellers</a>
         <a href="/admin/tickets" className="px-3 py-2 rounded-lg hover:bg-surface2">Tickets</a>
         <a href="/admin/partners" className="px-3 py-2 rounded-lg hover:bg-surface2">Partners</a>
+        {/* 26 Aug 2026, Steven: "if any pictures missing from listings it
+            goes to admin dashboard to add a picture before its uploaded to
+            shop." */}
+        <a href="/admin/shop-photos" className="px-3 py-2 rounded-lg hover:bg-surface2">Shop photos</a>
         <a href="/admin/risk" className="px-3 py-2 rounded-lg hover:bg-surface2">Risk &amp; Fraud</a>
         <a href="/admin/audit" className="px-3 py-2 rounded-lg hover:bg-surface2">Audit Log</a>
       </nav>

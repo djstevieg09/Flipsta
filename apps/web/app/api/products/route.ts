@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 // Force-dynamic: every route here reads live application data (bids, wallet
@@ -10,18 +10,43 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 // opportunities to not show up on /opportunities on 25 Aug 2026.
 export const dynamic = "force-dynamic";
 
-/** GET /api/products — catalogue with each product's pooled lowest ask (Section 11.4). */
-export async function GET() {
+/**
+ * GET /api/products — catalogue with each product's pooled lowest ask
+ * (Section 11.4). ?category=slug filters to one category, matching
+ * /api/shop-items so /shop can use the same query param for both sections.
+ */
+export async function GET(req: NextRequest) {
   const supabase = await createSupabaseServerClient();
-  const { data: products, error } = await supabase
+
+  const categorySlug = req.nextUrl.searchParams.get("category");
+  let categoryId: string | null = null;
+  if (categorySlug) {
+    const { data: category } = await supabase.from("categories").select("id").eq("slug", categorySlug).maybeSingle();
+    if (!category) return NextResponse.json({ products: [] });
+    categoryId = category.id;
+  }
+
+  let query = supabase
     .from("products")
-    .select("id, title, condition, description, image_url, category_id, categories(name), listings(price_gbp, sold_at)");
+    // listings.id added 26 Aug 2026 for the basket — "Add to basket" needs a
+    // specific listingId to hand to POST /api/orders later (each listing is
+    // a distinct seller's ask, unlike shop_items' grouped-by-product rows).
+    .select("id, title, condition, description, image_url, category_id, categories(name), listings(id, price_gbp, sold_at)");
+  if (categoryId) query = query.eq("category_id", categoryId);
+  const { data: products, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const withPricing = (products ?? []).map((p) => {
     const openListings = (p.listings ?? []).filter((l: any) => !l.sold_at);
-    const lowest = openListings.length ? Math.min(...openListings.map((l: any) => l.price_gbp)) : null;
-    return { ...p, lowestPriceGBP: lowest, sellerCount: openListings.length };
+    const lowest = openListings.length
+      ? openListings.reduce((best: any, l: any) => (l.price_gbp < best.price_gbp ? l : best))
+      : null;
+    return {
+      ...p,
+      lowestPriceGBP: lowest ? lowest.price_gbp : null,
+      cheapestListingId: lowest ? lowest.id : null,
+      sellerCount: openListings.length,
+    };
   });
 
   return NextResponse.json({ products: withPricing });

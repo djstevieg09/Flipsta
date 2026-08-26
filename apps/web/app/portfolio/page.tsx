@@ -184,8 +184,10 @@ export default function PortfolioPage() {
                 heading; avoid language implying Flipsta itself is the one
                 shipping the order. */}
             <h3 className="font-bold text-sm text-textDim mb-1">AI-sourced deals</h3>
+            {/* 26 Aug 2026, Steven: "Does not need to say brought and
+                shipped. Only needs to say shipped." */}
             <p className="text-[10px] text-textFaint mb-2">
-              Bought and shipped by an independent Flipsta reseller. Any issue with an order — raise it via Support,
+              Shipped by an independent Flipsta reseller. Any issue with an order — raise it via Support,
               not the original retailer.
             </p>
             {confirmMessage && <p className="text-xs text-brand2 mb-2">{confirmMessage}</p>}

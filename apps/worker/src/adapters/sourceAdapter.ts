@@ -6,6 +6,13 @@
  */
 export interface CandidateDeal {
   categorySlug: string;
+  /** The specific product's real name, e.g. "Eaglemoss Star Trek Klingon
+   * Bird-of-Prey Die-Cast Model" — becomes the listing title once someone
+   * wins it (see discoverOpportunities.ts / apps/web/app/sell/new). */
+  productName: string;
+  /** A real product image URL if one was found, else null — never a
+   * placeholder or invented URL. */
+  imageUrl: string | null;
   sourceTier: string;
   sourceRetailer: string;
   sourceUrl: string;

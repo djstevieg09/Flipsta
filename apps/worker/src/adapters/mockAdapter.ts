@@ -9,6 +9,8 @@ import { SourceAdapter, CandidateDeal } from "./sourceAdapter.js";
 const SAMPLE_POOL: Omit<CandidateDeal, "sourcePriceGBP" | "estimatedResalePriceGBP">[] = [
   {
     categorySlug: "collectibles",
+    productName: "Sample Collectible Figure",
+    imageUrl: null,
     sourceTier: "Independent retailer clearance",
     sourceRetailer: "Sample Retailer Ltd",
     sourceUrl: "https://example.com/sample-collectible",
@@ -18,6 +20,8 @@ const SAMPLE_POOL: Omit<CandidateDeal, "sourcePriceGBP" | "estimatedResalePriceG
   },
   {
     categorySlug: "tech",
+    productName: "Sample Bluetooth Speaker",
+    imageUrl: null,
     sourceTier: "Major online marketplace overstock",
     sourceRetailer: "Sample Marketplace",
     sourceUrl: "https://example.com/sample-tech",
@@ -27,6 +31,8 @@ const SAMPLE_POOL: Omit<CandidateDeal, "sourcePriceGBP" | "estimatedResalePriceG
   },
   {
     categorySlug: "footwear",
+    productName: "Sample Running Trainers",
+    imageUrl: null,
     sourceTier: "Independent retailer clearance",
     sourceRetailer: "Sample Sneaker Store",
     sourceUrl: "https://example.com/sample-footwear",

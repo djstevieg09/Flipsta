@@ -157,6 +157,16 @@ const REPORT_TOOL = {
           type: "object",
           properties: {
             category_slug: { type: "string", enum: [...VALID_CATEGORY_SLUGS] },
+            product_name: {
+              type: "string",
+              description:
+                "The specific product's real name, as it appears on the source page — e.g. 'Eaglemoss Star Trek Klingon Bird-of-Prey Die-Cast Model', not just its category. This becomes the listing title once someone wins it, so be specific and accurate — no invented model numbers or details you didn't actually see.",
+            },
+            image_url: {
+              type: ["string", "null"],
+              description:
+                "A real product image URL for this exact item, if one is visible in the page content you fetched (an <img> src, an og:image, etc.). null if you didn't see one — don't guess or invent one.",
+            },
             source_tier: {
               type: "string",
               description: "Short description of the source, e.g. 'Major UK high-street clearance', 'Independent retailer clearance'.",
@@ -183,6 +193,7 @@ const REPORT_TOOL = {
           },
           required: [
             "category_slug",
+            "product_name",
             "source_tier",
             "source_retailer",
             "source_url",
@@ -391,6 +402,10 @@ async function discoverFromSource(source: CuratedSource): Promise<CandidateDeal[
         console.warn(`[claudeSearchAdapter] Dropped a reported deal — missing source_url: ${JSON.stringify(d)}`);
         continue;
       }
+      if (typeof d.product_name !== "string" || !d.product_name.trim()) {
+        console.warn(`[claudeSearchAdapter] Dropped a reported deal — missing product_name: ${JSON.stringify(d)}`);
+        continue;
+      }
 
       // Not persisted (no DB column for it yet) but logged so an admin can
       // spot-check early real runs against what Claude actually found —
@@ -401,6 +416,8 @@ async function discoverFromSource(source: CuratedSource): Promise<CandidateDeal[
 
       candidates.push({
         categorySlug,
+        productName: d.product_name.trim(),
+        imageUrl: typeof d.image_url === "string" && d.image_url ? d.image_url : null,
         sourceTier: typeof d.source_tier === "string" ? d.source_tier : "Web-sourced",
         sourceRetailer: typeof d.source_retailer === "string" ? d.source_retailer : "Unknown retailer",
         sourceUrl: d.source_url,

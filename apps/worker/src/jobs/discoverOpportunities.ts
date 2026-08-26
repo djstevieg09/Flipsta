@@ -93,6 +93,8 @@ export async function discoverOpportunities(adapter: SourceAdapter, targetOpport
     // instead of stopping early on a phantom success.
     const { error: insertError } = await db.from("opportunities").insert({
       category_id: category.id,
+      product_name: c.productName,
+      image_url: c.imageUrl,
       source_tier: c.sourceTier,
       source_retailer: c.sourceRetailer,
       source_url: c.sourceUrl,

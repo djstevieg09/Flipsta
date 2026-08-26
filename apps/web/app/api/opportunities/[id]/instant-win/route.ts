@@ -34,12 +34,26 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   // Instant-win short-circuits the live auction immediately — see the design
   // note in apps/worker/src/jobs/closeExpiredAuctions.ts for how the normal
   // (non-instant-win) case decides a winner when the action clock expires.
-  const { error: updateError } = await supabase
+  //
+  // 26 Aug 2026 real bug: an update that matches zero rows (whether from
+  // the .eq() filters below, or — what actually happened in production —
+  // an RLS policy silently blocking it) returns NO error from
+  // supabase-js, just an empty result. The old code only checked
+  // `error`, so it reported "You won it!" even when nothing had changed.
+  // Chaining .select() and checking that a row actually came back is what
+  // catches both a real RLS gap (see migration 0011) and the legitimate
+  // case of someone else winning it a moment earlier.
+  const { data: updated, error: updateError } = await supabase
     .from("opportunities")
     .update({ status: "won", won_by: auth.userId })
     .eq("id", id)
-    .eq("status", "live"); // optimistic concurrency guard against two simultaneous instant-wins
+    .eq("status", "live") // optimistic concurrency guard against two simultaneous instant-wins
+    .select("id")
+    .maybeSingle();
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
+  if (!updated) {
+    return NextResponse.json({ error: "This opportunity was just won by someone else, or is no longer live." }, { status: 409 });
+  }
 
   await supabase.from("bids").insert({
     opportunity_id: id,

@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/currentProfile";
 import { createEscrowPaymentIntent } from "@/lib/stripe";
-import { evaluateOffer } from "@flipsta/shared";
 
 // Force-dynamic: every route here reads live application data (bids, wallet
 // balances, opportunities, order status) straight from Supabase. Without this,
@@ -19,21 +18,29 @@ export const dynamic = "force-dynamic";
 // instead. Revealed only to the fulfiller once they've claimed the job
 // (see /api/fulfillment) — migration 0013's comments call this out too.
 const PUBLIC_SHOP_ITEM_COLUMNS =
-  "id, category_id, product_name, description, image_url, rrp_gbp, our_price_gbp, min_offer_accept_gbp, estimated_stock_units, status, created_at, categories(name)";
+  "id, category_id, product_name, description, image_url, rrp_gbp, our_price_gbp, created_at, categories(name)";
 
 /**
- * GET /api/shop-items — Flipsta's own directly-sold stock (26 Aug 2026,
- * Steven: "the RRP is to be displayed along with our price, description and
- * photos"). These are AI-sourced candidates with a genuine retailer
- * discount but no independent resale evidence — see
- * packages/shared/src/shopPricing.ts and migration 0013.
+ * GET /api/shop-items — AI-sourced deals, fulfilled by an independent
+ * Flipsta reseller once bought (26 Aug 2026, Steven: "the RRP is to be
+ * displayed along with our price, description and photos"; also Steven,
+ * on the "Sold by Flipsta" framing: "that would assume we are taking
+ * ownership of the sale. We are just a broker" — Flipsta sources and takes
+ * payment, an independent reseller actually buys and ships).
+ *
+ * Steven, 26 Aug 2026: "if there is more than one item available to buy
+ * the items should not remove themselves from the store." Each unit of
+ * stock is its own row (see discoverOpportunities.ts) so that buying one
+ * only removes that row, not the listing — grouped here by product +
+ * price into one card with a unitsAvailable count, so the store doesn't
+ * show duplicate tiles for the same product.
  *
  * GET /api/shop-items?mine=true — a different mode: the caller's own
  * purchases, at whatever status they're at, powering /portfolio's "My
  * purchases" — including a "Confirm delivery" action once status is
  * 'shipped'. source_retailer/source_url stay hidden even here; the buyer
- * never needs to know where Flipsta actually sourced it (only the
- * fulfiller does, once they claim the job — see /api/fulfillment).
+ * never needs to know where it was sourced (only the fulfiller does, once
+ * they claim the job — see /api/fulfillment).
  */
 export async function GET(req: NextRequest) {
   const supabase = await createSupabaseServerClient();
@@ -57,21 +64,43 @@ export async function GET(req: NextRequest) {
     .from("shop_items")
     .select(PUBLIC_SHOP_ITEM_COLUMNS)
     .eq("status", "available")
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: true }); // oldest-first within a group keeps the representative row stable across refreshes
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ items: data });
+
+  type Row = {
+    id: string;
+    category_id: string;
+    product_name: string;
+    description: string | null;
+    image_url: string | null;
+    rrp_gbp: number;
+    our_price_gbp: number;
+    created_at: string;
+    categories: { name: string } | { name: string }[] | null;
+  };
+
+  const groups = new Map<string, Row & { unitsAvailable: number }>();
+  for (const row of (data ?? []) as Row[]) {
+    const key = `${row.product_name}|${row.our_price_gbp}`;
+    const existing = groups.get(key);
+    if (existing) {
+      existing.unitsAvailable++;
+    } else {
+      groups.set(key, { ...row, unitsAvailable: 1 });
+    }
+  }
+
+  return NextResponse.json({ items: Array.from(groups.values()) });
 }
 
 /**
- * POST /api/shop-items — Buy Now or Make an Offer. Steven: "should have a
- * buy now button and also a make an offer. The website is to work out the
- * offer and after taking into consideration all the fees for buying and
- * shipping etc to auto accept the offer." evaluateOffer (shopPricing.ts)
- * already has those fees baked into min_offer_accept_gbp at listing time,
- * so this route is just the accept/reject + checkout wiring.
+ * POST /api/shop-items — Buy Now. (Make an Offer was removed 26 Aug 2026,
+ * Steven: "Also take away the offer button" — the pricing/accept-offer
+ * logic still lives in packages/shared/src/shopPricing.ts if this comes
+ * back later, this route just no longer calls it.)
  *
- * Either path holds payment via Stripe manual capture — Steven: "the money
- * does not get released until the item has been delivered" — see
+ * Payment is held via Stripe manual capture — Steven: "the money does not
+ * get released until the item has been delivered" — see
  * /api/shop-items/[id]/confirm-delivery for the actual release, which also
  * pays the fulfiller.
  */
@@ -79,45 +108,30 @@ export async function POST(req: NextRequest) {
   const auth = await getCurrentProfile();
   if (!auth) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
 
-  const { itemId, action, offerGBP, shippingAddress } = await req.json();
-  if (!itemId || (action !== "buy" && action !== "offer")) {
-    return NextResponse.json({ error: "itemId and a valid action ('buy' or 'offer') are required." }, { status: 400 });
-  }
+  const { itemId, shippingAddress } = await req.json();
+  if (!itemId) return NextResponse.json({ error: "itemId is required." }, { status: 400 });
 
   const supabase = await createSupabaseServerClient();
   const { data: item, error: itemError } = await supabase
     .from("shop_items")
-    .select("id, status, our_price_gbp, min_offer_accept_gbp, fulfillment_reward_gbp, fulfiller_reimbursement_gbp")
+    .select("id, status, our_price_gbp")
     .eq("id", itemId)
     .single();
   if (itemError || !item) return NextResponse.json({ error: "Item not found." }, { status: 404 });
   if (item.status !== "available") {
-    return NextResponse.json({ error: "This item is no longer available." }, { status: 409 });
+    // Most likely a sibling unit of the same product got bought a moment
+    // ago and this exact row was the one picked — the client should just
+    // reload the shop list and try again, same as an Instant Win race.
+    return NextResponse.json({ error: "This item was just bought by someone else — refresh and try again." }, { status: 409 });
   }
 
-  let soldPriceGBP: number;
-  if (action === "buy") {
-    soldPriceGBP = item.our_price_gbp;
-  } else {
-    const offer = Number(offerGBP);
-    if (!(offer > 0)) return NextResponse.json({ error: "offerGBP must be a positive amount." }, { status: 400 });
-    const decision = evaluateOffer(
-      {
-        ourPriceGBP: item.our_price_gbp,
-        minOfferAcceptGBP: item.min_offer_accept_gbp,
-        fulfillmentRewardGBP: item.fulfillment_reward_gbp,
-        fulfillerReimbursementGBP: item.fulfiller_reimbursement_gbp,
-      },
-      offer,
-    );
-    if (!decision.accepted) {
-      return NextResponse.json({ error: decision.reason ?? "We can't accept that offer." }, { status: 409 });
-    }
-    soldPriceGBP = offer;
-  }
+  const soldPriceGBP = item.our_price_gbp;
 
-  // No connectedAccountId — Flipsta itself is the seller here, not a peer
-  // (see lib/stripe.ts's updated createEscrowPaymentIntent comment).
+  // No connectedAccountId — Flipsta collects payment here but isn't the
+  // one shipping the item, so there's no Connect account to route the
+  // eventual capture to (see lib/stripe.ts's createEscrowPaymentIntent
+  // comment). The fulfiller who actually buys and ships it is paid
+  // separately via a wallet_transactions credit on delivery confirmation.
   const paymentIntent = await createEscrowPaymentIntent({
     amountGBP: soldPriceGBP,
     metadata: { shopItemId: itemId, buyerId: auth.userId },
@@ -144,7 +158,7 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
   if (!updated) {
-    return NextResponse.json({ error: "This item was just bought by someone else." }, { status: 409 });
+    return NextResponse.json({ error: "This item was just bought by someone else — refresh and try again." }, { status: 409 });
   }
 
   return NextResponse.json(

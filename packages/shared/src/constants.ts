@@ -132,10 +132,35 @@ export const REVIEW_RATING_MAX = 5;
  */
 export const SHOP_ITEM_PAYMENT_PROCESSING_RATE = 0.029; // card processing cut taken off our_price
 export const SHOP_ITEM_ESTIMATED_SHIPPING_GBP = 4.99; // typical UK parcel — reimbursed to the fulfiller alongside source cost
-export const SHOP_ITEM_FULFILLMENT_REWARD_GBP = 8; // flat "free button to press" incentive per job, on top of reimbursement
+// 26 Aug 2026, Steven, after seeing a real £32 pair of shoes only earn a
+// flat £8 reward: "Also a reward set at percentages. The more expensive
+// the item the better the reward as the reseller is locking up more
+// capital." A fulfiller fronts the full source price out of their own
+// pocket until they're reimbursed, so the reward now scales with what
+// they're actually floating — SHOP_ITEM_FULFILLMENT_REWARD_MIN_GBP keeps a
+// cheap item's reward from rounding down to something not worth bothering
+// with.
+export const SHOP_ITEM_FULFILLMENT_REWARD_PCT = 0.08; // % of the fulfiller's reimbursement (their locked-up capital)
+export const SHOP_ITEM_FULFILLMENT_REWARD_MIN_GBP = 5;
 export const SHOP_ITEM_PLATFORM_MARGIN_GBP = 5; // what Flipsta keeps once reimbursement + reward + fees are covered
+// 26 Aug 2026, Steven: "if there is more than one item available to buy
+// the items should not remove themselves from the store." Each unit of
+// stock a discovery candidate reports becomes its OWN shop_items row (see
+// discoverOpportunities.ts) so selling one unit only removes that one row
+// — the product itself stays listed on /shop as long as a sibling row is
+// still available (grouped for display in api/shop-items/route.ts). This
+// caps how many duplicate rows one candidate can flood the table with if
+// the AI reports an implausibly large stock count.
+export const SHOP_ITEM_MAX_UNITS_LISTED = 10;
 export const SHOP_ITEM_MIN_DISCOUNT_VS_RRP_PCT = 0.08; // must land at least 8% below RRP or there's no real deal to offer
-export const SHOP_ITEM_MIN_OFFER_ACCEPT_PCT_OF_OUR_PRICE = 0.9; // Make an Offer auto-accepts at or above 90% of Buy Now
+// 26 Aug 2026, Steven, on the break-even price shopPricing.ts computes:
+// "thats rck bottom so if someone makes an offer we cannot go lower. maybe
+// add 10% on for wiggle room." The break-even amount (covers fulfiller
+// reimbursement + reward + margin + payment fees, and NOTHING else) is now
+// the true Make-an-Offer floor — it never moves. The Buy Now price shown to
+// customers is that floor plus this markup, so there's room to negotiate
+// down from the listed price without ever actually selling below cost.
+export const SHOP_ITEM_OFFER_WIGGLE_ROOM_PCT = 0.1;
 // Fairness (Steven: "make sure this is fair so one person isnt bashing all
 // the orders as they come in. maybe put a time delay or limit or something"):
 export const SHOP_ITEM_FULFILLMENT_CLAIM_WINDOW_HOURS = 48; // a claimed job with no shipment past this auto-releases

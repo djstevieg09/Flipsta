@@ -9,8 +9,7 @@ type ShopItem = {
   image_url: string | null;
   rrp_gbp: number;
   our_price_gbp: number;
-  min_offer_accept_gbp: number;
-  estimated_stock_units: number;
+  unitsAvailable: number;
   categories: { name: string } | null;
 };
 
@@ -24,25 +23,35 @@ type Product = {
   sellerCount: number;
 };
 
+// 26 Aug 2026, Steven, on "Sold by Flipsta": "that would assume we are
+// taking ownership of the sale. We are just a broker. so returns people
+// will think they need to return to Flipsta when this is being fulfilled
+// by our resellers." Flipsta sources the deal and takes payment (held in
+// escrow — see api/shop-items/route.ts), but an independent Pro/Elite
+// reseller is the one who actually buys and ships it (api/fulfillment).
+// This line is shown wherever a buyer might reasonably assume Flipsta
+// itself is shipping the parcel, and routes them to the existing support
+// ticket system — Section 11's "sole channel for buyer-seller
+// communication" per the terms draft — rather than implying "return it to
+// Flipsta" like a normal retailer.
+const FULFILLED_BY_RESELLER_NOTE =
+  "Sourced by Flipsta, bought and shipped by an independent Flipsta reseller once you order. Flipsta holds payment and handles support — for any issue with an order, raise it via Support rather than contacting the retailer.";
+
 /**
  * 26 Aug 2026, Steven: "the RRP is to be displayed along with our price,
- * description and photos, should have a buy now button and also a make an
- * offer. The website is to work out the offer and after taking into
- * consideration all the fees for buying and shipping etc to auto accept
- * the offer." These come from discoverOpportunities.ts's shop_candidates
- * path — a genuine retailer discount the AI found but couldn't back with
- * independent resale evidence — sold and fulfilled directly by Flipsta
- * (see /api/shop-items, /api/fulfillment) rather than via the bid/auction
- * opportunities flow. Shown above "Sold by other sellers" below, which is
- * the original peer-to-peer pooled catalogue (Section 11.4) — a different,
+ * description and photos, should have a buy now button." These come from
+ * discoverOpportunities.ts's shop_candidates path — a genuine retailer
+ * discount the AI found but couldn't back with independent resale evidence.
+ * Shown above "Sold by other sellers" below, which is the original
+ * peer-to-peer pooled catalogue (Section 11.4) — a different,
  * already-working feature, still exactly as it was.
  */
 export default function ShopPage() {
   const [flipstaItems, setFlipstaItems] = useState<ShopItem[]>([]);
   const [flipstaLoading, setFlipstaLoading] = useState(true);
   const [messages, setMessages] = useState<Record<string, string>>({});
-  const [offerDrafts, setOfferDrafts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<Record<string, boolean>>({});
+  const [expanded, setExpanded] = useState<ShopItem | null>(null);
 
   const [products, setProducts] = useState<Product[]>([]);
 
@@ -66,7 +75,7 @@ export default function ShopPage() {
     const res = await fetch("/api/shop-items", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ itemId: item.id, action: "buy" }),
+      body: JSON.stringify({ itemId: item.id }),
     });
     const data = await res.json();
     setMessages((m) => ({
@@ -76,47 +85,23 @@ export default function ShopPage() {
         : data.error,
     }));
     setBusy((b) => ({ ...b, [item.id]: false }));
-    if (res.ok) loadFlipstaItems();
-  }
-
-  async function makeOffer(item: ShopItem) {
-    const raw = offerDrafts[item.id];
-    const offerGBP = Number(raw);
-    if (!raw || !(offerGBP > 0)) {
-      setMessages((m) => ({ ...m, [item.id]: "Enter a valid offer amount first." }));
-      return;
+    if (res.ok) {
+      setExpanded(null);
+      loadFlipstaItems();
     }
-    setBusy((b) => ({ ...b, [item.id]: true }));
-    const res = await fetch("/api/shop-items", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ itemId: item.id, action: "offer", offerGBP }),
-    });
-    const data = await res.json();
-    setMessages((m) => ({
-      ...m,
-      [item.id]: res.ok
-        ? `Offer of £${offerGBP.toFixed(2)} accepted — see it in your Portfolio. Held until delivery is confirmed.`
-        : data.error,
-    }));
-    setBusy((b) => ({ ...b, [item.id]: false }));
-    if (res.ok) loadFlipstaItems();
   }
 
   return (
     <div className="space-y-10">
       <div>
         <h1 className="text-2xl font-bold">Shop</h1>
-        <p className="text-textDim text-sm">Buy directly from Flipsta, or from other Flipsta sellers, all in one place.</p>
+        <p className="text-textDim text-sm">Buy AI-sourced deals, or from other Flipsta sellers, all in one place.</p>
       </div>
 
       <section className="space-y-3">
         <div>
-          <h2 className="font-bold text-lg">Sold by Flipsta</h2>
-          <p className="text-textDim text-sm">
-            Genuine discounts off RRP. Buy Now or make an offer — either way, payment is held until your order's
-            confirmed delivered.
-          </p>
+          <h2 className="font-bold text-lg">AI-Sourced Deals</h2>
+          <p className="text-textDim text-sm">Genuine discounts off RRP. {FULFILLED_BY_RESELLER_NOTE}</p>
         </div>
         {flipstaLoading && <p className="text-textDim text-sm">Loading…</p>}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -124,21 +109,36 @@ export default function ShopPage() {
             const discountPct = Math.round(((item.rrp_gbp - item.our_price_gbp) / item.rrp_gbp) * 100);
             return (
               <div key={item.id} className="card space-y-2">
-                {item.image_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={item.image_url}
-                    alt={item.product_name}
-                    className="w-full h-36 object-cover rounded-lg border border-border"
-                  />
-                ) : (
-                  <div className="w-full h-36 rounded-lg border border-border flex items-center justify-center text-[10px] text-textFaint">
-                    No photo
+                <button
+                  onClick={() => setExpanded(item)}
+                  className="block w-full text-left"
+                  aria-label={`View details for ${item.product_name}`}
+                >
+                  {item.image_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={item.image_url}
+                      alt={item.product_name}
+                      className="w-full h-36 object-cover rounded-lg border border-border hover:opacity-90 transition"
+                    />
+                  ) : (
+                    <div className="w-full h-36 rounded-lg border border-border flex items-center justify-center text-[10px] text-textFaint">
+                      No photo
+                    </div>
+                  )}
+                </button>
+                <div className="flex justify-between items-start gap-2">
+                  <div>
+                    <button onClick={() => setExpanded(item)} className="font-bold text-sm text-left hover:underline">
+                      {item.product_name}
+                    </button>
+                    <div className="text-xs text-textDim">{item.categories?.name}</div>
                   </div>
-                )}
-                <div>
-                  <div className="font-bold text-sm">{item.product_name}</div>
-                  <div className="text-xs text-textDim">{item.categories?.name}</div>
+                  {item.unitsAvailable > 1 && (
+                    <span className="text-[10px] text-textDim border border-border rounded-full px-2 py-0.5 shrink-0">
+                      {item.unitsAvailable} available
+                    </span>
+                  )}
                 </div>
                 {item.description && <div className="text-xs text-textDim line-clamp-3">{item.description}</div>}
 
@@ -156,31 +156,19 @@ export default function ShopPage() {
                 >
                   Buy Now — £{item.our_price_gbp.toFixed(2)}
                 </button>
-
-                <div className="flex gap-2">
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder={`Min £${item.min_offer_accept_gbp.toFixed(2)}`}
-                    value={offerDrafts[item.id] ?? ""}
-                    onChange={(e) => setOfferDrafts((d) => ({ ...d, [item.id]: e.target.value }))}
-                    className="flex-1 bg-surface2 border border-border rounded-lg px-2 py-1.5 text-xs"
-                  />
-                  <button
-                    onClick={() => makeOffer(item)}
-                    disabled={busy[item.id]}
-                    className="text-xs font-bold border border-border rounded-lg px-3 py-1.5 hover:border-brand2 disabled:opacity-50"
-                  >
-                    Make an Offer
-                  </button>
-                </div>
+                <button
+                  onClick={() => setExpanded(item)}
+                  className="w-full text-xs font-bold border border-border rounded-lg py-1.5 hover:border-brand2"
+                >
+                  View details
+                </button>
 
                 {messages[item.id] && <div className="text-xs text-textDim">{messages[item.id]}</div>}
               </div>
             );
           })}
           {!flipstaLoading && flipstaItems.length === 0 && (
-            <p className="text-textDim text-sm col-span-full">Nothing sold directly by Flipsta right now — check back soon.</p>
+            <p className="text-textDim text-sm col-span-full">No AI-sourced deals right now — check back soon.</p>
           )}
         </div>
       </section>
@@ -216,6 +204,54 @@ export default function ShopPage() {
           {products.length === 0 && <p className="text-textDim text-sm col-span-full">No peer listings yet.</p>}
         </div>
       </section>
+
+      {expanded && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setExpanded(null)}
+        >
+          <div
+            className="card max-w-lg w-full max-h-[90vh] overflow-y-auto space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {expanded.image_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={expanded.image_url} alt={expanded.product_name} className="w-full h-64 object-cover rounded-lg border border-border" />
+            ) : (
+              <div className="w-full h-64 rounded-lg border border-border flex items-center justify-center text-xs text-textFaint">
+                No photo
+              </div>
+            )}
+            <div className="flex justify-between items-start gap-2">
+              <div>
+                <div className="font-bold text-lg">{expanded.product_name}</div>
+                <div className="text-xs text-textDim">{expanded.categories?.name}</div>
+              </div>
+              <button onClick={() => setExpanded(null)} className="text-textDim hover:text-text text-sm shrink-0">
+                Close ✕
+              </button>
+            </div>
+            {expanded.description && <p className="text-sm text-textDim">{expanded.description}</p>}
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-extrabold">£{expanded.our_price_gbp.toFixed(2)}</span>
+              <span className="text-sm text-textFaint line-through">RRP £{expanded.rrp_gbp.toFixed(2)}</span>
+            </div>
+            {expanded.unitsAvailable > 1 && (
+              <div className="text-xs text-textDim">{expanded.unitsAvailable} available right now.</div>
+            )}
+            <p className="text-xs text-textDim border-t border-border pt-2">{FULFILLED_BY_RESELLER_NOTE}</p>
+            <button
+              onClick={() => buyNow(expanded)}
+              disabled={busy[expanded.id]}
+              className="w-full rounded-lg py-2.5 text-sm font-bold text-white disabled:opacity-50"
+              style={{ background: "linear-gradient(135deg,#5b7cfa,#22d3ee)" }}
+            >
+              Buy Now — £{expanded.our_price_gbp.toFixed(2)}
+            </button>
+            {messages[expanded.id] && <div className="text-xs text-textDim">{messages[expanded.id]}</div>}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

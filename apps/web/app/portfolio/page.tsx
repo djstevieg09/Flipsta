@@ -178,7 +178,16 @@ export default function PortfolioPage() {
 
         {shopPurchases.length > 0 && (
           <div className="pt-2">
-            <h3 className="font-bold text-sm text-textDim mb-2">Bought directly from Flipsta</h3>
+            {/* 26 Aug 2026, Steven, on "Sold by Flipsta": "that would assume
+                we are taking ownership of the sale. We are just a broker" —
+                same reasoning as the /shop page's "AI-Sourced Deals"
+                heading; avoid language implying Flipsta itself is the one
+                shipping the order. */}
+            <h3 className="font-bold text-sm text-textDim mb-1">AI-sourced deals</h3>
+            <p className="text-[10px] text-textFaint mb-2">
+              Bought and shipped by an independent Flipsta reseller. Any issue with an order — raise it via Support,
+              not the original retailer.
+            </p>
             {confirmMessage && <p className="text-xs text-brand2 mb-2">{confirmMessage}</p>}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {shopPurchases.map((p) => (

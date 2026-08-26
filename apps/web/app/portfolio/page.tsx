@@ -145,7 +145,7 @@ export default function PortfolioPage() {
                 <img
                   src={o.image_url}
                   alt={o.product_name ?? o.categories?.name ?? "Item"}
-                  className="w-full h-28 object-cover rounded-lg border border-border mb-1"
+                  className="w-full h-28 object-contain bg-surface2 rounded-lg border border-border mb-1"
                 />
               )}
               <div className="flex justify-between items-start gap-2">
@@ -198,7 +198,7 @@ export default function PortfolioPage() {
                 same reasoning as the /shop page's "AI-Sourced Deals"
                 heading; avoid language implying Flipsta itself is the one
                 shipping the order. */}
-            <h3 className="font-bold text-sm text-textDim mb-1">AI-sourced deals</h3>
+            <h3 className="font-bold text-sm text-textDim mb-1">Flipsta Sourced deals</h3>
             {/* 26 Aug 2026, Steven: "Does not need to say brought and
                 shipped. Only needs to say shipped." */}
             <p className="text-[10px] text-textFaint mb-2">
@@ -211,7 +211,7 @@ export default function PortfolioPage() {
                 <div key={p.id} className="card space-y-1">
                   {p.image_url && (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={p.image_url} alt={p.product_name} className="w-full h-28 object-cover rounded-lg border border-border mb-1" />
+                    <img src={p.image_url} alt={p.product_name} className="w-full h-28 object-contain bg-surface2 rounded-lg border border-border mb-1" />
                   )}
                   <div className="flex justify-between items-start gap-2">
                     <div className="font-bold text-sm">{p.product_name}</div>

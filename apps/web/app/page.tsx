@@ -82,7 +82,7 @@ export default function HomePage() {
               <a key={item.id} href="/shop" className="card space-y-2 hover:border-brand2 transition">
                 {item.image_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={item.image_url} alt={item.product_name} className="w-full h-28 object-cover rounded-lg border border-border" />
+                  <img src={item.image_url} alt={item.product_name} className="w-full h-28 object-contain bg-surface2 rounded-lg border border-border" />
                 ) : (
                   <div className="w-full h-28 rounded-lg border border-border flex items-center justify-center text-[10px] text-textFaint">
                     No photo

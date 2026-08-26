@@ -149,7 +149,7 @@ function BasketLineRow({
     <div className="card flex items-center gap-3">
       {line.imageUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={line.imageUrl} alt={line.productName} className="w-16 h-16 object-cover rounded-lg border border-border shrink-0" />
+        <img src={line.imageUrl} alt={line.productName} className="w-16 h-16 object-contain bg-surface2 rounded-lg border border-border shrink-0" />
       ) : (
         <div className="w-16 h-16 rounded-lg border border-border shrink-0 flex items-center justify-center text-[9px] text-textFaint">
           No photo

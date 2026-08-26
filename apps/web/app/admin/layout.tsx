@@ -41,6 +41,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <a href="/admin/shop-photos" className="px-3 py-2 rounded-lg hover:bg-surface2">Shop photos</a>
         <a href="/admin/risk" className="px-3 py-2 rounded-lg hover:bg-surface2">Risk &amp; Fraud</a>
         <a href="/admin/audit" className="px-3 py-2 rounded-lg hover:bg-surface2">Audit Log</a>
+        {/* 26 Aug 2026, Steven: "in the admin dashboard i need to be able
+            to chosse what the AI should focus on when finding deals." +
+            the seasonal "Full calendar" ask. */}
+        <a href="/admin/discovery-focus" className="px-3 py-2 rounded-lg hover:bg-surface2">AI Focus</a>
+        <a href="/admin/seasonal" className="px-3 py-2 rounded-lg hover:bg-surface2">Seasonal Calendar</a>
       </nav>
       <SundayDealsReminder />
       {children}

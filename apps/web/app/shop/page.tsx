@@ -272,7 +272,7 @@ function ShopPageInner() {
       <div className="flex-1 min-w-0 space-y-10">
         <div>
           <h1 className="text-2xl font-bold">Shop</h1>
-          <p className="text-textDim text-sm">Buy AI-sourced deals, or from other Flipsta sellers, all in one place.</p>
+          <p className="text-textDim text-sm">Buy Flipsta Sourced deals, or from other Flipsta sellers, all in one place.</p>
         </div>
 
         <div className="space-y-3">
@@ -291,7 +291,7 @@ function ShopPageInner() {
 
         <section className="space-y-3">
         <div>
-          <h2 className="font-bold text-lg">AI-Sourced Deals</h2>
+          <h2 className="font-bold text-lg">Flipsta Sourced Deals</h2>
           <p className="text-textDim text-sm">Genuine discounts off RRP. {FULFILLED_BY_RESELLER_NOTE}</p>
         </div>
         {flipstaLoading && <p className="text-textDim text-sm">Loading…</p>}
@@ -312,7 +312,7 @@ function ShopPageInner() {
                       <img
                         src={item.image_url}
                         alt={item.product_name}
-                        className="w-full h-36 object-cover rounded-lg border border-border hover:opacity-90 transition"
+                        className="w-full h-36 object-contain bg-surface2 rounded-lg border border-border hover:opacity-90 transition"
                       />
                     ) : (
                       <div className="w-full h-36 rounded-lg border border-border flex items-center justify-center text-[10px] text-textFaint">
@@ -377,7 +377,7 @@ function ShopPageInner() {
             );
           })}
           {!flipstaLoading && filteredFlipstaItems.length === 0 && (
-            <p className="text-textDim text-sm col-span-full">No AI-sourced deals match right now — check back soon.</p>
+            <p className="text-textDim text-sm col-span-full">No Flipsta Sourced deals match right now — check back soon.</p>
           )}
         </div>
       </section>
@@ -398,7 +398,7 @@ function ShopPageInner() {
                 <div className="relative">
                   {p.image_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={p.image_url} alt={p.title} className="w-full h-32 object-cover rounded-lg border border-border mb-1" />
+                    <img src={p.image_url} alt={p.title} className="w-full h-32 object-contain bg-surface2 rounded-lg border border-border mb-1" />
                   ) : (
                     <div className="w-full h-32 rounded-lg border border-border mb-1 flex items-center justify-center text-[10px] text-textFaint">
                       No photo
@@ -446,7 +446,7 @@ function ShopPageInner() {
           >
             {expanded.image_url ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={expanded.image_url} alt={expanded.product_name} className="w-full h-64 object-cover rounded-lg border border-border" />
+              <img src={expanded.image_url} alt={expanded.product_name} className="w-full h-64 object-contain bg-surface2 rounded-lg border border-border" />
             ) : (
               <div className="w-full h-64 rounded-lg border border-border flex items-center justify-center text-xs text-textFaint">
                 No photo

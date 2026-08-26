@@ -71,7 +71,7 @@ export default function WishlistPage() {
           <div key={item.id} className="card space-y-2">
             {item.image_url ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={item.image_url} alt={item.product_name} className="w-full h-32 object-cover rounded-lg border border-border" />
+              <img src={item.image_url} alt={item.product_name} className="w-full h-32 object-contain bg-surface2 rounded-lg border border-border" />
             ) : (
               <div className="w-full h-32 rounded-lg border border-border flex items-center justify-center text-[10px] text-textFaint">
                 No photo

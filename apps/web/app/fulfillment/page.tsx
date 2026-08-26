@@ -130,7 +130,7 @@ export default function FulfillmentPage() {
             <div key={job.id} className="card space-y-1">
               {job.image_url && (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={job.image_url} alt={job.product_name} className="w-full h-28 object-cover rounded-lg border border-border mb-1" />
+                <img src={job.image_url} alt={job.product_name} className="w-full h-28 object-contain bg-surface2 rounded-lg border border-border mb-1" />
               )}
               <div className="font-bold text-sm">{job.product_name}</div>
               <div className="text-xs text-textDim">{job.categories?.name}</div>
@@ -158,7 +158,7 @@ export default function FulfillmentPage() {
             <div key={c.id} className="card space-y-1">
               {c.image_url && (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={c.image_url} alt={c.product_name} className="w-full h-28 object-cover rounded-lg border border-border mb-1" />
+                <img src={c.image_url} alt={c.product_name} className="w-full h-28 object-contain bg-surface2 rounded-lg border border-border mb-1" />
               )}
               <div className="flex justify-between items-start gap-2">
                 <div className="font-bold text-sm">{c.product_name}</div>

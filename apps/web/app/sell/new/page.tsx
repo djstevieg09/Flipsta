@@ -140,7 +140,7 @@ export default function NewListingPage() {
         <div className="card flex gap-3">
           {selected.image_url ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={selected.image_url} alt={title} className="w-20 h-20 object-cover rounded-lg border border-border shrink-0" />
+            <img src={selected.image_url} alt={title} className="w-20 h-20 object-contain bg-surface2 rounded-lg border border-border shrink-0" />
           ) : (
             <div className="w-20 h-20 rounded-lg border border-border shrink-0 flex items-center justify-center text-[10px] text-textFaint text-center p-1">
               No photo captured for this item

@@ -10,6 +10,8 @@ type WonOpportunity = {
   source_retailer?: string | null;
   source_url?: string | null;
   source_price_gbp?: number | null;
+  product_name?: string | null;
+  image_url?: string | null;
   instant_win_price_gbp: number;
   estimated_resale_price_gbp: number | null;
   expected_margin_gbp: number;
@@ -87,9 +89,17 @@ export default function PortfolioPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {won.map((o) => (
             <div key={o.id} className="card space-y-1">
+              {o.image_url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={o.image_url}
+                  alt={o.product_name ?? o.categories?.name ?? "Item"}
+                  className="w-full h-28 object-cover rounded-lg border border-border mb-1"
+                />
+              )}
               <div className="flex justify-between items-start gap-2">
                 <div>
-                  <div className="font-bold text-sm">{o.categories?.name ?? "Item"}</div>
+                  <div className="font-bold text-sm">{o.product_name ?? o.categories?.name ?? "Item"}</div>
                   <div className="text-xs text-textDim">{o.source_tier}</div>
                 </div>
                 <div className="text-right shrink-0">

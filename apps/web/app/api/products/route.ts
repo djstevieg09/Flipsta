@@ -15,7 +15,7 @@ export async function GET() {
   const supabase = await createSupabaseServerClient();
   const { data: products, error } = await supabase
     .from("products")
-    .select("id, title, condition, category_id, categories(name), listings(price_gbp, sold_at)");
+    .select("id, title, condition, description, image_url, category_id, categories(name), listings(price_gbp, sold_at)");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const withPricing = (products ?? []).map((p) => {

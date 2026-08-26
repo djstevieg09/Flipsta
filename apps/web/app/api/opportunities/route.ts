@@ -81,11 +81,15 @@ export async function GET(req: NextRequest) {
   const redacted = visible.map((o) => {
     const wonByMe = auth && o.won_by === auth.userId;
     const estimatedResalePriceGBP = withEstimatedResale(o);
-    const { source_retailer, source_url, source_price_gbp, ai_reasoning, ...teaser } = o;
+    // 26 Aug 2026: product_name/image_url join the existing blind-teaser
+    // reveal-on-win set (source_retailer/source_url/source_price_gbp) — a
+    // specific product name or photo is identifying enough to make the
+    // source guessable, same reasoning as the fields already here.
+    const { source_retailer, source_url, source_price_gbp, product_name, image_url, ai_reasoning, ...teaser } = o;
     return {
       ...teaser,
       estimated_resale_price_gbp: estimatedResalePriceGBP,
-      ...(wonByMe ? { source_retailer, source_url, source_price_gbp } : {}),
+      ...(wonByMe ? { source_retailer, source_url, source_price_gbp, product_name, image_url } : {}),
       ai_reasoning: entitlements.aiExplainability ? ai_reasoning : null,
     };
   });

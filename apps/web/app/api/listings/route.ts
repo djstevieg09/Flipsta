@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Your current plan doesn't include selling on the marketplace." }, { status: 403 });
   }
 
-  const { opportunityId, title, priceGBP, condition, categoryId, autoCrossPost, channels } = await req.json();
+  const { opportunityId, title, description, imageUrl, priceGBP, condition, categoryId, autoCrossPost, channels } = await req.json();
   if (!opportunityId || !title || !priceGBP || !condition) {
     return NextResponse.json({ error: "opportunityId, title, priceGBP, and condition are required." }, { status: 400 });
   }
@@ -103,7 +103,13 @@ export async function POST(req: NextRequest) {
   if (!productId) {
     const { data: newProduct, error: productError } = await supabase
       .from("products")
-      .insert({ title, condition, category_id: categoryId ?? opportunity.category_id })
+      .insert({
+        title,
+        condition,
+        category_id: categoryId ?? opportunity.category_id,
+        description: typeof description === "string" && description ? description : null,
+        image_url: typeof imageUrl === "string" && imageUrl ? imageUrl : null,
+      })
       .select("id")
       .single();
     if (productError) return NextResponse.json({ error: productError.message }, { status: 500 });

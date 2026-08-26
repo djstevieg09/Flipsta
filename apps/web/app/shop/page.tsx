@@ -6,6 +6,8 @@ type Product = {
   id: string;
   title: string;
   condition: string;
+  description: string | null;
+  image_url: string | null;
   lowestPriceGBP: number | null;
   sellerCount: number;
 };
@@ -29,8 +31,17 @@ export default function ShopPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {products.map((p) => (
           <div key={p.id} className="card space-y-1">
+            {p.image_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={p.image_url} alt={p.title} className="w-full h-32 object-cover rounded-lg border border-border mb-1" />
+            ) : (
+              <div className="w-full h-32 rounded-lg border border-border mb-1 flex items-center justify-center text-[10px] text-textFaint">
+                No photo
+              </div>
+            )}
             <div className="font-bold text-sm">{p.title}</div>
             <div className="text-xs text-textDim">{p.condition}</div>
+            {p.description && <div className="text-xs text-textDim line-clamp-2">{p.description}</div>}
             <div className="text-lg font-extrabold">
               {p.lowestPriceGBP ? `from £${p.lowestPriceGBP.toFixed(2)}` : "No sellers yet"}
             </div>

@@ -47,6 +47,19 @@ const MIN_SAMPLE_SIZE = 5;
 const STRONG_SELL_THROUGH_PCT = 70;
 const WEAK_SELL_THROUGH_PCT = 35;
 
+// 27 Aug 2026 — real Awin price data is directly observed fact, not a
+// statistical inference the way a sell-through percentage is, so it needs
+// a much smaller sample before it's trustworthy — 3 real prices in a
+// category is a genuine signal; 5 was chosen above for a *rate* (sold/not
+// sold) specifically because a rate needs more data points to not be noise.
+const AWIN_MIN_SAMPLE_SIZE = 3;
+
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 !== 0 ? sorted[mid] : Math.round(((sorted[mid - 1] + sorted[mid]) / 2) * 100) / 100;
+}
+
 function describePerformance(label: string, soldCount: number, totalCount: number): string | null {
   if (totalCount < MIN_SAMPLE_SIZE) return null;
   const pct = (soldCount / totalCount) * 100;
@@ -72,7 +85,7 @@ async function loadDiscoveryContext(
   const recentSinceIso = new Date(Date.now() - RECENT_HISTORY_DAYS * 24 * 60 * 60 * 1000).toISOString();
   const perfSinceIso = new Date(Date.now() - PERFORMANCE_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-  const [focusResult, seasonalResult, recentOppsResult, recentShopResult, categoriesResult, perfShopResult, perfOppResult] = await Promise.all([
+  const [focusResult, seasonalResult, recentOppsResult, recentShopResult, categoriesResult, perfShopResult, perfOppResult, awinResult] = await Promise.all([
     db.from("discovery_focus").select("category_slug, status, focus_note"),
     db
       .from("seasonal_events")
@@ -84,6 +97,10 @@ async function loadDiscoveryContext(
     db.from("categories").select("id, slug"),
     db.from("shop_items").select("category_id, paid_at").gte("created_at", perfSinceIso),
     db.from("opportunities").select("category_id, won_by").gte("created_at", perfSinceIso),
+    // 27 Aug 2026 — real Awin affiliate prices (migration 0025), the "use
+    // this info to help search better" half of Steven's ask. in_stock only
+    // — a delisted/out-of-stock price isn't a live market signal.
+    db.from("affiliate_products").select("category_id, price_gbp").eq("in_stock", true).not("price_gbp", "is", null),
   ]);
 
   const pausedCategorySlugs = (focusResult.data ?? [])
@@ -141,6 +158,21 @@ async function loadDiscoveryContext(
     if (notes.length > 0) categoryPerformance[slug] = { note: notes.join("; ") };
   }
 
+  const awinPricesByCategoryId = new Map<string, number[]>();
+  for (const row of (awinResult.data ?? []) as { category_id: string | null; price_gbp: number }[]) {
+    if (!row.category_id) continue;
+    const list = awinPricesByCategoryId.get(row.category_id) ?? [];
+    list.push(row.price_gbp);
+    awinPricesByCategoryId.set(row.category_id, list);
+  }
+  const realPriceBenchmarks: Record<string, { medianPriceGBP: number; sampleSize: number }> = {};
+  for (const [categoryId, slug] of slugByCategoryId) {
+    const prices = awinPricesByCategoryId.get(categoryId);
+    if (prices && prices.length >= AWIN_MIN_SAMPLE_SIZE) {
+      realPriceBenchmarks[slug] = { medianPriceGBP: median(prices), sampleSize: prices.length };
+    }
+  }
+
   return {
     context: {
       pausedCategorySlugs,
@@ -148,6 +180,7 @@ async function loadDiscoveryContext(
       seasonalGuidance,
       recentProductNames: Array.from(recentNamesSet),
       categoryPerformance,
+      realPriceBenchmarks,
     },
     seasonalEventIdByName,
   };

@@ -83,6 +83,15 @@ services:
         sync: false
       - key: CHANNEL_STOCKX_TOKEN_URL
         sync: false
+      # 27 Aug 2026, Steven: "i need assistance setting up Awin api to fill
+      # my store with goods... earn comission off items through affiliate
+      # programs." Powers the admin "which of my approved merchants should
+      # sync" picker (api/admin/awin-sync) — see INFRASTRUCTURE_TODO.md #6
+      # for exactly where to get these once Steven's signed up.
+      - key: AWIN_API_TOKEN
+        sync: false
+      - key: AWIN_PUBLISHER_ID
+        sync: false
 
   - type: worker
     name: flipsta-worker
@@ -108,4 +117,10 @@ services:
       - key: RESEND_API_KEY
         sync: false
       - key: NOTIFICATIONS_FROM_EMAIL
+        sync: false
+      # 27 Aug 2026 — same Awin credentials as flipsta-web above; the
+      # actual product-feed sync (jobs/syncAwinProducts.ts) runs here.
+      - key: AWIN_API_TOKEN
+        sync: false
+      - key: AWIN_PUBLISHER_ID
         sync: false

@@ -297,6 +297,15 @@ function buildContextSections(source: CuratedSource, context: DiscoveryContext |
     sections.push(`RECENT PERFORMANCE for this category (computed from real Flipsta sales data, not an admin's opinion): ${performance.note}. Weight this like the admin focus note above — lean toward similar picks when it's been strong, be more selective when it's been weak, but never let it override the real-discount/margin/evidence rules.`);
   }
 
+  // 27 Aug 2026, Steven, on the Awin affiliate integration: "then you can
+  // use this info to help search better." Real, currently-live retail
+  // prices — external ground truth, not another opinion — to weigh a
+  // source retailer's own "was" price against.
+  const priceBenchmark = source.category !== "any" ? context.realPriceBenchmarks[source.category] : undefined;
+  if (priceBenchmark) {
+    sections.push(`REAL PRICE BENCHMARK for this category — Flipsta's own affiliate data shows a median live retail price of £${priceBenchmark.medianPriceGBP} across ${priceBenchmark.sampleSize} real, currently-in-stock products in this category right now. Use this as one more real-world sanity check alongside the cheapest-price-check rule above — if a source retailer's "discount" price is actually close to or above this real median, that's a sign the "discount" may not be genuine.`);
+  }
+
   const matchingEvents = context.seasonalGuidance.filter(
     (e) => source.category === "any" || e.categorySlugs.includes(source.category),
   );

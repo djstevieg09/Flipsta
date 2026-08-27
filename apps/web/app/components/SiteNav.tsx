@@ -38,6 +38,11 @@ export default function SiteNav({
           them by a direct link anyway (see wants/page.tsx, sell/new/page.tsx). */}
       {isAuthed && <a href="/wants" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Buyer Wants</a>}
       <a href="/shop" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Shop</a>
+      {/* 27 Aug 2026, Steven: "i need assistance setting up Awin api to
+          fill my store with goods... this is seperate from our core
+          buisness." No auth gate — same as Shop, purely a browse-and-
+          click-through page, nothing account-specific here. */}
+      <a href="/partner-deals" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Partner Deals</a>
       {/* 26 Aug 2026, Steven: "Need a button that says Flipsta It!" */}
       {isAuthed && <a href="/flipsta-it" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Flipsta It!</a>}
       {/* 27 Aug 2026, Steven: "Sniper mode needs setting up with its own

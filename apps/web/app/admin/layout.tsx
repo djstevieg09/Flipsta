@@ -55,6 +55,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <a href="/admin/seasonal" className="px-3 py-2 rounded-lg hover:bg-surface2">Seasonal Calendar</a>
         {/* 26 Aug 2026, Steven: "this then goes to admin panel to approve" — Flipsta It! */}
         <a href="/admin/buy-requests" className="px-3 py-2 rounded-lg hover:bg-surface2">Flipsta It! Requests</a>
+        {/* 27 Aug 2026, Steven: "i need assistance setting up Awin api to
+            fill my store with goods... this is seperate from our core
+            buisness." */}
+        <a href="/admin/partner-deals" className="px-3 py-2 rounded-lg hover:bg-surface2">Partner Deals</a>
       </nav>
       <SundayDealsReminder />
       {children}

@@ -9,6 +9,7 @@ import { releaseExpiredFulfillmentClaims } from "./jobs/releaseExpiredFulfillmen
 import { expireSeasonalStock } from "./jobs/expireSeasonalStock.js";
 import { notifyDealMatches } from "./jobs/notifyDealMatches.js";
 import { runSniperBids } from "./jobs/runSniperBids.js";
+import { syncAwinProducts } from "./jobs/syncAwinProducts.js";
 import { mockAdapter } from "./adapters/mockAdapter.js";
 import { claudeSearchAdapter, isClaudeSearchConfigured } from "./adapters/claudeSearchAdapter.js";
 
@@ -58,6 +59,12 @@ const INTERVALS_MS = {
   fulfillmentClaims: 15 * 60 * 1000, // fairness sweep — see releaseExpiredFulfillmentClaims.ts
   seasonalExpiry: 60 * 60 * 1000, // dates, not minutes, matter here — hourly is plenty; see expireSeasonalStock.ts
   dealMatchNotifications: 30 * 60 * 1000, // 27 Aug 2026 — real-time-ish without spamming; see notifyDealMatches.ts
+  // 27 Aug 2026 — Awin affiliate sync (Steven: "fill my store with goods
+  // ... earn comission off items through affiliate programs"). Product
+  // feeds are typically only refreshed a handful of times a day on Awin's
+  // side, and the pilot scope is 2-3 merchants, so there's no benefit to
+  // checking more often than this — see syncAwinProducts.ts.
+  awinSync: 6 * 60 * 60 * 1000,
 };
 
 async function tick(name: string, fn: () => Promise<unknown>) {
@@ -92,6 +99,7 @@ async function main() {
   await tick("releaseExpiredFulfillmentClaims", releaseExpiredFulfillmentClaims);
   await tick("expireSeasonalStock", expireSeasonalStock);
   await tick("notifyDealMatches", notifyDealMatches);
+  await tick("syncAwinProducts", syncAwinProducts);
 
   if (!discoveryPaused) {
     setInterval(() => tick("discoverOpportunities", () => discoverOpportunities(discoveryAdapter)), INTERVALS_MS.discovery);
@@ -106,6 +114,7 @@ async function main() {
   setInterval(() => tick("releaseExpiredFulfillmentClaims", releaseExpiredFulfillmentClaims), INTERVALS_MS.fulfillmentClaims);
   setInterval(() => tick("expireSeasonalStock", expireSeasonalStock), INTERVALS_MS.seasonalExpiry);
   setInterval(() => tick("notifyDealMatches", notifyDealMatches), INTERVALS_MS.dealMatchNotifications);
+  setInterval(() => tick("syncAwinProducts", syncAwinProducts), INTERVALS_MS.awinSync);
 }
 
 main().catch((err) => {

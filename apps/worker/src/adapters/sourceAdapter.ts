@@ -114,6 +114,21 @@ export interface DiscoveryContext {
    * than guessing from a tiny sample.
    */
   categoryPerformance: Record<string, { note: string }>;
+  /**
+   * 27 Aug 2026, Steven, on the new Awin affiliate integration: "then you
+   * can use this info to help search better." Real, currently-live retail
+   * prices synced from Awin merchant feeds (migration 0025's
+   * affiliate_products — see jobs/syncAwinProducts.ts), summarised to a
+   * median GBP price per category. Unlike categoryPerformance above (Flipsta's
+   * own sales outcomes) this is external ground truth about what things
+   * actually cost right now — a sanity check the AI can weigh a source
+   * retailer's "was" price against, rather than another opinion on what
+   * sells well. Only present for a category with enough synced rows to be
+   * a real sample (see discoverOpportunities.ts's AWIN_MIN_SAMPLE_SIZE) —
+   * absent entirely (not zero) for a category Awin has no pilot data for,
+   * or before Steven has set up any Awin sync at all.
+   */
+  realPriceBenchmarks: Record<string, { medianPriceGBP: number; sampleSize: number }>;
 }
 
 /** One adapter run's full output — the two different outcomes of the same search. */

@@ -39,6 +39,12 @@ export default function NewListingPage() {
   const [autoCrossPost, setAutoCrossPost] = useState(false);
   const [channels, setChannels] = useState<string[]>([]);
   const [tier, setTier] = useState<string | null>(null);
+  // 27 Aug 2026, Steven: "list an item should not be a thing for someone
+  // who hasnt signed in yet" — /api/me returns {profile: null} (200, not
+  // 401) when signed out, so the gate is a plain check on that rather than
+  // a fetch failure. Same pattern as wants/page.tsx.
+  const [signedIn, setSignedIn] = useState(true);
+  const [checkedAuth, setCheckedAuth] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [submitting, setSubmitting] = useState(false);
   const [connections, setConnections] = useState<ChannelConnection[]>([]);
@@ -52,7 +58,11 @@ export default function NewListingPage() {
       .then((d) => setWon((d.opportunities ?? []).filter((o: WonOpportunity) => !o.alreadyListed)));
     fetch("/api/me")
       .then((r) => r.json())
-      .then((d) => setTier(d.profile?.subscriptionTier ?? null));
+      .then((d) => {
+        setTier(d.profile?.subscriptionTier ?? null);
+        setSignedIn(Boolean(d.profile));
+      })
+      .finally(() => setCheckedAuth(true));
     fetch("/api/channel-connections")
       .then((r) => r.json())
       .then((d) => setConnections(d.channels ?? []));
@@ -104,6 +114,14 @@ export default function NewListingPage() {
     const data = await res.json();
     setResult(res.ok ? data : { error: data.error });
     setSubmitting(false);
+  }
+
+  if (checkedAuth && !signedIn) {
+    return (
+      <p className="text-textDim text-sm">
+        <a className="underline" href="/login">Sign in</a> to list an item.
+      </p>
+    );
   }
 
   return (

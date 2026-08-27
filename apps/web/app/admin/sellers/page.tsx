@@ -38,6 +38,32 @@ export default function AdminSellersPage() {
     load();
   }
 
+  // 27 Aug 2026, Steven: "need the ability to add credit to people to spend
+  // on the store for sorry's etc." — a goodwill wallet credit, same ledger
+  // as loyalty/referral credit (see /api/admin/wallet-credit).
+  async function grantCredit(id: string, displayName: string) {
+    const amountStr = window.prompt(`Wallet credit for ${displayName}, in £ (e.g. 10 or -5):`);
+    if (amountStr === null) return;
+    const amountGBP = Number(amountStr);
+    if (!Number.isFinite(amountGBP) || amountGBP === 0) {
+      window.alert("Enter a non-zero number, e.g. 10 or -5.");
+      return;
+    }
+    const reason = window.prompt("Reason (goes into the audit log — e.g. \"late delivery apology\"):");
+    if (reason === null) return;
+    const res = await fetch("/api/admin/wallet-credit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ profileId: id, amountGBP, reason }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      window.alert(data.error ?? "Something went wrong.");
+      return;
+    }
+    window.alert(`Done — ${amountGBP >= 0 ? "+" : ""}£${amountGBP.toFixed(2)} added to ${displayName}'s wallet.`);
+  }
+
   const filtered = sellers.filter((s) => s.displayName.toLowerCase().includes(q.toLowerCase()));
 
   return (
@@ -82,6 +108,9 @@ export default function AdminSellersPage() {
                     </button>
                     <button className="btn btn-ghost text-xs px-2 py-1" onClick={() => updateSeller(s.id, { status: "suspended" })}>
                       Suspend
+                    </button>
+                    <button className="btn btn-ghost text-xs px-2 py-1" onClick={() => grantCredit(s.id, s.displayName)}>
+                      Grant credit
                     </button>
                   </td>
                 </tr>

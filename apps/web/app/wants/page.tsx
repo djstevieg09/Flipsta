@@ -11,6 +11,12 @@ type Want = {
 
 export default function WantsPage() {
   const [wants, setWants] = useState<Want[]>([]);
+  // 27 Aug 2026, Steven: "buyer wants should not be a thing for someone who
+  // hasnt signed in yet" — /api/wants itself has no auth check (it's a
+  // public read), so the gate has to happen here, same signed-in check
+  // /api/me already backs elsewhere (see wallet/page.tsx's `signedIn`).
+  const [signedIn, setSignedIn] = useState(true);
+  const [checkedAuth, setCheckedAuth] = useState(false);
 
   function load() {
     fetch("/api/wants")
@@ -18,7 +24,21 @@ export default function WantsPage() {
       .then((d) => setWants(d.wants ?? []));
   }
 
-  useEffect(load, []);
+  useEffect(() => {
+    fetch("/api/me")
+      .then((r) => r.json())
+      .then((d) => setSignedIn(Boolean(d.profile)))
+      .finally(() => setCheckedAuth(true));
+    load();
+  }, []);
+
+  if (checkedAuth && !signedIn) {
+    return (
+      <p className="text-textDim text-sm">
+        <a className="underline" href="/login">Sign in</a> to see Buyer Wants.
+      </p>
+    );
+  }
 
   return (
     <div className="space-y-4">

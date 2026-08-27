@@ -27,11 +27,18 @@ export default function SiteNav({
     <nav className="flex justify-center gap-1 text-sm px-6 border-t border-border overflow-x-auto">
       {isAuthed && <a href="/dashboard" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Dashboard</a>}
       <a href="/opportunities" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Live Opportunities</a>
-      <a href="/wants" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Buyer Wants</a>
+      {/* 27 Aug 2026, Steven: "list an item should not be a thing for
+          someone who hasnt signed in yet, also goes for buyer wants" —
+          both now match every other account-only tab here (Dashboard,
+          Flipsta It!, Portfolio, Wishlist, Wallet): hidden from the nav
+          entirely when signed out, and the pages themselves now show a
+          sign-in prompt instead of their real content if someone reaches
+          them by a direct link anyway (see wants/page.tsx, sell/new/page.tsx). */}
+      {isAuthed && <a href="/wants" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Buyer Wants</a>}
       <a href="/shop" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Shop</a>
       {/* 26 Aug 2026, Steven: "Need a button that says Flipsta It!" */}
       {isAuthed && <a href="/flipsta-it" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Flipsta It!</a>}
-      <a href="/sell/new" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">List an item</a>
+      {isAuthed && <a href="/sell/new" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">List an item</a>}
       {isAuthed && <a href="/portfolio" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Portfolio</a>}
       {isAuthed && <a href="/wishlist" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Wishlist</a>}
       {isAuthed && canFulfill && (

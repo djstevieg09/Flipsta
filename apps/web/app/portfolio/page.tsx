@@ -28,6 +28,15 @@ type Listing = {
   listing_channel_posts: { channel: string; status: string; external_url: string | null }[];
 };
 type Order = { id: string; price_gbp: number; status: string; created_at: string; listings: { products: { title: string } | null } | null };
+type BuybackPolicy = {
+  id: string;
+  opportunityId: string;
+  premiumGBP: number;
+  payoutPct: number;
+  itemPriceGBP: number | null;
+  potentialPayoutGBP: number | null;
+  claim: { id: string; status: string; listed_at: string } | null;
+};
 type ShopPurchase = {
   id: string;
   product_name: string;
@@ -68,6 +77,34 @@ export default function PortfolioPage() {
   const [myUserId, setMyUserId] = useState<string | null>(null);
   const [mySellerRating, setMySellerRating] = useState<{ averageRating: number | null; count: number } | null>(null);
   const [reviewFormOpenFor, setReviewFormOpenFor] = useState<string | null>(null);
+  // 27 Aug 2026, Steven: "is buyback insurance setup? need to do this if
+  // not." Keyed by opportunity id so each won-opportunity card can show its
+  // own protection status without a separate fetch per card.
+  const [buybackByOpportunity, setBuybackByOpportunity] = useState<Map<string, BuybackPolicy>>(new Map());
+  const [claimFormOpenFor, setClaimFormOpenFor] = useState<string | null>(null);
+
+  function loadBuyback() {
+    fetch("/api/buyback")
+      .then((r) => r.json())
+      .then((d) => {
+        const map = new Map<string, BuybackPolicy>();
+        for (const p of d.policies ?? []) map.set(p.opportunityId, p);
+        setBuybackByOpportunity(map);
+      });
+  }
+
+  async function fileClaim(policyId: string, listedAt: string, listedAtOrBelowEstimate: boolean, offeredAtCostAfterWindow: boolean) {
+    const res = await fetch("/api/buyback/claim", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ policyId, listedAt, listedAtOrBelowEstimate, offeredAtCostAfterWindow }),
+    });
+    const data = await res.json();
+    if (!res.ok) return data.error ?? "Something went wrong.";
+    setClaimFormOpenFor(null);
+    loadBuyback();
+    return null;
+  }
 
   function loadShopPurchases() {
     fetch("/api/shop-items?mine=true")
@@ -94,6 +131,7 @@ export default function PortfolioPage() {
         setOrdersAsSeller(d.asSeller ?? []);
       });
     loadShopPurchases();
+    loadBuyback();
     fetch("/api/me")
       .then((r) => r.json())
       .then((d) => {
@@ -182,7 +220,8 @@ export default function PortfolioPage() {
         <h2 className="font-bold text-lg">My purchases</h2>
         {unlistedWins.length > 0 && (
           <p className="text-xs text-gold">
-            {unlistedWins.length} won and not listed yet — <a className="underline" href="/sell/new">list one now</a>.
+            {unlistedWins.length} won and not listed yet —{" "}
+            <a className="underline" href="/sell/new">quick list them now</a>.
           </p>
         )}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -234,6 +273,37 @@ export default function PortfolioPage() {
                 <div className="text-[10px] text-textDim mt-2 pt-2 border-t border-border">
                   Retailer and purchase link will appear here once this win is confirmed.
                 </div>
+              )}
+              {/* 27 Aug 2026, Steven: "One click platform listing needs
+                  overhauling... the details, photos and everything needs
+                  to be auto filled in." Deep links straight into the new
+                  visual picker on /sell/new with this exact win pre-selected
+                  (and, per the auto cross-post default there, ready to
+                  quick-list in one more click) instead of making the seller
+                  find it again themselves. */}
+              {o.status === "won" && !o.alreadyListed && (
+                <a
+                  href={`/sell/new?opportunityId=${o.id}`}
+                  className="block text-center text-xs font-bold text-white rounded-lg py-1.5 mt-1"
+                  style={{ background: "linear-gradient(135deg,#5b7cfa,#22d3ee)" }}
+                >
+                  ⚡ List this item
+                </a>
+              )}
+              {/* 27 Aug 2026, Steven: "is buyback insurance setup? need to
+                  do this if not." Only shows anything for a win that was
+                  actually protected at purchase time (see
+                  /opportunities' "Add buyback protection" checkbox) —
+                  nothing shown, no nag, for one that wasn't. */}
+              {buybackByOpportunity.has(o.id) && (
+                <BuybackStatus
+                  policy={buybackByOpportunity.get(o.id)!}
+                  claimFormOpen={claimFormOpenFor === o.id}
+                  onOpenClaimForm={() => setClaimFormOpenFor(o.id)}
+                  onSubmitClaim={(listedAt, listedAtOrBelowEstimate, offeredAtCostAfterWindow) =>
+                    fileClaim(buybackByOpportunity.get(o.id)!.id, listedAt, listedAtOrBelowEstimate, offeredAtCostAfterWindow)
+                  }
+                />
               )}
               {/* 27 Aug 2026 — real trust-signal research, see
                   claude/deployment-checklist.md's #-5 section. */}
@@ -398,6 +468,95 @@ export default function PortfolioPage() {
         </div>
         <OrdersTable orders={ordersAsSeller} />
       </section>
+    </div>
+  );
+}
+
+const CLAIM_STATUS_LABEL: Record<string, string> = {
+  pending_window: "Claim on file — not eligible yet",
+  eligible: "Claim submitted — awaiting review",
+  paid: "Claim paid out",
+  rejected: "Claim rejected",
+};
+
+/**
+ * 27 Aug 2026 — the buyback protection status + claim-filing form for one
+ * won opportunity. Section 11.6's real anti-abuse gate: a claim is only
+ * payable once genuinely, actively listed at or below the AI's estimate for
+ * the proof-of-listing window — isBuybackClaimEligible (shared, tested)
+ * decides that server-side, this just collects the two real inputs it
+ * needs (when you listed it, and whether it's at or below estimate).
+ */
+function BuybackStatus({
+  policy,
+  claimFormOpen,
+  onOpenClaimForm,
+  onSubmitClaim,
+}: {
+  policy: BuybackPolicy;
+  claimFormOpen: boolean;
+  onOpenClaimForm: () => void;
+  onSubmitClaim: (listedAt: string, listedAtOrBelowEstimate: boolean, offeredAtCostAfterWindow: boolean) => Promise<string | null>;
+}) {
+  const [listedAt, setListedAt] = useState("");
+  const [belowEstimate, setBelowEstimate] = useState(false);
+  const [offeredAtCost, setOfferedAtCost] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit() {
+    if (!listedAt) {
+      setError("Enter when you listed it for resale.");
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    const err = await onSubmitClaim(listedAt, belowEstimate, offeredAtCost);
+    setSubmitting(false);
+    if (err) setError(err);
+  }
+
+  return (
+    <div className="mt-2 pt-2 border-t border-border space-y-1">
+      <div className="flex items-center justify-between text-[10px]">
+        <span className="font-bold text-brand2">
+          🛡 Protected — £{policy.potentialPayoutGBP?.toFixed(2) ?? "—"} back if it doesn't sell
+        </span>
+        <span className="text-textFaint">£{policy.premiumGBP.toFixed(2)} premium</span>
+      </div>
+      {policy.claim ? (
+        <div className="text-[10px] text-textDim">{CLAIM_STATUS_LABEL[policy.claim.status] ?? policy.claim.status}</div>
+      ) : claimFormOpen ? (
+        <div className="space-y-1.5 pt-1">
+          {error && <p className="text-[10px] text-red">{error}</p>}
+          <div>
+            <label className="block text-[9px] font-bold text-textDim uppercase tracking-wide mb-0.5">
+              Listed it for resale on
+            </label>
+            <input
+              type="date"
+              className="w-full bg-surface2 border border-border rounded-lg px-2 py-1 text-xs"
+              value={listedAt}
+              onChange={(e) => setListedAt(e.target.value)}
+            />
+          </div>
+          <label className="flex items-center gap-1.5 text-[10px]">
+            <input type="checkbox" checked={belowEstimate} onChange={(e) => setBelowEstimate(e.target.checked)} />
+            Listed at or below our estimated resale price
+          </label>
+          <label className="flex items-center gap-1.5 text-[10px]">
+            <input type="checkbox" checked={offeredAtCost} onChange={(e) => setOfferedAtCost(e.target.checked)} />
+            Also offered it at cost since the window closed (if applicable)
+          </label>
+          <button className="btn btn-primary text-[10px] px-2 py-1 w-full" disabled={submitting} onClick={submit}>
+            {submitting ? "Submitting…" : "Submit claim"}
+          </button>
+        </div>
+      ) : (
+        <button onClick={onOpenClaimForm} className="text-[10px] font-bold text-brand2 text-left w-full pt-0.5">
+          File a buyback claim
+        </button>
+      )}
     </div>
   );
 }

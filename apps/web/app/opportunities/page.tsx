@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { calculateBuybackPremium, BUYBACK_PAYOUT_PCT, SubscriptionTier } from "@flipsta/shared";
 
 type Opportunity = {
   id: string;
@@ -53,6 +54,10 @@ export default function OpportunitiesPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [celebration, setCelebration] = useState<{ priceGBP: number; exiting: boolean } | null>(null);
+  // 27 Aug 2026: buyback insurance pricing depends on the buyer's own tier
+  // (Pro/Elite get a discount, Section 7) — fetched once here rather than
+  // per-card so every card's live premium estimate stays in sync.
+  const [tier, setTier] = useState<SubscriptionTier>("standard");
 
   async function load() {
     setLoading(true);
@@ -64,6 +69,10 @@ export default function OpportunitiesPage() {
 
   useEffect(() => {
     load();
+    fetch("/api/me")
+      .then((r) => r.json())
+      .then((d) => setTier(d.profile?.subscriptionTier ?? "standard"))
+      .catch(() => {});
   }, []);
 
   // Drives every card's live countdown — one shared ticking clock rather
@@ -90,18 +99,19 @@ export default function OpportunitiesPage() {
   // brought." quantity now travels with the instant-win request, and the
   // response comes back already listed (or not, if auto-listing hit a
   // snag — see the route's try/catch) rather than needing a second step.
-  async function instantWin(id: string, quantity: number) {
+  async function instantWin(id: string, quantity: number, withBuyback: boolean) {
     const res = await fetch(`/api/opportunities/${id}/instant-win`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ quantity }),
+      body: JSON.stringify({ quantity, withBuyback }),
     });
     const data = await res.json();
     if (res.ok) {
+      const buybackNote = data.buybackPremiumGBP ? ` Protected — £${data.buybackPremiumGBP.toFixed(2)} buyback premium.` : "";
       setMessage(
-        data.autoListed
+        (data.autoListed
           ? `Won for £${data.priceGBP} — listed on the marketplace automatically.`
-          : `Won for £${data.priceGBP}.`,
+          : `Won for £${data.priceGBP}.`) + buybackNote,
       );
       triggerCelebration(data.priceGBP);
     } else {
@@ -135,9 +145,10 @@ export default function OpportunitiesPage() {
             key={o.id}
             o={o}
             now={now}
+            tier={tier}
             urgencyColorClass={urgencyColor[o.urgency_tier]}
             onBid={() => placeBid(o.id, o.starting_bid_gbp)}
-            onInstantWin={(quantity) => instantWin(o.id, quantity)}
+            onInstantWin={(quantity, withBuyback) => instantWin(o.id, quantity, withBuyback)}
           />
         ))}
       </div>
@@ -150,15 +161,17 @@ export default function OpportunitiesPage() {
 function OpportunityCard({
   o,
   now,
+  tier,
   urgencyColorClass,
   onBid,
   onInstantWin,
 }: {
   o: Opportunity;
   now: number;
+  tier: SubscriptionTier;
   urgencyColorClass: string;
   onBid: () => void;
-  onInstantWin: (quantity: number) => void;
+  onInstantWin: (quantity: number, withBuyback: boolean) => void;
 }) {
   const remainingSeconds = o.action_clock_expires_at
     ? Math.max(0, Math.round((new Date(o.action_clock_expires_at).getTime() - now) / 1000))
@@ -171,6 +184,15 @@ function OpportunityCard({
   const maxQuantity = Math.max(1, Math.min(o.estimated_stock_units, o.per_customer_cap ?? o.estimated_stock_units));
   const showQuantityPicker = o.status === "live" && maxQuantity > 1;
   const [quantity, setQuantity] = useState(1);
+
+  // 27 Aug 2026, Steven: "is buyback insurance setup? need to do this if
+  // not." Offered right at the checkout moment, priced off THIS
+  // opportunity's own AI confidence score (Section 8.3) — the exact same
+  // calculateBuybackPremium the API re-runs server-side before actually
+  // charging anything, so what's shown here is never just a guess.
+  const [addBuyback, setAddBuyback] = useState(false);
+  const totalPriceGBP = o.instant_win_price_gbp * quantity;
+  const buybackPremiumGBP = totalPriceGBP > 0 ? calculateBuybackPremium(totalPriceGBP, 1 - o.confidence_score, tier) : 0;
 
   return (
     <div className="card space-y-2">
@@ -236,12 +258,22 @@ function OpportunityCard({
         </div>
       )}
 
+      {o.status === "live" && tier !== "free" && (
+        <label className="flex items-center justify-between gap-2 text-xs pt-1 cursor-pointer">
+          <span className="flex items-center gap-1.5">
+            <input type="checkbox" checked={addBuyback} onChange={(e) => setAddBuyback(e.target.checked)} />
+            Add buyback protection
+          </span>
+          <span className="text-textDim">+£{buybackPremiumGBP.toFixed(2)} · get {Math.round(BUYBACK_PAYOUT_PCT * 100)}% back if it doesn't sell</span>
+        </label>
+      )}
+
       <div className="flex gap-2 pt-2">
         <button className="btn btn-ghost flex-1" onClick={onBid}>
           Bid £{(o.starting_bid_gbp + 2).toFixed(2)}
         </button>
-        <button className="btn btn-primary flex-1" onClick={() => onInstantWin(quantity)}>
-          Instant win £{(o.instant_win_price_gbp * quantity).toFixed(2)}
+        <button className="btn btn-primary flex-1" onClick={() => onInstantWin(quantity, addBuyback)}>
+          Instant win £{(totalPriceGBP + (addBuyback ? buybackPremiumGBP : 0)).toFixed(2)}
         </button>
       </div>
     </div>

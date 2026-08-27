@@ -4,6 +4,7 @@ import { getCurrentProfile } from "@/lib/currentProfile";
 import { requireTier, TierGuardError } from "@/lib/tierGuard";
 import { autoListWonOpportunity } from "@/lib/autoListOpportunity";
 import { awardLoyaltyCredit } from "@/lib/loyalty";
+import { calculateBuybackPremium, BUYBACK_PAYOUT_PCT } from "@flipsta/shared";
 
 /**
  * POST /api/opportunities/:id/instant-win — Section 11.3's instant-win path:
@@ -33,9 +34,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   let quantity = 1;
+  let withBuyback = false;
   try {
     const body = await req.json();
     if (body && body.quantity !== undefined) quantity = Number(body.quantity);
+    if (body && body.withBuyback !== undefined) withBuyback = Boolean(body.withBuyback);
   } catch {
     // No body (or non-JSON) sent — default to 1, same as before quantity existed.
   }
@@ -48,7 +51,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { data: opp, error } = await supabase
     .from("opportunities")
     .select(
-      "id, status, instant_win_price_gbp, category_id, categories(name), source_tier, source_retailer, source_price_gbp, expected_margin_gbp, product_name, image_url, estimated_stock_units, per_customer_cap",
+      "id, status, instant_win_price_gbp, category_id, categories(name), source_tier, source_retailer, source_price_gbp, expected_margin_gbp, confidence_score, product_name, image_url, estimated_stock_units, per_customer_cap",
     )
     .eq("id", id)
     .single();
@@ -102,6 +105,35 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // 27 Aug 2026: the "investment" stage of the Hook Model — see lib/loyalty.ts.
   await awardLoyaltyCredit(supabase, { profileId: auth.userId, spendGBP: totalPriceGBP, referenceOpportunityId: id });
 
+  // 27 Aug 2026, Steven: "is buyback insurance setup? need to do this if
+  // not." Section 8.3's real mechanism — offered as an add-on at the exact
+  // moment of purchase, priced off THIS item's own AI confidence score, not
+  // a flat rate. Like the underlying instant-win purchase itself, this
+  // isn't charged via a live Stripe PaymentIntent yet (opportunity
+  // purchases generally aren't — see INFRASTRUCTURE_TODO.md's Stripe
+  // finalisation item); it's recorded as a real, priced policy so the
+  // claims workflow (see /api/buyback/claim) has something real to run
+  // against once payment collection for opportunities is finished.
+  let buybackPremiumGBP: number | null = null;
+  if (withBuyback) {
+    const failureProbability = 1 - opp.confidence_score;
+    buybackPremiumGBP = calculateBuybackPremium(totalPriceGBP, failureProbability, auth.profile.subscriptionTier);
+    const { error: policyError } = await supabase.from("buyback_policies").insert({
+      profile_id: auth.userId,
+      opportunity_id: id,
+      premium_gbp: buybackPremiumGBP,
+      failure_probability: failureProbability,
+      payout_pct: BUYBACK_PAYOUT_PCT,
+      item_price_gbp: totalPriceGBP,
+    });
+    if (policyError) {
+      // Same "don't undo a real win over a side-effect failing" reasoning
+      // as auto-listing below — the win and payment are already locked in.
+      console.error("Buyback policy insert failed:", policyError.message);
+      buybackPremiumGBP = null;
+    }
+  }
+
   // Auto-list straight away — Steven's confirmed "fully automatic, no
   // review screen" answer. The win itself is already locked in above (the
   // optimistic-concurrency update succeeded and the bid row is recorded),
@@ -118,5 +150,5 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     console.error("Auto-list on instant win failed:", e instanceof Error ? e.message : e);
   }
 
-  return NextResponse.json({ ok: true, priceGBP: totalPriceGBP, quantity, autoListed, listingId });
+  return NextResponse.json({ ok: true, priceGBP: totalPriceGBP, quantity, autoListed, listingId, buybackPremiumGBP });
 }

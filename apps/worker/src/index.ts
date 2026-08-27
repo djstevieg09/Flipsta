@@ -8,6 +8,7 @@ import { crossPostListings } from "./jobs/crossPostListings.js";
 import { releaseExpiredFulfillmentClaims } from "./jobs/releaseExpiredFulfillmentClaims.js";
 import { expireSeasonalStock } from "./jobs/expireSeasonalStock.js";
 import { notifyDealMatches } from "./jobs/notifyDealMatches.js";
+import { runSniperBids } from "./jobs/runSniperBids.js";
 import { mockAdapter } from "./adapters/mockAdapter.js";
 import { claudeSearchAdapter, isClaudeSearchConfigured } from "./adapters/claudeSearchAdapter.js";
 
@@ -48,6 +49,7 @@ const discoveryPaused = process.env.DISCOVERY_PAUSED === "true";
 const INTERVALS_MS = {
   discovery: discoveryIntervalMs,
   closeAuctions: 30 * 1000, // action clocks are as short as 20 minutes (Section 11.1) — check often
+  sniperBids: 30 * 1000, // 27 Aug 2026 — same cadence as closeAuctions; see runSniperBids.ts for the 5-min sniping window this checks against
   relistLapsed: 30 * 60 * 1000, // gated internally by next_recheck_at (24h), so this just needs to be "often enough"
   batchRelist: 10 * 60 * 1000,
   releaseEscrow: 60 * 60 * 1000,
@@ -81,6 +83,7 @@ async function main() {
     await tick("discoverOpportunities", () => discoverOpportunities(discoveryAdapter));
   }
   await tick("closeExpiredAuctions", closeExpiredAuctions);
+  await tick("runSniperBids", runSniperBids);
   await tick("relistLapsedOpportunities", relistLapsedOpportunities);
   await tick("evaluateBatchRelisting", evaluateBatchRelisting);
   await tick("releaseEscrow", releaseEscrow);
@@ -94,6 +97,7 @@ async function main() {
     setInterval(() => tick("discoverOpportunities", () => discoverOpportunities(discoveryAdapter)), INTERVALS_MS.discovery);
   }
   setInterval(() => tick("closeExpiredAuctions", closeExpiredAuctions), INTERVALS_MS.closeAuctions);
+  setInterval(() => tick("runSniperBids", runSniperBids), INTERVALS_MS.sniperBids);
   setInterval(() => tick("relistLapsedOpportunities", relistLapsedOpportunities), INTERVALS_MS.relistLapsed);
   setInterval(() => tick("evaluateBatchRelisting", evaluateBatchRelisting), INTERVALS_MS.batchRelist);
   setInterval(() => tick("releaseEscrow", releaseEscrow), INTERVALS_MS.releaseEscrow);

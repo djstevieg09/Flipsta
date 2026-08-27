@@ -74,6 +74,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <SiteNav
               isAuthed={Boolean(auth)}
               canFulfill={Boolean(auth && TIER_ENTITLEMENTS[auth.profile.subscriptionTier].canFulfill)}
+              canSniper={Boolean(auth && TIER_ENTITLEMENTS[auth.profile.subscriptionTier].sniperMode)}
             />
           </header>
           <main className="max-w-6xl mx-auto px-6 py-8">{children}</main>

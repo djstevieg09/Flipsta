@@ -94,6 +94,29 @@ const TIERS: {
   },
 ];
 
+/**
+ * 27 Aug 2026, Steven: "When i click upgraade to pro or any others i get
+ * Unexpected token '<', "<!DOCTYPE " is not valid JSON." Both
+ * /api/billing/checkout and /api/billing/portal always return real JSON on
+ * every path (checked — even the "not configured yet" case is a proper 503
+ * JSON body), so this can only happen if the browser never actually reached
+ * that route handler at all — a stale/incomplete deploy 404ing straight to
+ * Next's HTML error page is the most common real-world cause, and
+ * `res.json()` throws exactly this cryptic native error on HTML input.
+ * Parsing the body as text first and only then trying JSON.parse turns that
+ * into an actual, readable message instead of a dead end.
+ */
+async function parseJsonResponse(res: Response): Promise<{ error?: string; url?: string }> {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(
+      `The server sent back something that wasn't valid JSON (status ${res.status}) — this usually means the latest web deploy is missing this page's API routes. Try again in a minute, or check the deploy on Render.`,
+    );
+  }
+}
+
 export default function UpgradePage() {
   const [loadingTier, setLoadingTier] = useState<string | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
@@ -120,8 +143,8 @@ export default function UpgradePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tier }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Something went wrong starting checkout.");
+      const data = await parseJsonResponse(res);
+      if (!res.ok || !data.url) throw new Error(data.error ?? "Something went wrong starting checkout.");
       window.location.href = data.url;
     } catch (err) {
       setError((err as Error).message);
@@ -134,8 +157,8 @@ export default function UpgradePage() {
     setPortalLoading(true);
     try {
       const res = await fetch("/api/billing/portal", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Something went wrong opening the billing portal.");
+      const data = await parseJsonResponse(res);
+      if (!res.ok || !data.url) throw new Error(data.error ?? "Something went wrong opening the billing portal.");
       window.location.href = data.url;
     } catch (err) {
       setError((err as Error).message);

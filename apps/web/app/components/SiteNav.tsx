@@ -16,9 +16,11 @@ import { usePathname } from "next/navigation";
 export default function SiteNav({
   isAuthed,
   canFulfill,
+  canSniper,
 }: {
   isAuthed: boolean;
   canFulfill: boolean;
+  canSniper: boolean;
 }) {
   const pathname = usePathname();
   if (pathname?.startsWith("/admin")) return null;
@@ -38,6 +40,12 @@ export default function SiteNav({
       <a href="/shop" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Shop</a>
       {/* 26 Aug 2026, Steven: "Need a button that says Flipsta It!" */}
       {isAuthed && <a href="/flipsta-it" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Flipsta It!</a>}
+      {/* 27 Aug 2026, Steven: "Sniper mode needs setting up with its own
+          tab." Gated the same way Fulfillment jobs is — Pro/Elite only
+          (TIER_ENTITLEMENTS[tier].sniperMode). */}
+      {isAuthed && canSniper && (
+        <a href="/sniper" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Sniper Mode</a>
+      )}
       {isAuthed && <a href="/sell/new" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">List an item</a>}
       {isAuthed && <a href="/portfolio" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Portfolio</a>}
       {isAuthed && <a href="/wishlist" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Wishlist</a>}

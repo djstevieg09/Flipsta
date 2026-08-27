@@ -7,6 +7,7 @@ import { BasketProvider } from "./BasketProvider";
 import BasketIndicator from "./components/BasketIndicator";
 import HeaderSearch from "./components/HeaderSearch";
 import SiteNav from "./components/SiteNav";
+import SupportChatWidget from "./components/SupportChatWidget";
 
 export const metadata: Metadata = {
   title: "Flipsta",
@@ -79,6 +80,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <footer className="border-t border-border px-6 py-6 text-center text-xs text-textDim">
             <a href="/partners/apply" className="hover:text-text">Become a supplier or courier partner →</a>
           </footer>
+          {/* 27 Aug 2026, Steven: "need a Ai chat bot that can assist with
+              any quiries people may have." Floating widget, every
+              non-admin page — see components/SupportChatWidget.tsx. */}
+          <SupportChatWidget isAuthed={Boolean(auth)} />
         </BasketProvider>
       </body>
     </html>

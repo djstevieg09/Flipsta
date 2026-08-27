@@ -34,6 +34,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             this panel." */}
         <a href="/admin/resellers" className="px-3 py-2 rounded-lg hover:bg-surface2">Resellers</a>
         <a href="/admin/tickets" className="px-3 py-2 rounded-lg hover:bg-surface2">Tickets</a>
+        {/* 27 Aug 2026, Steven: "need to set this up on the admin dashboard
+            aswell so we can track who we have spoken to etc." — the support
+            chatbot widget. */}
+        <a href="/admin/chats" className="px-3 py-2 rounded-lg hover:bg-surface2">Support Chats</a>
         <a href="/admin/partners" className="px-3 py-2 rounded-lg hover:bg-surface2">Partners</a>
         {/* 26 Aug 2026, Steven: "if any pictures missing from listings it
             goes to admin dashboard to add a picture before its uploaded to

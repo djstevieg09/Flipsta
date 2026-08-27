@@ -98,6 +98,22 @@ export interface DiscoveryContext {
    * so the shop doesn't fill up with duplicates (Steven: "is the AI
    * learning what its already found... not search over old ground"). */
   recentProductNames: string[];
+  /**
+   * 26 Aug 2026, Steven: "leanr over time what sells well and not" — the
+   * other half of "the cleverest AI buying bot," alongside the admin-set
+   * focusNotes above. Unlike focusNotes (a person's opinion), this is
+   * computed automatically from real outcomes: what fraction of a
+   * category's recent shop_items actually sold, and what fraction of its
+   * recent opportunities were actually won, using the same sell-through-rate
+   * framework real retailers use (industry rule of thumb: ~70%+ is strong,
+   * under ~35% signals a real problem — researched 26 Aug 2026, see
+   * claudeSearchAdapter.ts's SELLING TECHNIQUE NOTES for the sourcing). Only
+   * present for a category_slug where there's enough recent history to say
+   * anything meaningful (see discoverOpportunities.ts's MIN_SAMPLE_SIZE) —
+   * a category with too little data just isn't in this map at all, rather
+   * than guessing from a tiny sample.
+   */
+  categoryPerformance: Record<string, { note: string }>;
 }
 
 /** One adapter run's full output — the two different outcomes of the same search. */

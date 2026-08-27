@@ -25,6 +25,36 @@ function normalizeProductName(name: string): string {
 
 const RECENT_HISTORY_DAYS = 30;
 
+// 26 Aug 2026, Steven: "leanr over time what sells well and not." A wider
+// window than RECENT_HISTORY_DAYS's dedup lookback — a real sell-through
+// signal needs more data points than "don't repeat this exact product"
+// does, and shop_items in particular can sit for a while before selling,
+// so 30 days alone would under-count genuine recent sales.
+const PERFORMANCE_WINDOW_DAYS = 45;
+// Below this many recent rows in a category, a sell-through/win-rate
+// percentage is more noise than signal — that category just gets no
+// performance note at all rather than a misleading one built off 2 data
+// points. Sourced from the same 26 Aug 2026 research as the thresholds
+// below (industry sell-through-rate guides consistently only trust the
+// metric once there's a real sample to compute it from).
+const MIN_SAMPLE_SIZE = 5;
+// Real retail sell-through-rate benchmarks (researched 26 Aug 2026 —
+// industry inventory-management guides): ~70%+ sold is considered a strong
+// performer, under ~35% signals real trouble and usually calls for a
+// pricing/selection rethink. Applied here to both shop_items (did it
+// actually sell) and opportunities (did someone actually win it) as two
+// independent "did real demand show up" signals per category.
+const STRONG_SELL_THROUGH_PCT = 70;
+const WEAK_SELL_THROUGH_PCT = 35;
+
+function describePerformance(label: string, soldCount: number, totalCount: number): string | null {
+  if (totalCount < MIN_SAMPLE_SIZE) return null;
+  const pct = (soldCount / totalCount) * 100;
+  if (pct >= STRONG_SELL_THROUGH_PCT) return `${Math.round(pct)}% of recent ${label} sold (strong — lean into this)`;
+  if (pct < WEAK_SELL_THROUGH_PCT) return `${Math.round(pct)}% of recent ${label} sold (weak — be extra selective here)`;
+  return null; // mid-range is genuinely unremarkable — no note is more honest than a lukewarm one
+}
+
 /**
  * Builds this run's DiscoveryContext (see sourceAdapter.ts) from migration
  * 0019's admin tables plus recent sourcing history — one read at the start
@@ -40,8 +70,9 @@ async function loadDiscoveryContext(
 ): Promise<{ context: DiscoveryContext; seasonalEventIdByName: Map<string, string> }> {
   const todayIso = new Date().toISOString().slice(0, 10);
   const recentSinceIso = new Date(Date.now() - RECENT_HISTORY_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const perfSinceIso = new Date(Date.now() - PERFORMANCE_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-  const [focusResult, seasonalResult, recentOppsResult, recentShopResult] = await Promise.all([
+  const [focusResult, seasonalResult, recentOppsResult, recentShopResult, categoriesResult, perfShopResult, perfOppResult] = await Promise.all([
     db.from("discovery_focus").select("category_slug, status, focus_note"),
     db
       .from("seasonal_events")
@@ -50,6 +81,9 @@ async function loadDiscoveryContext(
       .gte("search_ends_on", todayIso),
     db.from("opportunities").select("product_name").gte("created_at", recentSinceIso),
     db.from("shop_items").select("product_name").gte("created_at", recentSinceIso),
+    db.from("categories").select("id, slug"),
+    db.from("shop_items").select("category_id, paid_at").gte("created_at", perfSinceIso),
+    db.from("opportunities").select("category_id, won_by").gte("created_at", perfSinceIso),
   ]);
 
   const pausedCategorySlugs = (focusResult.data ?? [])
@@ -77,12 +111,43 @@ async function loadDiscoveryContext(
     if (row.product_name) recentNamesSet.add(normalizeProductName(row.product_name));
   }
 
+  const slugByCategoryId = new Map<string, string>(
+    ((categoriesResult.data ?? []) as { id: string; slug: string }[]).map((c) => [c.id, c.slug]),
+  );
+
+  const shopTotals = new Map<string, { sold: number; total: number }>();
+  for (const row of (perfShopResult.data ?? []) as { category_id: string; paid_at: string | null }[]) {
+    const t = shopTotals.get(row.category_id) ?? { sold: 0, total: 0 };
+    t.total++;
+    if (row.paid_at) t.sold++;
+    shopTotals.set(row.category_id, t);
+  }
+  const oppTotals = new Map<string, { sold: number; total: number }>();
+  for (const row of (perfOppResult.data ?? []) as { category_id: string; won_by: string | null }[]) {
+    const t = oppTotals.get(row.category_id) ?? { sold: 0, total: 0 };
+    t.total++;
+    if (row.won_by) t.sold++;
+    oppTotals.set(row.category_id, t);
+  }
+
+  const categoryPerformance: Record<string, { note: string }> = {};
+  for (const [categoryId, slug] of slugByCategoryId) {
+    const shop = shopTotals.get(categoryId);
+    const opp = oppTotals.get(categoryId);
+    const notes = [
+      shop ? describePerformance("shop items", shop.sold, shop.total) : null,
+      opp ? describePerformance("opportunities", opp.sold, opp.total) : null,
+    ].filter((n): n is string => Boolean(n));
+    if (notes.length > 0) categoryPerformance[slug] = { note: notes.join("; ") };
+  }
+
   return {
     context: {
       pausedCategorySlugs,
       focusNotes,
       seasonalGuidance,
       recentProductNames: Array.from(recentNamesSet),
+      categoryPerformance,
     },
     seasonalEventIdByName,
   };

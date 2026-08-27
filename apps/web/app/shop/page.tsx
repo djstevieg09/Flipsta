@@ -275,6 +275,23 @@ function ShopPageInner() {
           <p className="text-textDim text-sm">Buy Flipsta Sourced deals, or from other Flipsta sellers, all in one place.</p>
         </div>
 
+        {/* 26 Aug 2026, Steven: "Need a banner explaining this on the main
+            page of the shop." — the "Flipsta It!" request-a-deal feature. */}
+        <a
+          href="/flipsta-it"
+          className="block rounded-xl border border-brand2/40 bg-brand2/10 px-4 py-3 hover:border-brand2 transition"
+        >
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <span className="font-bold">🔎 Can't find what you're after?</span>{" "}
+              <span className="text-textDim text-sm">
+                Tell us what you want and the most you'd pay — Flipsta It! and we'll go find it for you.
+              </span>
+            </div>
+            <span className="text-xs font-bold text-brand2 whitespace-nowrap">Flipsta It! →</span>
+          </div>
+        </a>
+
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-3">
             <input

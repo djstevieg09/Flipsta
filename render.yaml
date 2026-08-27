@@ -20,6 +20,13 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
+      # 26 Aug 2026, Steven's "Flipsta It!" feature — the web app now makes
+      # its own Claude calls too (finding candidate photos + the targeted
+      # buy-request search, apps/web/lib/buyRequestSearch.ts), not just the
+      # worker. Same key already set on flipsta-worker below — set the same
+      # value here too, Render env vars are per-service.
+      - key: ANTHROPIC_API_KEY
+        sync: false
       - key: STRIPE_SECRET_KEY
         sync: false
       - key: STRIPE_WEBHOOK_SECRET

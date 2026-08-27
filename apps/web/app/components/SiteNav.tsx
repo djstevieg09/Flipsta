@@ -29,6 +29,8 @@ export default function SiteNav({
       <a href="/opportunities" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Live Opportunities</a>
       <a href="/wants" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Buyer Wants</a>
       <a href="/shop" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Shop</a>
+      {/* 26 Aug 2026, Steven: "Need a button that says Flipsta It!" */}
+      {isAuthed && <a href="/flipsta-it" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Flipsta It!</a>}
       <a href="/sell/new" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">List an item</a>
       {isAuthed && <a href="/portfolio" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Portfolio</a>}
       {isAuthed && <a href="/wishlist" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Wishlist</a>}

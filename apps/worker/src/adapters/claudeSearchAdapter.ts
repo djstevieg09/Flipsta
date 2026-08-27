@@ -289,6 +289,14 @@ function buildContextSections(source: CuratedSource, context: DiscoveryContext |
     sections.push(`ADMIN FOCUS NOTE for this category — an admin left this steering note, follow it as long as it doesn't conflict with the real-discount rules above: "${focusNote}"`);
   }
 
+  // 26 Aug 2026, Steven: "leanr over time what sells well and not" —
+  // computed automatically from real sell-through/win-rate data (see
+  // discoverOpportunities.ts's loadDiscoveryContext), not set by a person.
+  const performance = source.category !== "any" ? context.categoryPerformance[source.category] : undefined;
+  if (performance) {
+    sections.push(`RECENT PERFORMANCE for this category (computed from real Flipsta sales data, not an admin's opinion): ${performance.note}. Weight this like the admin focus note above — lean toward similar picks when it's been strong, be more selective when it's been weak, but never let it override the real-discount/margin/evidence rules.`);
+  }
+
   const matchingEvents = context.seasonalGuidance.filter(
     (e) => source.category === "any" || e.categorySlugs.includes(source.category),
   );
@@ -342,7 +350,9 @@ COUNTERFEIT/REPLICA CHECK (this source specifically) — ${source.retailer} carr
       : ""
   }
 
-SIZES — for footwear, clothing, or anything else that comes in sizes: if the page shows which sizes are currently available for a product, read them off and list them in shop_candidates' sizes field (e.g. ["UK 7", "UK 8", "UK 9"]). Don't invent a standard size range if the page doesn't actually show one — leave sizes empty in that case, and always leave it empty for products that don't come in sizes at all.${contextSections}
+SIZES — for footwear, clothing, or anything else that comes in sizes: if the page shows which sizes are currently available for a product, read them off and list them in shop_candidates' sizes field (e.g. ["UK 7", "UK 8", "UK 9"]). Don't invent a standard size range if the page doesn't actually show one — leave sizes empty in that case, and always leave it empty for products that don't come in sizes at all.
+
+SELLING TECHNIQUE NOTES (from real retail-arbitrage/reselling practice, researched 26 Aug 2026, per Steven's ask to bring in real selling knowledge) — three habits worth applying on top of everything above: (1) EXACT MATCH DISCIPLINE — a retailer's clearance listing and the resale comp you check against must be the exact same product (model/size/colour/bundle), not just "close enough" — a near-miss match is worthless as evidence. (2) SUSTAINED DEMAND OVER A ONE-OFF SPIKE — when you have a choice between two otherwise-similar candidates, favour the one whose resale evidence looks like ongoing, steady demand (multiple recent comps over time) rather than a single isolated high sale that might not repeat. (3) PRICE IN THE REAL COST OF SELLING — a genuinely good buy price already has real headroom for marketplace fees (~10-13%), shipping, and the chance the resale estimate is a bit optimistic, not just a positive gap on paper; this is exactly why the 20% margin floor downstream of your report exists, so don't talk yourself into reporting something that only clears margin by a hair.${contextSections}
 
 Report what you find with report_candidate_deals — ${categoryInstruction} Both deals and shop_candidates are required arrays; either or both can be empty. Empty is a completely fine outcome if nothing on the page genuinely clears a real discount; don't invent a candidate for either array to avoid reporting zero.`;
 }

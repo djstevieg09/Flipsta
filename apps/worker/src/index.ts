@@ -7,6 +7,7 @@ import { flagRiskSignals } from "./jobs/flagRiskSignals.js";
 import { crossPostListings } from "./jobs/crossPostListings.js";
 import { releaseExpiredFulfillmentClaims } from "./jobs/releaseExpiredFulfillmentClaims.js";
 import { expireSeasonalStock } from "./jobs/expireSeasonalStock.js";
+import { notifyDealMatches } from "./jobs/notifyDealMatches.js";
 import { mockAdapter } from "./adapters/mockAdapter.js";
 import { claudeSearchAdapter, isClaudeSearchConfigured } from "./adapters/claudeSearchAdapter.js";
 
@@ -54,6 +55,7 @@ const INTERVALS_MS = {
   crossPost: 2 * 60 * 1000, // retry sweep for cross-posting that didn't succeed at submit time
   fulfillmentClaims: 15 * 60 * 1000, // fairness sweep — see releaseExpiredFulfillmentClaims.ts
   seasonalExpiry: 60 * 60 * 1000, // dates, not minutes, matter here — hourly is plenty; see expireSeasonalStock.ts
+  dealMatchNotifications: 30 * 60 * 1000, // 27 Aug 2026 — real-time-ish without spamming; see notifyDealMatches.ts
 };
 
 async function tick(name: string, fn: () => Promise<unknown>) {
@@ -86,6 +88,7 @@ async function main() {
   await tick("crossPostListings", crossPostListings);
   await tick("releaseExpiredFulfillmentClaims", releaseExpiredFulfillmentClaims);
   await tick("expireSeasonalStock", expireSeasonalStock);
+  await tick("notifyDealMatches", notifyDealMatches);
 
   if (!discoveryPaused) {
     setInterval(() => tick("discoverOpportunities", () => discoverOpportunities(discoveryAdapter)), INTERVALS_MS.discovery);
@@ -98,6 +101,7 @@ async function main() {
   setInterval(() => tick("crossPostListings", crossPostListings), INTERVALS_MS.crossPost);
   setInterval(() => tick("releaseExpiredFulfillmentClaims", releaseExpiredFulfillmentClaims), INTERVALS_MS.fulfillmentClaims);
   setInterval(() => tick("expireSeasonalStock", expireSeasonalStock), INTERVALS_MS.seasonalExpiry);
+  setInterval(() => tick("notifyDealMatches", notifyDealMatches), INTERVALS_MS.dealMatchNotifications);
 }
 
 main().catch((err) => {

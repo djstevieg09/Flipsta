@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/currentProfile";
 import { requireTier, TierGuardError } from "@/lib/tierGuard";
 import { autoListWonOpportunity } from "@/lib/autoListOpportunity";
+import { awardLoyaltyCredit } from "@/lib/loyalty";
 
 /**
  * POST /api/opportunities/:id/instant-win — Section 11.3's instant-win path:
@@ -97,6 +98,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     amount_gbp: totalPriceGBP,
     is_instant_win: true,
   });
+
+  // 27 Aug 2026: the "investment" stage of the Hook Model — see lib/loyalty.ts.
+  await awardLoyaltyCredit(supabase, { profileId: auth.userId, spendGBP: totalPriceGBP, referenceOpportunityId: id });
 
   // Auto-list straight away — Steven's confirmed "fully automatic, no
   // review screen" answer. The win itself is already locked in above (the

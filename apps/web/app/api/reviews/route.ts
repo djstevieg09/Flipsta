@@ -15,6 +15,12 @@ export const dynamic = "force-dynamic";
 /**
  * GET /api/reviews?sellerId= — public trust signal (Section 12.4), readable
  * by anyone browsing a seller before they bid or buy.
+ * GET /api/reviews?mine=true — 27 Aug 2026: the signed-in buyer's own
+ * authored reviews, so Portfolio can show "already reviewed" instead of
+ * re-showing the form for an order that's been done already — this round
+ * is what finally surfaces this feature in the UI at all (see migration
+ * 0021's comment: the table and this route existed since day one, just
+ * never wired to a page).
  * POST /api/reviews — a buyer leaves a rating on a completed order. Gated
  * here (not just in RLS) on the buyer actually owning a delivered order for
  * that seller that hasn't already been reviewed — prevents drive-by reviews
@@ -22,10 +28,18 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const sellerId = searchParams.get("sellerId");
-  if (!sellerId) return NextResponse.json({ error: "sellerId is required." }, { status: 400 });
-
   const supabase = await createSupabaseServerClient();
+
+  if (searchParams.get("mine") === "true") {
+    const auth = await getCurrentProfile();
+    if (!auth) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+    const { data, error } = await supabase.from("reviews").select("*").eq("buyer_id", auth.userId);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ reviews: data });
+  }
+
+  const sellerId = searchParams.get("sellerId");
+  if (!sellerId) return NextResponse.json({ error: "sellerId or mine=true is required." }, { status: 400 });
   const { data, error } = await supabase
     .from("reviews")
     .select("*")

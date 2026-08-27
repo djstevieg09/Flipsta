@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useBasket } from "../BasketProvider";
 import CategorySidebar from "../components/CategorySidebar";
 import ShopperSwitch from "../components/ShopperSwitch";
+import { SHOP_LOW_STOCK_THRESHOLD_UNITS } from "@flipsta/shared";
 
 type ShopItem = {
   id: string;
@@ -98,6 +99,10 @@ function ShopPageInner() {
   // target DELETE /api/wishlist/[id] without a second lookup round-trip.
   const [wishlistMap, setWishlistMap] = useState<Map<string, string>>(new Map());
   const [signedIn, setSignedIn] = useState(true);
+  // 27 Aug 2026 — real trust-signal research (see
+  // claude/deployment-checklist.md's #-5 section): product_name -> average
+  // rating + review count, fetched once and looked up per card.
+  const [reviewSummary, setReviewSummary] = useState<Record<string, { averageRating: number | null; count: number }>>({});
 
   const basket = useBasket();
 
@@ -136,6 +141,10 @@ function ShopPageInner() {
       .catch((err) => setCategoriesError(err.message ?? "Couldn't load categories."))
       .finally(() => setCategoriesLoading(false));
     loadWishlist();
+    fetch("/api/product-reviews/summary")
+      .then((r) => r.json())
+      .then((d) => setReviewSummary(d.summary ?? {}))
+      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -352,12 +361,33 @@ function ShopPageInner() {
                     </button>
                     <div className="text-xs text-textDim">{item.categories?.name}</div>
                   </div>
-                  {item.unitsAvailable > 1 && (
+                  {/* 27 Aug 2026: real urgency, not invented — unitsAvailable is
+                      the actual count of unsold shop_items rows for this
+                      product (see api/shop-items/route.ts's grouping). Below
+                      the threshold it's a genuine "hurry" signal, worth
+                      calling out; above it, it's just informational. See
+                      the CMA/ICO dark-patterns research in
+                      claude/deployment-checklist.md's #-5 section for why
+                      this must always stay a true count. */}
+                  {item.unitsAvailable <= SHOP_LOW_STOCK_THRESHOLD_UNITS ? (
+                    <span className="text-[10px] font-bold text-white bg-red rounded-full px-2 py-0.5 shrink-0">
+                      Only {item.unitsAvailable} left
+                    </span>
+                  ) : (
                     <span className="text-[10px] text-textDim border border-border rounded-full px-2 py-0.5 shrink-0">
                       {item.unitsAvailable} available
                     </span>
                   )}
                 </div>
+                {reviewSummary[item.product_name] && reviewSummary[item.product_name].count > 0 && (
+                  <div className="text-xs text-gold">
+                    {"★".repeat(Math.round(reviewSummary[item.product_name].averageRating ?? 0))}
+                    {"☆".repeat(5 - Math.round(reviewSummary[item.product_name].averageRating ?? 0))}
+                    <span className="text-textDim ml-1">
+                      {reviewSummary[item.product_name].averageRating} ({reviewSummary[item.product_name].count})
+                    </span>
+                  </div>
+                )}
                 {item.description && <div className="text-xs text-textDim line-clamp-3">{item.description}</div>}
 
                 <div className="flex items-baseline gap-2">

@@ -94,3 +94,11 @@ services:
         sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
+      # 27 Aug 2026: deal-drop notifications (notifyDealMatches.ts) send
+      # real email from the worker now, same Resend account already
+      # declared on flipsta-web for ticket-update emails — same key value,
+      # just also needs setting here since Render env vars are per-service.
+      - key: RESEND_API_KEY
+        sync: false
+      - key: NOTIFICATIONS_FROM_EMAIL
+        sync: false

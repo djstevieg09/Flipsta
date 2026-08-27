@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/currentProfile";
 import { createEscrowPaymentIntent } from "@/lib/stripe";
 import { parseSizesParam, sizeOrFilter } from "@/lib/sizeFilter";
+import { awardLoyaltyCredit } from "@/lib/loyalty";
 
 // Force-dynamic: every route here reads live application data (bids, wallet
 // balances, opportunities, order status) straight from Supabase. Without this,
@@ -193,6 +194,9 @@ export async function POST(req: NextRequest) {
   if (!updated) {
     return NextResponse.json({ error: "This item was just bought by someone else — refresh and try again." }, { status: 409 });
   }
+
+  // 27 Aug 2026: the "investment" stage of the Hook Model — see lib/loyalty.ts.
+  await awardLoyaltyCredit(supabase, { profileId: auth.userId, spendGBP: soldPriceGBP, referenceShopItemId: itemId });
 
   return NextResponse.json(
     { ok: true, pricePaidGBP: soldPriceGBP, clientSecret: (paymentIntent as { client_secret?: string }).client_secret },

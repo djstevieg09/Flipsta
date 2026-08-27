@@ -175,3 +175,22 @@ export const SHOP_ITEM_MAX_CONCURRENT_CLAIMS_PER_USER = 2; // cap on jobs one pe
 // silently drift from what actually gets paid. If this number ever
 // changes, update BOTH this constant and the trigger's `reward_gbp`.
 export const REFERRAL_REWARD_GBP = 5;
+
+// 27 Aug 2026, Steven: "go away and look at proven selling techniques...
+// what makes it almost addictive to keep coming back" — researched (see
+// claude/deployment-checklist.md's #-5 section) and scoped via
+// AskUserQuestion. Loyalty credit is the "investment" stage of the Hook
+// Model: a real % of every real purchase comes back as spendable wallet
+// credit, reusing the SAME wallet_transactions ledger referral credit and
+// seller payouts already use (migration 0021 just adds a new `kind` value)
+// rather than a separate points system — Steven's confirmed answer. Unlike
+// REFERRAL_REWARD_GBP, this rate is only ever read in application code
+// (apps/web/lib/loyalty.ts) at the moment of award, never hardcoded into a
+// SQL trigger, so there's nothing else to keep in sync if it changes.
+export const LOYALTY_EARN_RATE_PCT = 1;
+
+// Real, not invented — see the CMA/ICO dark-patterns research in the same
+// section. Every shop_items row is one physical unit, so "N left" is always
+// a true count straight from the database. Only worth showing once stock is
+// actually getting low; above this it'd just be noise on every card.
+export const SHOP_LOW_STOCK_THRESHOLD_UNITS = 3;

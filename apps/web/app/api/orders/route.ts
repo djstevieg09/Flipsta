@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/currentProfile";
 import { getMarketplaceCommissionRate } from "@flipsta/shared";
 import { createEscrowPaymentIntent } from "@/lib/stripe";
+import { awardLoyaltyCredit } from "@/lib/loyalty";
 
 // Force-dynamic: every route here reads live application data (bids, wallet
 // balances, opportunities, order status) straight from Supabase. Without this,
@@ -67,6 +68,13 @@ export async function POST(req: NextRequest) {
   if (orderError) return NextResponse.json({ error: orderError.message }, { status: 500 });
 
   await supabase.from("listings").update({ sold_at: new Date().toISOString() }).eq("id", listingId);
+
+  // 27 Aug 2026: the "investment" stage of the Hook Model — see lib/loyalty.ts.
+  await awardLoyaltyCredit(supabase, {
+    profileId: auth.userId,
+    spendGBP: listing.price_gbp + shippingGBP,
+    referenceOrderId: order.id,
+  });
 
   return NextResponse.json({ order, clientSecret: (paymentIntent as any).client_secret }, { status: 201 });
 }

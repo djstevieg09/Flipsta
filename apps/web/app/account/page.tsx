@@ -41,6 +41,8 @@ export default function AccountPage() {
   const [error, setError] = useState<string | null>(null);
   const [portalBusy, setPortalBusy] = useState(false);
   const [portalError, setPortalError] = useState<string | null>(null);
+  const [notifyDealMatches, setNotifyDealMatches] = useState<boolean | null>(null);
+  const [notifySaving, setNotifySaving] = useState(false);
 
   function loadProfiles() {
     fetch("/api/account/shopper-profiles").then(async (r) => {
@@ -57,7 +59,29 @@ export default function AccountPage() {
 
   useEffect(() => {
     loadProfiles();
+    fetch("/api/account/notification-prefs").then(async (r) => {
+      if (!r.ok) return;
+      const d = await r.json();
+      setNotifyDealMatches(Boolean(d.notifyDealMatches));
+    });
   }, []);
+
+  // 27 Aug 2026 — see claude/deployment-checklist.md's #-5 research: this
+  // is on by default, so switching it off needs to be exactly as easy as
+  // that default was, not buried behind a confirmation or a support
+  // ticket.
+  async function toggleNotifyDealMatches() {
+    const next = !notifyDealMatches;
+    setNotifySaving(true);
+    setNotifyDealMatches(next); // optimistic — a real toggle should feel instant
+    const res = await fetch("/api/account/notification-prefs", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notifyDealMatches: next }),
+    });
+    if (!res.ok) setNotifyDealMatches(!next); // revert on failure
+    setNotifySaving(false);
+  }
 
   async function openPaymentPortal() {
     setPortalBusy(true);
@@ -146,6 +170,32 @@ export default function AccountPage() {
             {portalBusy ? "Opening…" : "Manage payment methods"}
           </button>
           {portalError && <p className="text-xs text-red">{portalError}</p>}
+        </div>
+      </section>
+
+      <section className="space-y-2">
+        <h2 className="font-bold text-lg">Notifications</h2>
+        <div className="card flex items-center justify-between gap-3">
+          <div>
+            <div className="font-bold text-sm">Email me when a new deal matches me</div>
+            <div className="text-xs text-textDim">
+              Based on your wishlist and shopping profile sizes — real matches only, and never more than one email
+              per check.
+            </div>
+          </div>
+          <button
+            onClick={toggleNotifyDealMatches}
+            disabled={notifyDealMatches === null || notifySaving}
+            className={`shrink-0 w-12 h-7 rounded-full relative transition-colors disabled:opacity-50 ${notifyDealMatches ? "" : "bg-surface2 border border-border"}`}
+            style={notifyDealMatches ? { background: "linear-gradient(135deg,#5b7cfa,#22d3ee)" } : undefined}
+            aria-pressed={Boolean(notifyDealMatches)}
+            aria-label="Toggle deal-match email notifications"
+          >
+            <span
+              className="absolute top-0.5 w-6 h-6 rounded-full bg-white transition-transform"
+              style={{ transform: notifyDealMatches ? "translateX(22px)" : "translateX(2px)" }}
+            />
+          </button>
         </div>
       </section>
 

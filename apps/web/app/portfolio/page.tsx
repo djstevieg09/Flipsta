@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import BecomeResellerBanner from "@/app/components/BecomeResellerBanner";
+import ReviewForm from "@/app/components/ReviewForm";
 
 type WonOpportunity = {
   id: string;
@@ -59,6 +60,14 @@ export default function PortfolioPage() {
   // resellers" — right after seeing their own purchases is a natural
   // moment to pitch fulfilling other people's orders for a reward.
   const [tier, setTier] = useState<string | null>(null);
+  // 27 Aug 2026 — see claude/deployment-checklist.md's #-5 research.
+  // Keys are "shop_item:<id>" / "opportunity:<id>" (product_reviews) or
+  // plain order id (reviews, the pre-existing seller-rating table).
+  const [myProductReviews, setMyProductReviews] = useState<Set<string>>(new Set());
+  const [mySellerReviewedOrders, setMySellerReviewedOrders] = useState<Set<string>>(new Set());
+  const [myUserId, setMyUserId] = useState<string | null>(null);
+  const [mySellerRating, setMySellerRating] = useState<{ averageRating: number | null; count: number } | null>(null);
+  const [reviewFormOpenFor, setReviewFormOpenFor] = useState<string | null>(null);
 
   function loadShopPurchases() {
     fetch("/api/shop-items?mine=true")
@@ -87,8 +96,47 @@ export default function PortfolioPage() {
     loadShopPurchases();
     fetch("/api/me")
       .then((r) => r.json())
-      .then((d) => setTier(d.profile?.subscriptionTier ?? null));
+      .then((d) => {
+        setTier(d.profile?.subscriptionTier ?? null);
+        const userId = d.profile?.id ?? null;
+        setMyUserId(userId);
+        if (userId) {
+          fetch(`/api/reviews?sellerId=${userId}`)
+            .then((r) => r.json())
+            .then((rd) => setMySellerRating({ averageRating: rd.averageRating ?? null, count: rd.count ?? 0 }));
+        }
+      });
+    fetch("/api/product-reviews?mine=true")
+      .then((r) => r.json())
+      .then((d) => setMyProductReviews(new Set((d.reviews ?? []).map((r: { source_type: string; source_id: string }) => `${r.source_type}:${r.source_id}`))));
+    fetch("/api/reviews?mine=true")
+      .then((r) => r.json())
+      .then((d) => setMySellerReviewedOrders(new Set((d.reviews ?? []).map((r: { order_id: string }) => r.order_id))));
   }, []);
+
+  async function submitProductReview(sourceType: "shop_item" | "opportunity", sourceId: string, rating: number, body: string) {
+    const res = await fetch("/api/product-reviews", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sourceType, sourceId, rating, body: body || undefined }),
+    });
+    const data = await res.json();
+    if (!res.ok) return data.error ?? "Couldn't submit that review.";
+    setMyProductReviews((s) => new Set(s).add(`${sourceType}:${sourceId}`));
+    return null;
+  }
+
+  async function submitSellerReview(orderId: string, rating: number, body: string) {
+    const res = await fetch("/api/reviews", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderId, rating, comment: body || undefined }),
+    });
+    const data = await res.json();
+    if (!res.ok) return data.error ?? "Couldn't submit that review.";
+    setMySellerReviewedOrders((s) => new Set(s).add(orderId));
+    return null;
+  }
 
   // 26 Aug 2026, Steven: "number one the money does not get released until
   // the item has been delivered" — this is the buyer action that actually
@@ -187,6 +235,20 @@ export default function PortfolioPage() {
                   Retailer and purchase link will appear here once this win is confirmed.
                 </div>
               )}
+              {/* 27 Aug 2026 — real trust-signal research, see
+                  claude/deployment-checklist.md's #-5 section. */}
+              {myProductReviews.has(`opportunity:${o.id}`) ? (
+                <div className="text-[10px] text-green border-t border-border mt-2 pt-2">✓ You reviewed this</div>
+              ) : reviewFormOpenFor === `opportunity:${o.id}` ? (
+                <ReviewForm onSubmit={(rating, body) => submitProductReview("opportunity", o.id, rating, body)} />
+              ) : (
+                <button
+                  onClick={() => setReviewFormOpenFor(`opportunity:${o.id}`)}
+                  className="text-[10px] font-bold border-t border-border mt-2 pt-2 text-brand2 text-left w-full"
+                >
+                  ★ Leave a review
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -233,7 +295,23 @@ export default function PortfolioPage() {
                       Confirm delivery
                     </button>
                   )}
-                  {p.status === "delivered" && <div className="text-[10px] text-green">Delivered — order complete.</div>}
+                  {p.status === "delivered" && (
+                    <div className="space-y-1">
+                      <div className="text-[10px] text-green">Delivered — order complete.</div>
+                      {myProductReviews.has(`shop_item:${p.id}`) ? (
+                        <div className="text-[10px] text-green">✓ You reviewed this</div>
+                      ) : reviewFormOpenFor === `shop_item:${p.id}` ? (
+                        <ReviewForm onSubmit={(rating, body) => submitProductReview("shop_item", p.id, rating, body)} />
+                      ) : (
+                        <button
+                          onClick={() => setReviewFormOpenFor(`shop_item:${p.id}`)}
+                          className="text-[10px] font-bold text-brand2"
+                        >
+                          ★ Leave a review
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -243,7 +321,20 @@ export default function PortfolioPage() {
         {ordersAsBuyer.length > 0 && (
           <div className="pt-2">
             <h3 className="font-bold text-sm text-textDim mb-2">Bought from other sellers</h3>
-            <OrdersTable orders={ordersAsBuyer} />
+            <OrdersTable
+              orders={ordersAsBuyer}
+              renderReview={(o) =>
+                o.status !== "delivered" ? null : mySellerReviewedOrders.has(o.id) ? (
+                  <span className="text-[10px] text-green">✓ Reviewed</span>
+                ) : reviewFormOpenFor === `order:${o.id}` ? (
+                  <ReviewForm onSubmit={(rating, body) => submitSellerReview(o.id, rating, body)} />
+                ) : (
+                  <button onClick={() => setReviewFormOpenFor(`order:${o.id}`)} className="text-[10px] font-bold text-brand2">
+                    ★ Leave a review
+                  </button>
+                )
+              }
+            />
           </div>
         )}
 
@@ -290,14 +381,28 @@ export default function PortfolioPage() {
       </section>
 
       <section className="space-y-2">
-        <h2 className="font-bold text-lg">My sales</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="font-bold text-lg">My sales</h2>
+          {/* 27 Aug 2026 — the seller-rating side of the same trust-signal
+              feature: this table/API existed since day one (0002_admin_ops.sql
+              / api/reviews) but was never surfaced anywhere until now. */}
+          {mySellerRating && mySellerRating.count > 0 && (
+            <span className="text-xs text-gold">
+              {"★".repeat(Math.round(mySellerRating.averageRating ?? 0))}
+              {"☆".repeat(5 - Math.round(mySellerRating.averageRating ?? 0))}
+              <span className="text-textDim ml-1">
+                {mySellerRating.averageRating} ({mySellerRating.count} review{mySellerRating.count === 1 ? "" : "s"})
+              </span>
+            </span>
+          )}
+        </div>
         <OrdersTable orders={ordersAsSeller} />
       </section>
     </div>
   );
 }
 
-function OrdersTable({ orders }: { orders: Order[] }) {
+function OrdersTable({ orders, renderReview }: { orders: Order[]; renderReview?: (order: Order) => ReactNode }) {
   return (
     <div className="card p-0 overflow-x-auto">
       <table className="w-full text-sm">
@@ -307,6 +412,7 @@ function OrdersTable({ orders }: { orders: Order[] }) {
             <th className="p-3">Price</th>
             <th className="p-3">Status</th>
             <th className="p-3">Date</th>
+            {renderReview && <th className="p-3">Review</th>}
           </tr>
         </thead>
         <tbody>
@@ -316,11 +422,12 @@ function OrdersTable({ orders }: { orders: Order[] }) {
               <td className="p-3">£{Number(o.price_gbp).toFixed(2)}</td>
               <td className="p-3 capitalize">{o.status.replace(/_/g, " ")}</td>
               <td className="p-3 text-textDim">{new Date(o.created_at).toLocaleDateString()}</td>
+              {renderReview && <td className="p-3 min-w-[140px]">{renderReview(o)}</td>}
             </tr>
           ))}
           {orders.length === 0 && (
             <tr>
-              <td colSpan={4} className="p-6 text-center text-textDim">
+              <td colSpan={renderReview ? 5 : 4} className="p-6 text-center text-textDim">
                 None yet.
               </td>
             </tr>

@@ -4,6 +4,7 @@ import { getCurrentProfile } from "@/lib/currentProfile";
 import { createEscrowPaymentIntent } from "@/lib/stripe";
 import { parseSizesParam, sizeOrFilter } from "@/lib/sizeFilter";
 import { awardLoyaltyCredit } from "@/lib/loyalty";
+import { groupShopItemsByProduct } from "@/lib/shopItemGrouping";
 
 // Force-dynamic: every route here reads live application data (bids, wallet
 // balances, opportunities, order status) straight from Supabase. Without this,
@@ -111,20 +112,10 @@ export async function GET(req: NextRequest) {
   // 26 Aug 2026, Steven: "one click, several linked charges" for the basket
   // (confirmed via AskUserQuestion) — each group needs every available row
   // id, not just one representative, so the basket can request N distinct
-  // units of the same product without a second round-trip per unit.
-  const groups = new Map<string, Row & { unitsAvailable: number; itemIds: string[] }>();
-  for (const row of (data ?? []) as Row[]) {
-    const key = `${row.product_name}|${row.our_price_gbp}`;
-    const existing = groups.get(key);
-    if (existing) {
-      existing.unitsAvailable++;
-      existing.itemIds.push(row.id);
-    } else {
-      groups.set(key, { ...row, unitsAvailable: 1, itemIds: [row.id] });
-    }
-  }
-
-  return NextResponse.json({ items: Array.from(groups.values()) });
+  // units of the same product without a second round-trip per unit. See
+  // lib/shopItemGrouping.ts (27 Aug 2026: pulled out of this route so
+  // /api/recommendations can reuse the exact same grouping).
+  return NextResponse.json({ items: groupShopItemsByProduct((data ?? []) as Row[]) });
 }
 
 /**

@@ -35,6 +35,10 @@ export default function HomePage() {
   const [shopItems, setShopItems] = useState<ShopItem[]>([]);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [loading, setLoading] = useState(true);
+  // 27 Aug 2026 — see @/api/recommendations' comment: empty for anyone
+  // signed out or with no real purchase history / saved size yet, by
+  // design — never a generic "trending" stand-in.
+  const [recommended, setRecommended] = useState<ShopItem[]>([]);
 
   useEffect(() => {
     Promise.all([
@@ -45,6 +49,10 @@ export default function HomePage() {
       setOpportunities((opp.opportunities ?? []).filter((o: Opportunity) => o.status === "live").slice(0, 3));
       setLoading(false);
     });
+    fetch("/api/recommendations")
+      .then((r) => r.json())
+      .then((d) => setRecommended(d.items ?? []))
+      .catch(() => {});
   }, []);
 
   const urgencyColor: Record<string, string> = { hot: "text-red", standard: "text-brand", stable: "text-brand2" };
@@ -63,6 +71,26 @@ export default function HomePage() {
           <a href="/opportunities" className="btn btn-ghost">See Live Opportunities</a>
         </div>
       </section>
+
+      {recommended.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="font-bold text-lg">Recommended for you</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {recommended.map((item) => (
+              <a key={item.id} href="/shop" className="card space-y-2 hover:border-brand2 transition">
+                {item.image_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={item.image_url} alt={item.product_name} className="w-full h-24 object-contain bg-surface2 rounded-lg border border-border" />
+                ) : (
+                  <div className="w-full h-24 rounded-lg border border-border" />
+                )}
+                <div className="font-bold text-sm line-clamp-1">{item.product_name}</div>
+                <div className="font-extrabold">£{item.our_price_gbp.toFixed(2)}</div>
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">

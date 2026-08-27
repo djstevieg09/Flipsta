@@ -103,6 +103,10 @@ function ShopPageInner() {
   // claude/deployment-checklist.md's #-5 section): product_name -> average
   // rating + review count, fetched once and looked up per card.
   const [reviewSummary, setReviewSummary] = useState<Record<string, { averageRating: number | null; count: number }>>({});
+  // 27 Aug 2026 — real personalization only (see @/api/recommendations'
+  // comment): empty unless the signed-in shopper has real purchase
+  // history or a saved size to match against.
+  const [recommended, setRecommended] = useState<(ShopItem & { matchReasons?: string[] })[]>([]);
 
   const basket = useBasket();
 
@@ -144,6 +148,10 @@ function ShopPageInner() {
     fetch("/api/product-reviews/summary")
       .then((r) => r.json())
       .then((d) => setReviewSummary(d.summary ?? {}))
+      .catch(() => {});
+    fetch("/api/recommendations")
+      .then((r) => r.json())
+      .then((d) => setRecommended(d.items ?? []))
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -300,6 +308,43 @@ function ShopPageInner() {
             <span className="text-xs font-bold text-brand2 whitespace-nowrap">Flipsta It! →</span>
           </div>
         </a>
+
+        {/* 27 Aug 2026 — real trust/conversion research (see
+            claude/deployment-checklist.md's #-5 section): recommendations
+            based on the shopper's own past purchases and saved sizes.
+            Hidden entirely rather than showing a generic "trending" list
+            when there's no real signal to base it on — see
+            /api/recommendations for why. */}
+        {recommended.length > 0 && (
+          <section className="space-y-3">
+            <h2 className="font-bold text-lg">Recommended for you</h2>
+            <div className="flex gap-3 overflow-x-auto pb-1">
+              {recommended.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => setExpanded(item)}
+                  className="card space-y-1 text-left shrink-0 w-40"
+                >
+                  {item.image_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={item.image_url}
+                      alt={item.product_name}
+                      className="w-full h-24 object-contain bg-surface2 rounded-lg border border-border"
+                    />
+                  ) : (
+                    <div className="w-full h-24 rounded-lg border border-border" />
+                  )}
+                  <div className="text-xs font-bold line-clamp-2">{item.product_name}</div>
+                  <div className="text-sm font-extrabold">£{item.our_price_gbp.toFixed(2)}</div>
+                  {item.matchReasons && item.matchReasons.length > 0 && (
+                    <div className="text-[10px] text-textDim line-clamp-1">{item.matchReasons[0]}</div>
+                  )}
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
 
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-3">

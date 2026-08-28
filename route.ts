@@ -1,85 +1,58 @@
-import { NextRequest, NextResponse } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getCurrentProfile } from "@/lib/currentProfile";
-import { TIER_ENTITLEMENTS } from "@/lib/tierGuard";
+import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import { createSupabaseServerClient, createSupabaseServiceClient } from "@/lib/supabase/server";
 
 /**
- * estimated_resale_price_gbp (0008_opportunity_lifecycle.sql) is only
- * populated going forward by discoverOpportunities.ts — any opportunity
- * created before that migration has it as null. Rather than leave those
- * showing a blank "Returns" figure until they cycle out of the feed,
- * reconstruct it from two fields that have always been there:
- * source_price_gbp + expected_margin_gbp ≈ the original resale estimate
- * (same arithmetic discoverOpportunities.ts used to derive the margin in
- * the first place, just run in reverse). source_price_gbp is only ever
- * read here server-side for this calculation — it's never included in
- * what gets returned to the caller unless they've already won it.
- */
-function withEstimatedResale<T extends { estimated_resale_price_gbp?: number | null; source_price_gbp?: number | null; expected_margin_gbp?: number | null }>(
-  o: T,
-): number | null {
-  if (typeof o.estimated_resale_price_gbp === "number") return o.estimated_resale_price_gbp;
-  if (typeof o.source_price_gbp === "number" && typeof o.expected_margin_gbp === "number") {
-    return Math.round((o.source_price_gbp + o.expected_margin_gbp) * 100) / 100;
-  }
-  return null;
-}
-
-/**
- * GET /api/opportunities — the live feed (Section 2 step 4, Section 5 blind teaser).
- * - Redacts source_retailer / source_url / source_price_gbp unless the caller won it.
- * - Enforces the Pro/Elite early-access window (Section 7): Standard tier
- *   doesn't see an opportunity until pro_early_access_until has passed.
- * - Strips ai_reasoning for tiers without AI explainability (Section 11.3 modal feature).
+ * GET /api/auth/callback — 27 Aug 2026, Steven: "need to have users be able
+ * to login with google, facebook and apple." Supabase's OAuth flow redirects
+ * the browser back here with a `code` param once the provider's consent
+ * step is done (see SocialAuthButtons.tsx's signInWithOAuth call); exchanging
+ * it for a session is what actually signs the user in.
  *
- * GET /api/opportunities?won=true — a different mode entirely: the caller's
- * own won opportunities (any status), fields unredacted since they own
- * them. Powers /sell/new, where a seller turns a win into a listing.
+ * Redirects are anchored on NEXT_PUBLIC_SITE_URL rather than req.url, same
+ * fix and same reasoning as api/auth/signout/route.ts ("when i sign out it
+ * goes to local host") — not something to trust blindly behind Render's
+ * proxy in production.
  */
-export async function GET(req: NextRequest) {
-  const supabase = await createSupabaseServerClient();
-  const auth = await getCurrentProfile();
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const code = url.searchParams.get("code");
+  const errorDescription = url.searchParams.get("error_description");
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+  const base = siteUrl ?? url.origin;
 
-  if (req.nextUrl.searchParams.get("won") === "true") {
-    if (!auth) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
-    const { data, error } = await supabase
-      .from("opportunities")
-      .select("*, categories(name, slug)")
-      .eq("won_by", auth.userId)
-      .order("created_at", { ascending: false });
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    const opportunities = (data ?? []).map((o) => ({ ...o, estimated_resale_price_gbp: withEstimatedResale(o) }));
-    return NextResponse.json({ opportunities });
+  if (!code) {
+    const dest = new URL("/login", base);
+    dest.searchParams.set("error", errorDescription || "Sign-in was cancelled or failed.");
+    return NextResponse.redirect(dest);
   }
 
-  const { data, error } = await supabase
-    .from("opportunities")
-    .select("*, categories(name, slug)")
-    .eq("status", "live")
-    .order("created_at", { ascending: false });
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
-  const tier = auth?.profile.subscriptionTier ?? "free";
-  const entitlements = TIER_ENTITLEMENTS[tier];
-  const now = Date.now();
+  if (error || !data.session) {
+    const dest = new URL("/login", base);
+    dest.searchParams.set("error", error?.message ?? "Sign-in failed.");
+    return NextResponse.redirect(dest);
+  }
 
-  const visible = (data ?? []).filter((o) => {
-    if (!o.pro_early_access_until) return true;
-    const stillInEarlyAccess = new Date(o.pro_early_access_until).getTime() > now;
-    return !stillInEarlyAccess || entitlements.earlyAccessSeconds > 0;
-  });
+  // Reconcile a pending referral cookie (see SocialAuthButtons.tsx) now that
+  // the profile row actually exists — best-effort only, a missed referral
+  // credit should never block sign-in itself.
+  const cookieStore = await cookies();
+  const refCode = cookieStore.get("flipsta_ref")?.value;
+  if (refCode) {
+    try {
+      const service = createSupabaseServiceClient();
+      await service.rpc("apply_oauth_referral", {
+        target_user_id: data.session.user.id,
+        incoming_code: refCode,
+      });
+    } catch {
+      // Best-effort — see above.
+    }
+    cookieStore.delete("flipsta_ref");
+  }
 
-  const redacted = visible.map((o) => {
-    const wonByMe = auth && o.won_by === auth.userId;
-    const estimatedResalePriceGBP = withEstimatedResale(o);
-    const { source_retailer, source_url, source_price_gbp, ai_reasoning, ...teaser } = o;
-    return {
-      ...teaser,
-      estimated_resale_price_gbp: estimatedResalePriceGBP,
-      ...(wonByMe ? { source_retailer, source_url, source_price_gbp } : {}),
-      ai_reasoning: entitlements.aiExplainability ? ai_reasoning : null,
-    };
-  });
-
-  return NextResponse.json({ opportunities: redacted });
+  return NextResponse.redirect(new URL("/opportunities", base));
 }

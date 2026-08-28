@@ -14,12 +14,24 @@ import { SalesChannelKey } from "@flipsta/shared";
  * connect an account there; until then this reports "not connectable yet"
  * with a clear reason instead of a broken button.
  *
- * eBay and Etsy's endpoints below are real, stable, publicly documented
- * URLs (verified against developer.ebay.com and developers.etsy.com).
- * Depop, Whatnot, and StockX gate API access behind a direct application —
- * they don't publish their OAuth endpoint URLs, so those three are left
- * fully env-configurable (CHANNEL_<X>_AUTHORIZE_URL / _TOKEN_URL) rather
- * than guessed at here; the platform gives you the real URLs once approved.
+ * eBay's and Etsy's endpoints below are real, stable, publicly documented
+ * URLs (verified against developer.ebay.com and developers.etsy.com — Etsy
+ * Open API v3's authorize endpoint is https://www.etsy.com/oauth/connect,
+ * token endpoint https://api.etsy.com/v3/public/oauth/token). Depop,
+ * Whatnot, and StockX don't have a fixed public authorize URL to hardcode —
+ * all three are gated behind a direct application to that platform's own
+ * developer/partner team rather than self-serve, and each one issues
+ * account-specific endpoint URLs as part of that approval, not published
+ * ahead of time — so all three are left fully env-configurable
+ * (CHANNEL_<X>_AUTHORIZE_URL / _TOKEN_URL) rather than guessed at here. See
+ * INFRASTRUCTURE_TODO.md #9 for exactly how to get access to each.
+ *
+ * 27 Aug 2026: this file previously still had Amazon/Vinted/Facebook
+ * Marketplace here instead of Etsy/Whatnot/StockX — a real drift from
+ * salesChannels.ts (which is the source of truth for SalesChannelKey, so
+ * this Record must always have exactly one entry per key there) caught
+ * while walking Steven through the Etsy signup he'd asked for. See
+ * salesChannels.ts's matching comment for the full story.
  */
 interface ChannelOAuthStatic {
   displayName: string;
@@ -46,6 +58,22 @@ const CHANNEL_OAUTH_STATIC: Record<SalesChannelKey, ChannelOAuthStatic> = {
     clientAuthMethod: "basic",
     accessNote: "Public, self-serve — register an OAuth application at the eBay Developers Program (developer.ebay.com).",
   },
+  etsy: {
+    displayName: "Etsy",
+    defaultAuthorizeUrl: "https://www.etsy.com/oauth/connect",
+    defaultTokenUrl: "https://api.etsy.com/v3/public/oauth/token",
+    scopes: ["listings_r", "listings_w"],
+    // Etsy Open API v3 is a PKCE-only public-client flow — there is no
+    // client secret at all, not even an optional one (confirmed against
+    // developers.etsy.com/documentation/essentials/authentication). Only
+    // CHANNEL_ETSY_CLIENT_ID needs setting; CLIENT_SECRET is simply never
+    // sent, whatever's in env for it.
+    usesPkce: true,
+    requiresClientSecret: false,
+    clientAuthMethod: "body",
+    accessNote:
+      "Self-serve — register a Personal App (not a Seller App — a Seller App only ever authorizes the single shop that created it, and Flipsta needs each of its own sellers to connect their own separate shop) at developers.etsy.com, then apply for Commercial Access on that same app before other sellers can connect (Etsy reviews this manually; timing varies). Set CHANNEL_ETSY_CLIENT_ID only.",
+  },
   depop: {
     displayName: "Depop",
     defaultAuthorizeUrl: null,
@@ -57,16 +85,6 @@ const CHANNEL_OAUTH_STATIC: Record<SalesChannelKey, ChannelOAuthStatic> = {
     accessNote:
       "Gated — Depop's Partner API isn't self-serve; email their Partner API team to get a client_id/secret and your specific authorize/token URLs, then set CHANNEL_DEPOP_CLIENT_ID/_SECRET/_AUTHORIZE_URL/_TOKEN_URL.",
   },
-  etsy: {
-    displayName: "Etsy",
-    defaultAuthorizeUrl: "https://www.etsy.com/oauth/connect",
-    defaultTokenUrl: "https://api.etsy.com/v3/public/oauth/token",
-    scopes: ["listings_r", "listings_w"],
-    usesPkce: true,
-    requiresClientSecret: false,
-    clientAuthMethod: "body",
-    accessNote: "Public, self-serve — apply for a Keystring (client id) via Etsy's developer portal (developers.etsy.com).",
-  },
   whatnot: {
     displayName: "Whatnot",
     defaultAuthorizeUrl: null,
@@ -76,7 +94,7 @@ const CHANNEL_OAUTH_STATIC: Record<SalesChannelKey, ChannelOAuthStatic> = {
     requiresClientSecret: true,
     clientAuthMethod: "body",
     accessNote:
-      "Gated — contact Whatnot's developer team to register a client app and redirect URI; they generate your secret and give you the real authorize/token URLs, then set CHANNEL_WHATNOT_CLIENT_ID/_SECRET/_AUTHORIZE_URL/_TOKEN_URL.",
+      "Gated — contact Whatnot's developer team to register a client app and redirect URI; they issue the client_id/secret and your specific authorize/token URLs. Set CHANNEL_WHATNOT_CLIENT_ID/_SECRET/_AUTHORIZE_URL/_TOKEN_URL.",
   },
   stockx: {
     displayName: "StockX",
@@ -87,7 +105,7 @@ const CHANNEL_OAUTH_STATIC: Record<SalesChannelKey, ChannelOAuthStatic> = {
     requiresClientSecret: true,
     clientAuthMethod: "body",
     accessNote:
-      "Gated behind an application/review process via the StockX Developer Portal — confirm the exact OAuth flow with StockX once approved, then set CHANNEL_STOCKX_CLIENT_ID/_SECRET/_AUTHORIZE_URL/_TOKEN_URL.",
+      "Gated, application/review process via the StockX Developer Portal — their OAuth pages also sit behind PerimeterX bot-detection, budget extra lead time. Once approved, set CHANNEL_STOCKX_CLIENT_ID/_SECRET/_AUTHORIZE_URL/_TOKEN_URL from StockX's own dashboard.",
   },
 };
 

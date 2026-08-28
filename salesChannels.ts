@@ -5,21 +5,41 @@
  */
 export const SALES_CHANNELS = [
   { key: "ebay", name: "eBay" },
+  // 27 Aug 2026 real bug, caught while walking Steven through the Etsy
+  // signup he asked for: this list still said Amazon/Vinted/Facebook
+  // Marketplace, but INFRASTRUCTURE_TODO.md #9 and render.yaml (both
+  // current — CHANNEL_ETSY_CLIENT_ID etc. are already scaffolded there)
+  // and this very file's own publishListingToChannel() doc comment below
+  // all already described the real intended set as eBay/Etsy/Depop/
+  // Whatnot/StockX. A 26 Aug 2026 comment here explained that an earlier
+  // attempt at this exact swap got reverted because updating this file
+  // alone (without also updating channelOAuth.ts's channel-static map,
+  // which is keyed off this union type) broke the build — i.e. the swap
+  // was half-done and the revert papered over the compile error instead
+  // of finishing it. This redoes it properly, updating both files
+  // together — see channelOAuth.ts's matching change.
+  //
+  // Etsy — a strong fit for the same trainers/streetwear/collectibles
+  // audience Depop targets, and Etsy Open API v3 is real, self-serve,
+  // PKCE-based (no client secret) — see channelOAuth.ts.
+  { key: "etsy", name: "Etsy" },
   // Depop isn't in the original doc's list — added because the proof-of-concept
   // audience (trainers/streetwear/collectibles, Section 4/6.1) is a strong
   // fit for it, and it now has an official seller API (via a Vendoo/partner
   // integration) rather than none, as originally documented here.
   { key: "depop", name: "Depop" },
-  // Etsy, Whatnot, and StockX replace Amazon/Facebook Marketplace/Vinted as
-  // the priority channel list (2026 update) — each of the three below has a
-  // real, official seller/listing API a real integration can build against;
-  // Amazon needs the seller's own pre-existing Seller Central account, Vinted
-  // has no public seller API, and Facebook needs a Meta Business/Commerce
-  // account, so all three were deprioritised in favour of channels with a
-  // documented, self-serve API path. See INFRASTRUCTURE_TODO.md #9.
-  { key: "etsy", name: "Etsy" },
+  // Whatnot and StockX both have real seller APIs, but both are gated
+  // (a direct application to their developer/partner teams, not
+  // self-serve) — see INFRASTRUCTURE_TODO.md #9 and channelOAuth.ts.
   { key: "whatnot", name: "Whatnot" },
   { key: "stockx", name: "StockX" },
+  // Amazon, Vinted, and Facebook Marketplace were all considered and
+  // deliberately deprioritised (not removed from the plan, just not built
+  // against yet) — see INFRASTRUCTURE_TODO.md #9's "kept in mind for
+  // later" note for why each one specifically isn't worth building against
+  // right now (Amazon needs a pre-existing Seller Central account and
+  // often isn't the cheapest source anyway; Vinted has no public seller
+  // API at all; Meta's Graph API deliberately excludes Marketplace).
 ] as const;
 
 export type SalesChannelKey = (typeof SALES_CHANNELS)[number]["key"];
@@ -71,16 +91,26 @@ export interface WonOpportunityForListing {
   sourceTier: string;
   sourcePriceGBP: number;
   expectedMarginGBP: number;
+  /** 26 Aug 2026: the AI's specific product name, once discoverOpportunities.ts
+   * started capturing it — e.g. "Eaglemoss Star Trek Klingon Bird-of-Prey
+   * Die-Cast Model". Optional so opportunities created before that change
+   * (which only have category/tier) still get a sensible fallback title. */
+  productName?: string | null;
+  sourceRetailer?: string | null;
 }
 
 export interface SuggestedListing {
   suggestedTitle: string;
   suggestedPriceGBP: number;
+  suggestedDescription: string;
 }
 
 export function suggestListingFromOpportunity(opp: WonOpportunityForListing): SuggestedListing {
+  const title = opp.productName?.trim() ? opp.productName.trim() : `${opp.categoryName} — ${opp.sourceTier}`;
+  const retailerNote = opp.sourceRetailer ? ` Originally sourced from ${opp.sourceRetailer}.` : "";
   return {
-    suggestedTitle: `${opp.categoryName} — ${opp.sourceTier}`,
+    suggestedTitle: title,
     suggestedPriceGBP: Math.round((opp.sourcePriceGBP + opp.expectedMarginGBP) * 100) / 100,
+    suggestedDescription: `${title} — ${opp.categoryName.toLowerCase()}.${retailerNote} Priced to sell quickly at a fair market rate. Edit this description before publishing.`,
   };
 }

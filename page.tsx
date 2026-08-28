@@ -1,105 +1,102 @@
-import { requireStaff } from "@/lib/adminGuard";
-import { createSupabaseServiceClient } from "@/lib/supabase/server";
-import { getBusinessMetrics } from "@/lib/businessMetrics";
-import BarChart from "./BarChart";
+"use client";
+
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { REFERRAL_REWARD_GBP } from "@flipsta/shared";
+import { SocialAuthButtons } from "@/app/components/SocialAuthButtons";
 
 /**
- * Section 12.1 — the one screen to check first. Server component: queries
- * run once at request time using the service-role client (the same reason
- * every other /api/admin/* route uses it — these tables have no RLS policy
- * granting the plain "authenticated" role access, on purpose).
+ * There was previously no way for a real user to create an account through
+ * the UI at all — this and /login are the minimum needed to actually test
+ * the app end to end. Profile creation itself happens via the
+ * `on_auth_user_created` trigger (0004_auth_profile_trigger.sql, redefined
+ * by 0016_referral_program.sql to also handle referral_code/referred_by),
+ * not here.
  */
-export default async function AdminOverviewPage() {
-  await requireStaff("support");
-  const supabase = createSupabaseServiceClient();
+export default function SignupPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignupForm />
+    </Suspense>
+  );
+}
 
-  const [{ count: sellerCount }, { count: openTickets }, { count: breachRiskTickets }, { count: openFlags }, { count: highFlags }, { count: pendingPartners }, { count: shopPhotosNeeded }, { data: escrowOrders }, metrics] =
-    await Promise.all([
-      supabase.from("profiles").select("id", { count: "exact", head: true }),
-      supabase.from("tickets").select("id", { count: "exact", head: true }).neq("status", "resolved"),
-      supabase.from("tickets").select("id", { count: "exact", head: true }).eq("priority", "high").neq("status", "resolved"),
-      supabase.from("risk_flags").select("id", { count: "exact", head: true }).eq("status", "open"),
-      supabase.from("risk_flags").select("id", { count: "exact", head: true }).eq("status", "open").eq("severity", "high"),
-      supabase.from("partners").select("id", { count: "exact", head: true }).eq("status", "pending"),
-      // 26 Aug 2026, Steven: "if any pictures missing from listings it goes
-      // to admin dashboard to add a picture before its uploaded to shop."
-      supabase.from("shop_items").select("id", { count: "exact", head: true }).eq("status", "available").is("image_url", null),
-      supabase.from("orders").select("price_gbp").is("funds_released_at", null),
-      // 26 Aug 2026, Steven: "need this to show me exactly where the
-      // buisness is" + "i need graphs, i need new signups."
-      getBusinessMetrics(supabase),
-    ]);
+function SignupForm() {
+  // 26 Aug 2026, Steven: "we need a referral program." /referrals shares a
+  // link shaped /signup?ref=CODE — passed through as referral_code in
+  // raw_user_meta_data so the signup trigger can resolve and credit it.
+  const searchParams = useSearchParams();
+  const refCode = searchParams.get("ref");
 
-  const escrowHeldGBP = (escrowOrders ?? []).reduce((sum: number, o: any) => sum + Number(o.price_gbp ?? 0), 0);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [status, setStatus] = useState<"idle" | "sent" | "error">("idle");
+  const [error, setError] = useState<string | null>(null);
 
-  const signupsDeltaPct =
-    metrics.signupsPrev7 > 0 ? Math.round(((metrics.signupsLast7 - metrics.signupsPrev7) / metrics.signupsPrev7) * 100) : null;
-  const revenueDeltaPct =
-    metrics.revenuePrev7GBP > 0
-      ? Math.round(((metrics.revenueLast7GBP - metrics.revenuePrev7GBP) / metrics.revenuePrev7GBP) * 100)
-      : null;
+  async function submit() {
+    setError(null);
+    const supabase = createSupabaseBrowserClient();
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          display_name: displayName || email.split("@")[0],
+          ...(refCode ? { referral_code: refCode } : {}),
+        },
+      },
+    });
+    if (error) {
+      setError(error.message);
+      setStatus("error");
+      return;
+    }
+    setStatus("sent");
+  }
 
-  const tiles = [
-    {
-      label: "New signups (7d)",
-      value: metrics.signupsLast7,
-      sub: signupsDeltaPct === null ? undefined : `${signupsDeltaPct >= 0 ? "+" : ""}${signupsDeltaPct}% vs prior 7d`,
-    },
-    {
-      label: "Revenue (7d)",
-      value: `£${metrics.revenueLast7GBP.toFixed(2)}`,
-      sub: revenueDeltaPct === null ? undefined : `${revenueDeltaPct >= 0 ? "+" : ""}${revenueDeltaPct}% vs prior 7d`,
-    },
-    { label: "Total sellers", value: sellerCount ?? 0 },
-    { label: "Active resellers", value: metrics.activeResellers, sub: "Pro/Elite" },
-    { label: "Open tickets", value: openTickets ?? 0, sub: `${breachRiskTickets ?? 0} high priority` },
-    { label: "Escrow held", value: `£${escrowHeldGBP.toFixed(2)}`, sub: `${escrowOrders?.length ?? 0} orders` },
-    { label: "Open risk flags", value: openFlags ?? 0, sub: `${highFlags ?? 0} high severity` },
-    { label: "Partners pending", value: pendingPartners ?? 0 },
-    { label: "Shop photos needed", value: shopPhotosNeeded ?? 0 },
-  ];
+  if (status === "sent") {
+    return (
+      <div className="max-w-sm space-y-2">
+        <h1 className="text-2xl font-bold">Check your email</h1>
+        <p className="text-textDim text-sm">
+          Confirm your address to finish signing up, then head to <a className="underline" href="/login">/login</a>.
+          (If you've disabled email confirmation in Supabase Auth settings for testing, you can sign in immediately.)
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-4">
-      <p className="text-textDim text-sm">
-        Live counts from the real database — no mock data. See <code>/admin/tickets</code>,{" "}
-        <code>/admin/risk</code>, <code>/admin/partners</code>, <code>/admin/shop-photos</code>, and{" "}
-        <code>/admin/resellers</code> to act on any of these.
+    <div className="max-w-sm space-y-4">
+      <h1 className="text-2xl font-bold">Create your account</h1>
+      {refCode && (
+        <p className="text-xs text-gold bg-gold/10 border border-gold/40 rounded-lg px-3 py-2">
+          You were referred with code <span className="font-bold">{refCode}</span> — you&apos;ll both get £
+          {REFERRAL_REWARD_GBP.toFixed(2)} in your wallets once you sign up.
+        </p>
+      )}
+      <div>
+        <label className="block text-xs font-bold text-textDim uppercase tracking-wide mb-1">Display name</label>
+        <input className="w-full bg-surface2 border border-border rounded-lg px-3 py-2 text-sm" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+      </div>
+      <div>
+        <label className="block text-xs font-bold text-textDim uppercase tracking-wide mb-1">Email</label>
+        <input type="email" className="w-full bg-surface2 border border-border rounded-lg px-3 py-2 text-sm" value={email} onChange={(e) => setEmail(e.target.value)} />
+      </div>
+      <div>
+        <label className="block text-xs font-bold text-textDim uppercase tracking-wide mb-1">Password</label>
+        <input type="password" className="w-full bg-surface2 border border-border rounded-lg px-3 py-2 text-sm" value={password} onChange={(e) => setPassword(e.target.value)} />
+      </div>
+      {error && <p className="text-red text-sm">{error}</p>}
+      <button className="btn btn-primary" disabled={!email || !password} onClick={submit}>
+        Sign up
+      </button>
+      <p className="text-xs text-textDim">
+        Already have an account? <a className="underline" href="/login">Sign in</a>
       </p>
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        {tiles.map((t) => (
-          <div key={t.label} className="card">
-            <div className="text-xs text-textDim uppercase tracking-wide mb-2">{t.label}</div>
-            <div className="text-2xl font-extrabold">{t.value}</div>
-            {t.sub && <div className="text-xs text-textDim mt-1">{t.sub}</div>}
-          </div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="card">
-          <div className="text-xs text-textDim uppercase tracking-wide mb-2">New signups — last 14 days</div>
-          {/* 26 Aug 2026 real production bug, first time Steven actually
-              loaded /admin against a live deploy: this used to pass a
-              `formatValue` function prop straight from this server
-              component into BarChart (a Client Component) — Next.js can't
-              serialize a function across that boundary, so the whole page
-              500'd. Fixed by pre-formatting each point's tooltip text here
-              instead, so only a plain string crosses the boundary — see
-              BarChart.tsx's comment for the full explanation. */}
-          <BarChart
-            data={metrics.dailySignups.map((d) => ({ date: d.date, value: d.count, label: `${d.count} signup${d.count === 1 ? "" : "s"}` }))}
-            color="#22d3ee"
-          />
-        </div>
-        <div className="card">
-          <div className="text-xs text-textDim uppercase tracking-wide mb-2">Revenue (GMV) — last 14 days</div>
-          <BarChart
-            data={metrics.dailyRevenueGBP.map((d) => ({ date: d.date, value: d.gbp, label: `£${d.gbp.toFixed(2)}` }))}
-            color="#5b7cfa"
-          />
-        </div>
-      </div>
+      <SocialAuthButtons refCode={refCode} />
     </div>
   );
 }

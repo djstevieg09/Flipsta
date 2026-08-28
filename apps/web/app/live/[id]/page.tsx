@@ -13,6 +13,7 @@ type Show = {
   hostDisplayName: string;
   playbackUrl: string | null;
   scheduled_at: string | null;
+  overlay_theme: "classic" | "bold" | "minimal";
 };
 
 type Item = {
@@ -21,6 +22,7 @@ type Item = {
   position: number;
   starting_bid_gbp: number;
   buy_now_price_gbp: number | null;
+  shipping_gbp: number | null;
   status: "upcoming" | "active" | "sold" | "unsold";
   ends_at: string | null;
   winning_bid_gbp: number | null;
@@ -30,6 +32,51 @@ type Item = {
 type Bid = { id: string; amount_gbp: number; bidder_id: string; created_at: string };
 type ChatMessage = { id: string; profile_id: string; message: string; created_at: string; display_name?: string };
 type MyListing = { id: string; price_gbp: number; sold_at: string | null; products: { title: string } | null };
+type MulticastTarget = { id: string; platform: string; label: string | null; rtmp_url: string; created_at: string };
+
+// 28 Aug 2026, Steven: "needs a design tool so people can design the
+// viewing window, maybe a banner showing the current item and what's
+// coming up next. Have multiple options." Three fixed CSS presets rather
+// than a drag-and-drop editor (kept in sync with migration 0029's
+// overlay_theme check constraint and live/new/page.tsx's picker) —
+// each just repositions/restyles the same "now selling / up next" banner.
+const OVERLAY_THEMES: Record<string, { wrap: string; label: string; sub: string }> = {
+  classic: {
+    wrap: "absolute bottom-0 inset-x-0 bg-brand/90 backdrop-blur-sm text-white px-4 py-2 flex items-center justify-between gap-3 flex-wrap",
+    label: "text-sm font-bold",
+    sub: "text-xs text-white/80",
+  },
+  bold: {
+    wrap: "absolute top-0 inset-x-0 bg-black/90 text-white px-4 py-3 flex items-center justify-between gap-3 border-b-2 border-brand flex-wrap",
+    label: "text-lg font-extrabold uppercase tracking-wide",
+    sub: "text-sm text-brand font-bold",
+  },
+  minimal: {
+    wrap: "absolute bottom-2 right-2 bg-black/60 backdrop-blur-sm text-white px-3 py-1.5 rounded-lg flex items-center gap-2 max-w-[80%]",
+    label: "text-xs font-bold",
+    sub: "text-[10px] text-white/70",
+  },
+};
+
+// Chat overlay sits in whichever corner the banner isn't using, so the two
+// never overlap regardless of theme.
+const CHAT_OVERLAY_POSITION: Record<string, string> = {
+  classic: "absolute left-2 top-2",
+  bold: "absolute left-2 bottom-2",
+  minimal: "absolute left-2 bottom-2",
+};
+
+// 28 Aug 2026, Steven: "This needs to be cast across all connected
+// platforms reaching everywhere at once." Research confirmed eBay Live and
+// Whatnot have no third-party ingest API at all (see multicast route's own
+// comments) — this covers only the genuinely feasible destinations, prefilled
+// from Cloudflare's own documented RTMP endpoints where one exists.
+// Kept as a plain local copy (not imported from lib/cloudflareStream.ts)
+// since that module is server-only and this is a "use client" page.
+const KNOWN_RTMP_URLS: Partial<Record<string, string>> = {
+  youtube: "rtmp://a.rtmp.youtube.com/live2",
+  facebook: "rtmps://live-api-s.facebook.com:443/rtmp/",
+};
 
 /**
  * 27 Aug 2026 — the live-show room: video (Cloudflare Stream hosted
@@ -60,6 +107,16 @@ export default function LiveShowPage() {
   const [addListingId, setAddListingId] = useState("");
   const [addStartingBid, setAddStartingBid] = useState("");
   const [addBuyNow, setAddBuyNow] = useState("");
+  const [addShipping, setAddShipping] = useState("");
+
+  // Multicast destinations (host only) — see api/live-shows/[id]/multicast.
+  const [multicastTargets, setMulticastTargets] = useState<MulticastTarget[]>([]);
+  const [mcPlatform, setMcPlatform] = useState("youtube");
+  const [mcLabel, setMcLabel] = useState("");
+  const [mcRtmpUrl, setMcRtmpUrl] = useState(KNOWN_RTMP_URLS.youtube ?? "");
+  const [mcStreamKey, setMcStreamKey] = useState("");
+  const [mcBusy, setMcBusy] = useState(false);
+  const [mcMessage, setMcMessage] = useState<string | null>(null);
 
   // WHIP broadcast state (host only) — see startBroadcast/stopBroadcast
   // below. localVideoRef is the host's own camera preview; the
@@ -172,6 +229,18 @@ export default function LiveShowPage() {
       .then((d) => setMyListings((d.listings ?? []).filter((l: MyListing) => !l.sold_at)));
   }, [isHost]);
 
+  async function loadMulticastTargets() {
+    const res = await fetch(`/api/live-shows/${showId}/multicast`);
+    const data = await res.json();
+    if (res.ok) setMulticastTargets(data.targets ?? []);
+  }
+
+  useEffect(() => {
+    if (!isHost) return;
+    loadMulticastTargets();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHost]);
+
   async function sendChat() {
     if (!chatInput.trim() || !myUserId) return;
     const text = chatInput.trim().slice(0, 500);
@@ -203,6 +272,19 @@ export default function LiveShowPage() {
     else loadItems();
   }
 
+  // 28 Aug 2026, Steven: "need... the ability to have the items in the
+  // order they want to sell them in."
+  async function moveItem(itemId: string, direction: "up" | "down") {
+    const res = await fetch(`/api/live-shows/${showId}/items/${itemId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "move", direction }),
+    });
+    const data = await res.json();
+    if (!res.ok) setMessage(data.error);
+    else loadItems();
+  }
+
   async function placeBid(itemId: string, floor: number) {
     const amount = Math.round((floor + 1) * 100) / 100;
     const res = await fetch(`/api/live-shows/${showId}/items/${itemId}/bid`, {
@@ -227,7 +309,12 @@ export default function LiveShowPage() {
     const res = await fetch(`/api/live-shows/${showId}/items`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ listingId: addListingId, startingBidGBP: Number(addStartingBid), buyNowPriceGBP: addBuyNow ? Number(addBuyNow) : null }),
+      body: JSON.stringify({
+        listingId: addListingId,
+        startingBidGBP: Number(addStartingBid),
+        buyNowPriceGBP: addBuyNow ? Number(addBuyNow) : null,
+        shippingGBP: addShipping ? Number(addShipping) : null,
+      }),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -238,7 +325,41 @@ export default function LiveShowPage() {
     setAddListingId("");
     setAddStartingBid("");
     setAddBuyNow("");
+    setAddShipping("");
     loadItems();
+  }
+
+  // 28 Aug 2026, Steven: "This needs to be cast across all connected
+  // platforms reaching everywhere at once." Confirmed via research + an
+  // AskUserQuestion to Steven: eBay/Whatnot have no third-party ingest API
+  // (hard technical wall), so this covers YouTube/Facebook/Instagram/TikTok
+  // via Cloudflare Stream's real Outputs API instead.
+  async function addMulticastTarget() {
+    if (!mcRtmpUrl.trim() || !mcStreamKey.trim()) {
+      setMcMessage("RTMP URL and stream key are both required.");
+      return;
+    }
+    setMcBusy(true);
+    setMcMessage(null);
+    const res = await fetch(`/api/live-shows/${showId}/multicast`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ platform: mcPlatform, label: mcLabel.trim() || undefined, rtmpUrl: mcRtmpUrl.trim(), streamKey: mcStreamKey.trim() }),
+    });
+    const data = await res.json();
+    setMcBusy(false);
+    if (!res.ok) {
+      setMcMessage(data.error ?? "Couldn't add that destination.");
+      return;
+    }
+    setMcLabel("");
+    setMcStreamKey("");
+    loadMulticastTargets();
+  }
+
+  async function removeMulticastTarget(targetId: string) {
+    await fetch(`/api/live-shows/${showId}/multicast/${targetId}`, { method: "DELETE" });
+    loadMulticastTargets();
   }
 
   /**
@@ -337,6 +458,10 @@ export default function LiveShowPage() {
   if (!show) return <p className="text-textDim text-sm">Loading…</p>;
 
   const activeItem = items.find((i) => i.status === "active");
+  const nextItem = items
+    .filter((i) => i.status === "upcoming")
+    .sort((a, b) => a.position - b.position)[0];
+  const theme = OVERLAY_THEMES[show.overlay_theme] ?? OVERLAY_THEMES.classic;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -359,14 +484,91 @@ export default function LiveShowPage() {
           ) : show.status === "live" && show.playbackUrl ? (
             <iframe src={show.playbackUrl} className="w-full h-full" allow="autoplay; encrypted-media" allowFullScreen />
           ) : show.status === "scheduled" ? (
-            <p className="text-textDim text-sm">
-              {show.scheduled_at ? `Starts ${new Date(show.scheduled_at).toLocaleString()}` : "Not live yet — check back soon."}
-            </p>
+            <div className="text-center space-y-3 p-4">
+              {(() => {
+                if (!show.scheduled_at) return <p className="text-textDim text-sm">Not live yet — check back soon.</p>;
+                const secondsUntil = Math.round((new Date(show.scheduled_at).getTime() - now) / 1000);
+                // 28 Aug 2026, Steven: "i need it 5 minutes before the show
+                // goes live to show a countdown and a link that people can
+                // click on to then take them to my site so they can sign
+                // up." Plain date beyond 5 minutes out; a live-ticking
+                // countdown once inside that window, since a countdown
+                // shown days in advance just looks broken/stale.
+                if (secondsUntil > 300) {
+                  return <p className="text-textDim text-sm">Starts {new Date(show.scheduled_at).toLocaleString()}</p>;
+                }
+                const clamped = Math.max(0, secondsUntil);
+                const mm = Math.floor(clamped / 60).toString().padStart(2, "0");
+                const ss = (clamped % 60).toString().padStart(2, "0");
+                return (
+                  <p className="text-2xl font-bold">
+                    {clamped > 0 ? (
+                      <>
+                        Starts in {mm}:{ss}
+                      </>
+                    ) : (
+                      "Starting any moment…"
+                    )}
+                  </p>
+                );
+              })()}
+              {!myUserId && (
+                <div>
+                  <a href="/signup" className="btn btn-primary text-sm px-4 py-2 inline-block">
+                    Sign up so you're ready to bid
+                  </a>
+                  {/* Signup requires an email confirmation step (see
+                      /signup), so there's no reliable way to bounce someone
+                      straight back to THIS show afterward — this line just
+                      tells them to keep the link instead of silently
+                      dropping them somewhere else. */}
+                  <p className="text-xs text-textDim mt-1">Come back to this link once you're signed in.</p>
+                </div>
+              )}
+            </div>
           ) : (
             <p className="text-textDim text-sm">This show has ended.</p>
           )}
           {isHost && broadcasting && (
             <span className="absolute top-2 left-2 text-xs font-bold text-white bg-red-500 rounded-full px-2 py-0.5">● Broadcasting</span>
+          )}
+
+          {/* 28 Aug 2026, Steven: "a banner showing the current item and
+              what's coming up next." Only shown once the show is actually
+              live and there's something to say — a banner over a countdown
+              or an ended show would just be clutter. */}
+          {show.status === "live" && (activeItem || nextItem) && (
+            <div className={theme.wrap}>
+              {activeItem && (
+                <div>
+                  <p className={theme.label}>Now selling: {activeItem.listings?.products?.title ?? "Untitled item"}</p>
+                  <p className={theme.sub}>
+                    Current bid £{(highBidByItem[activeItem.id]?.amount_gbp ?? activeItem.starting_bid_gbp).toFixed(2)}
+                  </p>
+                </div>
+              )}
+              {nextItem && (
+                <div className="text-right">
+                  <p className={theme.sub}>Up next</p>
+                  <p className={theme.label}>{nextItem.listings?.products?.title ?? "Untitled item"}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 28 Aug 2026, Steven: "need to show the messages on screen like
+              whatnot and all the other sites, match ours to make it seem
+              familiar." Additive, not a replacement for the side panel
+              below — pointer-events-none so it never blocks clicks on the
+              video/controls beneath it. */}
+          {show.status === "live" && chat.length > 0 && (
+            <div className={`${CHAT_OVERLAY_POSITION[show.overlay_theme] ?? CHAT_OVERLAY_POSITION.classic} max-w-[65%] space-y-1 pointer-events-none`}>
+              {chat.slice(-4).map((m) => (
+                <p key={m.id} className="text-xs bg-black/50 backdrop-blur-sm text-white rounded-lg px-2 py-1 inline-block">
+                  <span className="font-bold text-brand">{m.display_name ?? "Someone"}:</span> {m.message}
+                </p>
+              ))}
+            </div>
           )}
         </div>
 
@@ -415,10 +617,61 @@ export default function LiveShowPage() {
                   </select>
                   <input type="number" placeholder="Starting bid" value={addStartingBid} onChange={(e) => setAddStartingBid(e.target.value)} className="w-28 bg-surface2 border border-border rounded-lg px-2 py-1.5 text-xs" />
                   <input type="number" placeholder="Buy-now (optional)" value={addBuyNow} onChange={(e) => setAddBuyNow(e.target.value)} className="w-32 bg-surface2 border border-border rounded-lg px-2 py-1.5 text-xs" />
+                  <input type="number" min="0" step="0.01" placeholder="P&P (optional)" value={addShipping} onChange={(e) => setAddShipping(e.target.value)} className="w-28 bg-surface2 border border-border rounded-lg px-2 py-1.5 text-xs" />
                   <button className="btn btn-primary text-xs px-3 py-1.5" onClick={addItem}>
                     Add
                   </button>
                 </div>
+              </div>
+            )}
+
+            {/* 28 Aug 2026, Steven: "This needs to be cast across all
+                connected platforms reaching everywhere at once." Only the
+                genuinely feasible destinations (see this file's own
+                comment above KNOWN_RTMP_URLS) — the stream key is
+                write-only, never shown back after saving. */}
+            {show.status !== "ended" && show.status !== "cancelled" && (
+              <div className="pt-2 border-t border-border space-y-2">
+                <p className="text-xs text-textDim">Also broadcast to (multicast):</p>
+                {multicastTargets.length > 0 && (
+                  <div className="space-y-1">
+                    {multicastTargets.map((t) => (
+                      <div key={t.id} className="flex items-center justify-between gap-2 text-xs bg-surface2 rounded-lg px-2 py-1.5">
+                        <span className="capitalize">{t.label ? `${t.label} (${t.platform})` : t.platform}</span>
+                        <button className="btn btn-ghost text-xs px-2 py-1" onClick={() => removeMulticastTarget(t.id)}>
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex flex-wrap gap-2 items-center">
+                  <select
+                    value={mcPlatform}
+                    onChange={(e) => {
+                      setMcPlatform(e.target.value);
+                      setMcRtmpUrl(KNOWN_RTMP_URLS[e.target.value] ?? "");
+                    }}
+                    className="bg-surface2 border border-border rounded-lg px-2 py-1.5 text-xs"
+                  >
+                    <option value="youtube">YouTube</option>
+                    <option value="facebook">Facebook</option>
+                    <option value="instagram">Instagram</option>
+                    <option value="tiktok">TikTok</option>
+                    <option value="custom">Custom (any RTMP)</option>
+                  </select>
+                  <input placeholder="Label (optional)" value={mcLabel} onChange={(e) => setMcLabel(e.target.value)} className="w-32 bg-surface2 border border-border rounded-lg px-2 py-1.5 text-xs" />
+                  <input placeholder="RTMP URL" value={mcRtmpUrl} onChange={(e) => setMcRtmpUrl(e.target.value)} className="w-44 bg-surface2 border border-border rounded-lg px-2 py-1.5 text-xs" />
+                  <input placeholder="Stream key" value={mcStreamKey} onChange={(e) => setMcStreamKey(e.target.value)} className="w-40 bg-surface2 border border-border rounded-lg px-2 py-1.5 text-xs" />
+                  <button className="btn btn-primary text-xs px-3 py-1.5" onClick={addMulticastTarget} disabled={mcBusy}>
+                    Add destination
+                  </button>
+                </div>
+                <p className="text-xs text-textDim">
+                  Get the RTMP URL and stream key from each platform's own "go live" / stream-setup page (e.g. YouTube Studio → Go Live, Facebook
+                  Live Producer). Up to 50 destinations, added while the show is scheduled or live.
+                </p>
+                {mcMessage && <p className="text-red-400 text-xs">{mcMessage}</p>}
               </div>
             )}
           </div>
@@ -439,6 +692,7 @@ export default function LiveShowPage() {
                   <span className="font-bold">{title}</span>
                   <span className="text-xs uppercase text-textDim">{item.status}</span>
                 </div>
+                {item.shipping_gbp != null && <p className="text-xs text-textDim">P&amp;P £{item.shipping_gbp.toFixed(2)}</p>}
                 {item.status === "active" && (
                   <>
                     <p className="text-sm">
@@ -462,12 +716,18 @@ export default function LiveShowPage() {
                 {item.status === "sold" && <p className="text-sm text-brand">Sold for £{item.winning_bid_gbp?.toFixed(2)}</p>}
                 {item.status === "unsold" && <p className="text-sm text-textDim">Didn't sell this time.</p>}
                 {isHost && item.status === "upcoming" && (
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 items-center flex-wrap">
                     <button className="btn btn-primary text-xs px-3 py-1.5" onClick={() => itemAction(item.id, "activate")} disabled={Boolean(activeItem) || show.status !== "live"}>
                       Show this item now
                     </button>
                     <button className="btn btn-ghost text-xs px-3 py-1.5" onClick={() => itemAction(item.id, "skip")}>
                       Skip
+                    </button>
+                    <button className="btn btn-ghost text-xs px-2 py-1.5" onClick={() => moveItem(item.id, "up")} title="Move earlier in the queue" aria-label="Move up">
+                      ↑
+                    </button>
+                    <button className="btn btn-ghost text-xs px-2 py-1.5" onClick={() => moveItem(item.id, "down")} title="Move later in the queue" aria-label="Move down">
+                      ↓
                     </button>
                   </div>
                 )}

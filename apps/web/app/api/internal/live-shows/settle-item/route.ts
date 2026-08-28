@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
 
   const { data: item, error: itemError } = await supabase
     .from("live_show_items")
-    .select("id, status, listing_id")
+    .select("id, status, listing_id, shipping_gbp")
     .eq("id", itemId)
     .single();
   if (itemError || !item) return NextResponse.json({ error: "Item not found." }, { status: 404 });
@@ -79,6 +79,7 @@ export async function POST(req: NextRequest) {
     listingId: item.listing_id,
     buyerId: highBid.bidder_id,
     priceOverrideGBP: highBid.amount_gbp,
+    shippingOverrideGBP: item.shipping_gbp ?? undefined,
   });
   if (!result.ok) {
     console.error(`[internal/live-shows/settle-item] order creation failed for item ${itemId}: ${result.error}`);

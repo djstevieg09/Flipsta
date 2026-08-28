@@ -38,12 +38,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "This show has already ended." }, { status: 409 });
   }
 
-  const { listingId, startingBidGBP, buyNowPriceGBP } = await req.json();
+  const { listingId, startingBidGBP, buyNowPriceGBP, shippingGBP } = await req.json();
   if (!listingId || typeof startingBidGBP !== "number" || startingBidGBP <= 0) {
     return NextResponse.json({ error: "listingId and a positive startingBidGBP are required." }, { status: 400 });
   }
   if (buyNowPriceGBP !== undefined && buyNowPriceGBP !== null && buyNowPriceGBP <= startingBidGBP) {
     return NextResponse.json({ error: "buyNowPriceGBP must be higher than startingBidGBP." }, { status: 400 });
+  }
+  // 28 Aug 2026, Steven: "Also set P&P in the items they are selling."
+  // Optional — an item with nothing set here just keeps using the existing
+  // flat courier-based default at checkout (lib/orderCreation.ts).
+  if (shippingGBP !== undefined && shippingGBP !== null && (typeof shippingGBP !== "number" || shippingGBP < 0)) {
+    return NextResponse.json({ error: "shippingGBP must be zero or a positive number." }, { status: 400 });
   }
 
   const { data: listing, error: listingError } = await supabase
@@ -68,6 +74,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       position: count ?? 0,
       starting_bid_gbp: startingBidGBP,
       buy_now_price_gbp: buyNowPriceGBP ?? null,
+      shipping_gbp: shippingGBP ?? null,
     })
     .select()
     .single();

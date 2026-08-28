@@ -26,13 +26,45 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const { data: item, error: itemError } = await supabase
     .from("live_show_items")
-    .select("id, live_show_id, status")
+    .select("id, live_show_id, status, position")
     .eq("id", itemId)
     .eq("live_show_id", id)
     .single();
   if (itemError || !item) return NextResponse.json({ error: "Item not found on this show." }, { status: 404 });
 
-  const { action } = await req.json();
+  const { action, direction } = await req.json();
+
+  // 28 Aug 2026, Steven: "need... the ability to have the items in the
+  // order they want to sell them in." Only reorders among items that
+  // haven't been shown yet — an already-sold/unsold/active item's position
+  // is history, not something reordering should disturb.
+  if (action === "move") {
+    if (item.status !== "upcoming") return NextResponse.json({ error: "Only an upcoming item can be reordered." }, { status: 409 });
+    if (direction !== "up" && direction !== "down") return NextResponse.json({ error: "direction must be 'up' or 'down'." }, { status: 400 });
+
+    const { data: upcoming, error: listError } = await supabase
+      .from("live_show_items")
+      .select("id, position")
+      .eq("live_show_id", id)
+      .eq("status", "upcoming")
+      .order("position", { ascending: true });
+    if (listError) return NextResponse.json({ error: listError.message }, { status: 500 });
+
+    const idx = (upcoming ?? []).findIndex((i) => i.id === itemId);
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (idx === -1 || swapIdx < 0 || swapIdx >= (upcoming ?? []).length) {
+      return NextResponse.json({ error: "Already at that end of the queue." }, { status: 409 });
+    }
+
+    const a = upcoming![idx];
+    const b = upcoming![swapIdx];
+    const [{ error: errA }, { error: errB }] = await Promise.all([
+      supabase.from("live_show_items").update({ position: b.position }).eq("id", a.id),
+      supabase.from("live_show_items").update({ position: a.position }).eq("id", b.id),
+    ]);
+    if (errA || errB) return NextResponse.json({ error: (errA ?? errB)!.message }, { status: 500 });
+    return NextResponse.json({ ok: true });
+  }
 
   if (action === "activate") {
     if (show.status !== "live") return NextResponse.json({ error: "The show has to be live to activate an item." }, { status: 409 });
@@ -63,5 +95,5 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ item: data });
   }
 
-  return NextResponse.json({ error: "Unknown action — use 'activate' or 'skip'." }, { status: 400 });
+  return NextResponse.json({ error: "Unknown action — use 'activate', 'skip', or 'move'." }, { status: 400 });
 }

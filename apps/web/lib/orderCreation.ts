@@ -25,6 +25,12 @@ export async function createOrderForListing(
     extendedHoldRequested?: boolean;
     /** Live-show settlement price — omit for a normal purchase, which uses listing.price_gbp. */
     priceOverrideGBP?: number;
+    /**
+     * 28 Aug 2026, Steven: "Also set P&P in the items they are selling."
+     * A live-show item's own shipping_gbp (migration 0029), when the host
+     * set one — omit to keep the existing flat courier-based default.
+     */
+    shippingOverrideGBP?: number;
   },
 ): Promise<
   | { ok: true; order: any; clientSecret: string | null }
@@ -44,7 +50,7 @@ export async function createOrderForListing(
   const priceGBP = params.priceOverrideGBP ?? listing.price_gbp;
   const commissionGBP = Math.round(priceGBP * commissionRate * 100) / 100;
 
-  const shippingGBP = params.courier === "dpd" ? 4.99 : 2.99;
+  const shippingGBP = params.shippingOverrideGBP ?? (params.courier === "dpd" ? 4.99 : 2.99);
 
   const paymentIntent = await createEscrowPaymentIntent({
     amountGBP: priceGBP + shippingGBP,

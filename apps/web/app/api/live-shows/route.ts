@@ -58,9 +58,13 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { title, description, scheduledAt } = await req.json();
+  const { title, description, scheduledAt, overlayTheme } = await req.json();
   if (!title || !String(title).trim()) {
     return NextResponse.json({ error: "title is required." }, { status: 400 });
+  }
+  const VALID_THEMES = ["classic", "bold", "minimal"];
+  if (overlayTheme !== undefined && !VALID_THEMES.includes(overlayTheme)) {
+    return NextResponse.json({ error: `overlayTheme must be one of: ${VALID_THEMES.join(", ")}.` }, { status: 400 });
   }
 
   // The Cloudflare Live Input is created up front, at scheduling time, not
@@ -87,6 +91,7 @@ export async function POST(req: NextRequest) {
       scheduled_at: scheduledAt ?? null,
       cf_live_input_uid: liveInput.liveInputUid,
       cf_playback_uid: liveInput.playbackUid,
+      overlay_theme: overlayTheme ?? "classic",
     })
     .select()
     .single();

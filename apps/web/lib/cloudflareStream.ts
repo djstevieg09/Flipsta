@@ -107,3 +107,67 @@ export async function deleteLiveInput(liveInputUid: string): Promise<void> {
     console.error("[cloudflareStream] deleteLiveInput failed (non-fatal):", e instanceof Error ? e.message : e);
   }
 }
+
+/**
+ * 28 Aug 2026, Steven: "Yes build this multicast now" — Cloudflare Stream's
+ * real "outputs" API (developers.cloudflare.com/stream/stream-live/simulcasting,
+ * confirmed live 28 Aug 2026): a live input can push the SAME broadcast out
+ * to up to 50 external RTMP destinations at once. This is the actual "cast
+ * everywhere at once" mechanism — see migration 0029's comments for why
+ * this only covers YouTube/Facebook/Instagram/TikTok/custom and NOT
+ * eBay Live or Whatnot (neither exposes anything a third party can push
+ * into, confirmed against both platforms' own help docs the same day).
+ *
+ * Known-good ingest URLs are prefilled by the UI for the well-documented
+ * platforms (YouTube, Facebook); Instagram/TikTok/custom always need the
+ * host to paste both the URL and key themselves, since those platforms'
+ * exact ingest formats are less standardized and can change without
+ * Cloudflare or Flipsta being able to detect it — a wrong value here just
+ * means that one destination silently doesn't receive video, not a broken
+ * broadcast (all destinations are independent).
+ */
+export async function createMulticastOutput(params: {
+  liveInputUid: string;
+  rtmpUrl: string;
+  streamKey: string;
+}): Promise<{ outputId: string }> {
+  if (!isCloudflareStreamConfigured()) {
+    throw new Error("Live video isn't configured yet — see INFRASTRUCTURE_TODO.md.");
+  }
+  const res = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/stream/live_inputs/${params.liveInputUid}/outputs`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${CF_API_TOKEN}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ url: params.rtmpUrl, streamKey: params.streamKey, enabled: true }),
+    },
+  );
+  const data = await res.json();
+  if (!res.ok || !data.success) {
+    const message = data?.errors?.[0]?.message ?? `Cloudflare Stream API returned ${res.status}.`;
+    throw new Error(`Couldn't add that destination: ${message}`);
+  }
+  return { outputId: data.result.uid };
+}
+
+/** Removes one multicast destination — best-effort, same reasoning as deleteLiveInput. */
+export async function deleteMulticastOutput(liveInputUid: string, outputId: string): Promise<void> {
+  if (!isCloudflareStreamConfigured()) return;
+  try {
+    await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/stream/live_inputs/${liveInputUid}/outputs/${outputId}`,
+      { method: "DELETE", headers: { Authorization: `Bearer ${CF_API_TOKEN}` } },
+    );
+  } catch (e) {
+    console.error("[cloudflareStream] deleteMulticastOutput failed (non-fatal):", e instanceof Error ? e.message : e);
+  }
+}
+
+/** Well-known RTMP ingest URLs, used to prefill the host's "add destination" form. */
+export const KNOWN_MULTICAST_RTMP_URLS: Partial<Record<"youtube" | "facebook" | "instagram" | "tiktok", string>> = {
+  youtube: "rtmp://a.rtmp.youtube.com/live2",
+  facebook: "rtmps://live-api-s.facebook.com:443/rtmp/",
+  // Instagram and TikTok don't have one stable, well-documented public
+  // ingest URL the way YouTube/Facebook do — left blank so the host pastes
+  // theirs directly from that platform's own live-streaming settings.
+};

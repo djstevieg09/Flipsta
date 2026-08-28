@@ -63,6 +63,9 @@ export default function SiteNav({
         <a href="/sniper" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Sniper Mode</a>
       )}
       {isAuthed && <a href="/sell/new" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">List an item</a>}
+      {/* 28 Aug 2026, Steven: "need an option in the sellers dashboard to
+          add own stock they have for sale." */}
+      {isAuthed && <a href="/sell/stock" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">My Stock</a>}
       {isAuthed && <a href="/portfolio" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Portfolio</a>}
       {isAuthed && <a href="/wishlist" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Wishlist</a>}
       {isAuthed && canFulfill && (

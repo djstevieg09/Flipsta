@@ -24,7 +24,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   const { data: item, error: itemError } = await supabase
     .from("live_show_items")
-    .select("id, status, listing_id, buy_now_price_gbp, ends_at")
+    .select("id, status, listing_id, buy_now_price_gbp, ends_at, shipping_gbp")
     .eq("id", itemId)
     .single();
   if (itemError || !item) return NextResponse.json({ error: "Item not found." }, { status: 404 });
@@ -49,6 +49,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     listingId: item.listing_id,
     buyerId: auth.userId,
     priceOverrideGBP: item.buy_now_price_gbp,
+    shippingOverrideGBP: item.shipping_gbp ?? undefined,
   });
   if (!result.ok) {
     // Order creation failed after the item was already claimed — surface

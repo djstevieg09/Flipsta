@@ -57,15 +57,31 @@ export async function GET(req: NextRequest) {
 }
 
 /**
- * POST /api/listings — a seller turns a won opportunity into a marketplace
- * listing. "The AI is automatically filling out the listing" happens
- * client-side (see /sell/new, which calls suggestListingFromOpportunity),
- * this route just needs the final title/price/condition — plus, if the
- * seller flipped the auto-post switch, the list of external channels to
- * cross-post to (Section 7's multi-platform listing entitlement, Pro/Elite
- * only). Cross-posting is attempted synchronously here, right as they
- * submit; apps/worker/src/jobs/crossPostListings.ts retries anything that
- * didn't succeed.
+ * POST /api/listings — either a seller turns a won opportunity into a
+ * marketplace listing (the original, still-unchanged path), OR — 28 Aug
+ * 2026, Steven: "need an option in the sellers dashboard to add own stock
+ * they have for sale" — lists straight from their own seller_stock_items
+ * catalog (migration 0029), OR a fully freeform manual listing with no
+ * opportunity/stock link at all. Exactly one of opportunityId / stockItemId
+ * is expected; omit both for a freeform listing.
+ *
+ * This closes a real, pre-existing gap: before this, there was NO way for
+ * a reseller to list something they sourced themselves — opportunityId was
+ * always required. Honest limitation, unchanged from before: a listing
+ * with no opportunity_id has no known cost basis, so it still can't
+ * contribute to the public leaderboard's realized-profit calculation (see
+ * api/leaderboard/route.ts's own comment) — that's a pre-existing
+ * trade-off, not something this relaxation makes worse.
+ *
+ * "The AI is automatically filling out the listing" happens client-side
+ * for the opportunity path (see /sell/new, which calls
+ * suggestListingFromOpportunity) — this route just needs the final
+ * title/price/condition — plus, if the seller flipped the auto-post
+ * switch, the list of external channels to cross-post to (Section 7's
+ * multi-platform listing entitlement, Pro/Elite only). Cross-posting is
+ * attempted synchronously here, right as they submit;
+ * apps/worker/src/jobs/crossPostListings.ts retries anything that didn't
+ * succeed.
  */
 export async function POST(req: NextRequest) {
   const auth = await getCurrentProfile();
@@ -74,39 +90,74 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Your current plan doesn't include selling on the marketplace." }, { status: 403 });
   }
 
-  const { opportunityId, title, description, imageUrl, priceGBP, condition, categoryId, autoCrossPost, channels, quantity } = await req.json();
-  if (!opportunityId || !title || !priceGBP || !condition) {
-    return NextResponse.json({ error: "opportunityId, title, priceGBP, and condition are required." }, { status: 400 });
+  const body = await req.json();
+  const { opportunityId, stockItemId, autoCrossPost, channels } = body;
+  let { title, description, imageUrl, priceGBP, condition, categoryId, quantity } = body;
+
+  const supabase = await createSupabaseServerClient();
+
+  let sourceOpportunityCategoryId: string | undefined;
+
+  if (opportunityId) {
+    const { data: opportunity, error: oppError } = await supabase
+      .from("opportunities")
+      .select("id, won_by, category_id")
+      .eq("id", opportunityId)
+      .single();
+    if (oppError || !opportunity) return NextResponse.json({ error: "Opportunity not found." }, { status: 404 });
+    if (opportunity.won_by !== auth.userId) {
+      return NextResponse.json({ error: "You can only list an opportunity you won." }, { status: 403 });
+    }
+
+    // 26 Aug 2026: instant-win now auto-lists the moment a win is confirmed
+    // (see lib/autoListOpportunity.ts), so by the time a seller could reach
+    // this manual form for the same opportunity it may already be listed.
+    // Without this guard that's a real duplicate listing, not just a
+    // theoretical one — same opportunity_id traceability migration 0017 adds.
+    const { data: existingListing } = await supabase
+      .from("listings")
+      .select("id")
+      .eq("opportunity_id", opportunityId)
+      .maybeSingle();
+    if (existingListing) {
+      return NextResponse.json({ error: "This opportunity has already been listed." }, { status: 409 });
+    }
+    sourceOpportunityCategoryId = opportunity.category_id;
+  }
+
+  // 28 Aug 2026 — the new "list from my own stock" path. Pulls the
+  // catalog entry's own details as defaults; the seller can still override
+  // priceGBP on the day (e.g. pricing differently for a live show) but
+  // everything else comes straight from the stock item to keep this simple.
+  let stockItem: { id: string; quantity: number; is_recurring: boolean } | null = null;
+  if (stockItemId) {
+    const { data: stock, error: stockError } = await supabase
+      .from("seller_stock_items")
+      .select("id, seller_id, title, description, image_url, condition, price_gbp, category_id, quantity, is_recurring")
+      .eq("id", stockItemId)
+      .single();
+    if (stockError || !stock) return NextResponse.json({ error: "Stock item not found." }, { status: 404 });
+    if (stock.seller_id !== auth.userId) return NextResponse.json({ error: "You can only list your own stock." }, { status: 403 });
+    if (stock.quantity <= 0) return NextResponse.json({ error: "No quantity left on this stock item." }, { status: 409 });
+
+    title = title ?? stock.title;
+    description = description ?? stock.description;
+    imageUrl = imageUrl ?? stock.image_url;
+    condition = condition ?? stock.condition;
+    categoryId = categoryId ?? stock.category_id;
+    priceGBP = priceGBP ?? stock.price_gbp;
+    stockItem = { id: stock.id, quantity: stock.quantity, is_recurring: stock.is_recurring };
+  }
+
+  if (!title || !priceGBP || !condition) {
+    return NextResponse.json({ error: "title, priceGBP, and condition are required." }, { status: 400 });
   }
   const listedQuantity = quantity !== undefined ? Number(quantity) : 1;
   if (!Number.isInteger(listedQuantity) || listedQuantity < 1) {
     return NextResponse.json({ error: "quantity must be a positive whole number." }, { status: 400 });
   }
-
-  const supabase = await createSupabaseServerClient();
-
-  const { data: opportunity, error: oppError } = await supabase
-    .from("opportunities")
-    .select("id, won_by, category_id")
-    .eq("id", opportunityId)
-    .single();
-  if (oppError || !opportunity) return NextResponse.json({ error: "Opportunity not found." }, { status: 404 });
-  if (opportunity.won_by !== auth.userId) {
-    return NextResponse.json({ error: "You can only list an opportunity you won." }, { status: 403 });
-  }
-
-  // 26 Aug 2026: instant-win now auto-lists the moment a win is confirmed
-  // (see lib/autoListOpportunity.ts), so by the time a seller could reach
-  // this manual form for the same opportunity it may already be listed.
-  // Without this guard that's a real duplicate listing, not just a
-  // theoretical one — same opportunity_id traceability migration 0017 adds.
-  const { data: existingListing } = await supabase
-    .from("listings")
-    .select("id")
-    .eq("opportunity_id", opportunityId)
-    .maybeSingle();
-  if (existingListing) {
-    return NextResponse.json({ error: "This opportunity has already been listed." }, { status: 409 });
+  if (stockItem && listedQuantity > stockItem.quantity) {
+    return NextResponse.json({ error: `Only ${stockItem.quantity} left in stock.` }, { status: 400 });
   }
 
   // Find-or-create the canonical product row this listing pools onto (Section 11.4).
@@ -124,7 +175,7 @@ export async function POST(req: NextRequest) {
       .insert({
         title,
         condition,
-        category_id: categoryId ?? opportunity.category_id,
+        category_id: categoryId ?? sourceOpportunityCategoryId ?? null,
         description: typeof description === "string" && description ? description : null,
         image_url: typeof imageUrl === "string" && imageUrl ? imageUrl : null,
       })
@@ -147,12 +198,25 @@ export async function POST(req: NextRequest) {
       seller_id: auth.userId,
       price_gbp: priceGBP,
       quantity: listedQuantity,
-      opportunity_id: opportunityId,
+      opportunity_id: opportunityId ?? null,
       auto_cross_post: wantsAutoCrossPost,
     })
     .select()
     .single();
   if (listingError) return NextResponse.json({ error: listingError.message }, { status: 500 });
+
+  // 28 Aug 2026 — draw down the stock catalog entry by however much just
+  // got listed. is_recurring items are still decremented (the checkbox is
+  // about keeping the TEMPLATE around for next time, not about the
+  // quantity being unlimited) — the seller just tops the quantity back up
+  // themselves next time they restock, same as they'd manage any other
+  // inventory count.
+  if (stockItem) {
+    await supabase
+      .from("seller_stock_items")
+      .update({ quantity: stockItem.quantity - listedQuantity })
+      .eq("id", stockItem.id);
+  }
 
   const crossPostResults: unknown[] = [];
   if (wantsAutoCrossPost && Array.isArray(channels)) {

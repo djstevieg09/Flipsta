@@ -230,6 +230,34 @@ no sign-in needed; bidding/buying/chat needs an account.
       in). Worth a real test broadcast (even solo, to yourself) the first
       time this runs for real, before relying on it for an actual show.
 
+## 14. Live-show multicast — no new setup needed on your side
+
+28 Aug 2026, Steven: "This needs to be cast across all connected platforms
+reaching everywhere at once." Multicast (also pushing a Flipsta broadcast
+out to YouTube/Facebook/Instagram/TikTok/a custom RTMP target at the same
+time) reuses the exact same `CLOUDFLARE_STREAM_ACCOUNT_ID`/
+`CLOUDFLARE_STREAM_API_TOKEN` already set up in Section 13 above —
+Cloudflare's Outputs API just needs the destination's own RTMP URL and
+stream key, which the **host** supplies per show (a new "Also broadcast
+to" section on the show's host controls) rather than anything you need to
+configure globally.
+
+- [ ] Nothing for you to set up here — this is a per-show, per-host thing,
+      not a platform-wide credential.
+- [ ] Each host gets their own RTMP URL + stream key from whichever
+      platform they want to also cast to, from that platform's own "go
+      live" page (e.g. YouTube Studio → Go Live → Stream Key; Facebook's
+      Live Producer). Flipsta prefills YouTube's and Facebook's standard
+      RTMP endpoint — the host only needs to paste in their own stream key.
+- [ ] **eBay Live and Whatnot are NOT available as multicast destinations**
+      — confirmed directly against both platforms' own official docs:
+      neither has any public API or mechanism for a third party (Flipsta
+      included) to push a stream in. eBay Live only broadcasts through
+      eBay's own mobile app; Whatnot's stream-key flow is for Whatnot's own
+      hosts only, and its own "multicast" feature pushes the opposite
+      direction (out from Whatnot, not in). This is a hard technical
+      limitation on their side, not something Flipsta can build around.
+
 ---
 
 **Suggested order:** 1 → 2 → 4 (deploy with the mock worker adapter and Stripe

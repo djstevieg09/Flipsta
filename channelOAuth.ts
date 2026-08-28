@@ -32,6 +32,13 @@ import { SalesChannelKey } from "@flipsta/shared";
  * this Record must always have exactly one entry per key there) caught
  * while walking Steven through the Etsy signup he'd asked for. See
  * salesChannels.ts's matching comment for the full story.
+ *
+ * 27 Aug 2026, second real bug caught the same way, immediately after —
+ * this time walking through eBay's actual signup (the next channel in
+ * line): eBay's redirect_uri parameter isn't a real URL at all, it's an
+ * eBay-generated RuName — see usesRuNameAsRedirect below and
+ * resolveRedirectParam(). Every other channel here does take a real URL;
+ * eBay is the one exception.
  */
 interface ChannelOAuthStatic {
   displayName: string;
@@ -44,6 +51,23 @@ interface ChannelOAuthStatic {
   requiresClientSecret: boolean;
   /** How the client credentials are sent on the token request. */
   clientAuthMethod: "basic" | "body";
+  /**
+   * 27 Aug 2026, found while walking Steven through eBay's real signup flow
+   * (the very next channel after catching the Etsy/salesChannels.ts drift):
+   * eBay's OAuth `redirect_uri` parameter — on BOTH the authorize request
+   * and the token exchange — does not take a real callback URL like every
+   * other channel here. It takes an eBay-generated "RuName" (a string ID
+   * eBay maps internally to the actual accept/decline URLs you configure
+   * when creating it under Your Account > Application Keys > User Tokens).
+   * Confirmed against eBay's own docs (developer.ebay.com/develop/guides/
+   * sell/authorization — the documented authorize URL literally shows
+   * `redirect_uri=<app-RuName-value>`, not a URL). Without this flag, the
+   * connect/callback routes' real https://.../callback URL would have been
+   * sent straight to eBay as `redirect_uri` and rejected. Only eBay works
+   * this way among the five channels here — Etsy/Depop/Whatnot/StockX all
+   * take a real URL.
+   */
+  usesRuNameAsRedirect: boolean;
   accessNote: string;
 }
 
@@ -56,7 +80,9 @@ const CHANNEL_OAUTH_STATIC: Record<SalesChannelKey, ChannelOAuthStatic> = {
     usesPkce: false,
     requiresClientSecret: true,
     clientAuthMethod: "basic",
-    accessNote: "Public, self-serve — register an OAuth application at the eBay Developers Program (developer.ebay.com).",
+    usesRuNameAsRedirect: true,
+    accessNote:
+      "Public, self-serve — register an OAuth application at the eBay Developers Program (developer.ebay.com) to get your App ID (Client ID) and Cert ID (Client Secret), then under Your Account > Application Keys > User Tokens, create a Redirect URL (RuName) — set its Auth Accepted URL to https://flipsta.co.uk/api/channel-connections/ebay/callback. eBay's own OAuth flow takes that RuName value, not the URL itself, in its redirect_uri parameter — set CHANNEL_EBAY_CLIENT_ID, CHANNEL_EBAY_CLIENT_SECRET, and CHANNEL_EBAY_RUNAME (all three required).",
   },
   etsy: {
     displayName: "Etsy",
@@ -71,6 +97,7 @@ const CHANNEL_OAUTH_STATIC: Record<SalesChannelKey, ChannelOAuthStatic> = {
     usesPkce: true,
     requiresClientSecret: false,
     clientAuthMethod: "body",
+    usesRuNameAsRedirect: false,
     accessNote:
       "Self-serve — register a Personal App (not a Seller App — a Seller App only ever authorizes the single shop that created it, and Flipsta needs each of its own sellers to connect their own separate shop) at developers.etsy.com, then apply for Commercial Access on that same app before other sellers can connect (Etsy reviews this manually; timing varies). Set CHANNEL_ETSY_CLIENT_ID only.",
   },
@@ -82,6 +109,7 @@ const CHANNEL_OAUTH_STATIC: Record<SalesChannelKey, ChannelOAuthStatic> = {
     usesPkce: true,
     requiresClientSecret: true,
     clientAuthMethod: "body",
+    usesRuNameAsRedirect: false,
     accessNote:
       "Gated — Depop's Partner API isn't self-serve; email their Partner API team to get a client_id/secret and your specific authorize/token URLs, then set CHANNEL_DEPOP_CLIENT_ID/_SECRET/_AUTHORIZE_URL/_TOKEN_URL.",
   },
@@ -93,6 +121,7 @@ const CHANNEL_OAUTH_STATIC: Record<SalesChannelKey, ChannelOAuthStatic> = {
     usesPkce: false,
     requiresClientSecret: true,
     clientAuthMethod: "body",
+    usesRuNameAsRedirect: false,
     accessNote:
       "Gated — contact Whatnot's developer team to register a client app and redirect URI; they issue the client_id/secret and your specific authorize/token URLs. Set CHANNEL_WHATNOT_CLIENT_ID/_SECRET/_AUTHORIZE_URL/_TOKEN_URL.",
   },
@@ -104,6 +133,7 @@ const CHANNEL_OAUTH_STATIC: Record<SalesChannelKey, ChannelOAuthStatic> = {
     usesPkce: false,
     requiresClientSecret: true,
     clientAuthMethod: "body",
+    usesRuNameAsRedirect: false,
     accessNote:
       "Gated, application/review process via the StockX Developer Portal — their OAuth pages also sit behind PerimeterX bot-detection, budget extra lead time. Once approved, set CHANNEL_STOCKX_CLIENT_ID/_SECRET/_AUTHORIZE_URL/_TOKEN_URL from StockX's own dashboard.",
   },
@@ -119,6 +149,8 @@ export interface ChannelOAuthConfig extends ChannelOAuthStatic {
   clientSecret?: string;
   authorizeUrl?: string;
   tokenUrl?: string;
+  /** eBay only — see usesRuNameAsRedirect above. Read from CHANNEL_EBAY_RUNAME. */
+  ruName?: string;
 }
 
 export function getChannelOAuthConfig(channel: SalesChannelKey): ChannelOAuthConfig {
@@ -130,6 +162,7 @@ export function getChannelOAuthConfig(channel: SalesChannelKey): ChannelOAuthCon
     clientSecret: process.env[envKey(channel, "CLIENT_SECRET")] || undefined,
     authorizeUrl: process.env[envKey(channel, "AUTHORIZE_URL")] || base.defaultAuthorizeUrl || undefined,
     tokenUrl: process.env[envKey(channel, "TOKEN_URL")] || base.defaultTokenUrl || undefined,
+    ruName: process.env[envKey(channel, "RUNAME")] || undefined,
   };
 }
 
@@ -137,7 +170,17 @@ export function getChannelOAuthConfig(channel: SalesChannelKey): ChannelOAuthCon
 export function isChannelConnectConfigured(channel: SalesChannelKey): boolean {
   const c = getChannelOAuthConfig(channel);
   const hasSecret = !c.requiresClientSecret || Boolean(c.clientSecret);
-  return Boolean(c.clientId && hasSecret && c.authorizeUrl && c.tokenUrl);
+  const hasRuName = !c.usesRuNameAsRedirect || Boolean(c.ruName);
+  return Boolean(c.clientId && hasSecret && hasRuName && c.authorizeUrl && c.tokenUrl);
+}
+
+/**
+ * The value that actually belongs in the OAuth `redirect_uri` parameter for
+ * this channel — the real callback URL for every channel except eBay, which
+ * takes its eBay-generated RuName there instead (see usesRuNameAsRedirect).
+ */
+function resolveRedirectParam(cfg: ChannelOAuthConfig, realRedirectUri: string): string {
+  return cfg.usesRuNameAsRedirect && cfg.ruName ? cfg.ruName : realRedirectUri;
 }
 
 /** Builds the URL to send the seller's browser to for them to log in and grant access. */
@@ -151,7 +194,7 @@ export function buildChannelAuthorizeUrl(
   }
   const url = new URL(cfg.authorizeUrl);
   url.searchParams.set("client_id", cfg.clientId!);
-  url.searchParams.set("redirect_uri", params.redirectUri);
+  url.searchParams.set("redirect_uri", resolveRedirectParam(cfg, params.redirectUri));
   url.searchParams.set("response_type", "code");
   url.searchParams.set("state", params.state);
   if (cfg.scopes.length) url.searchParams.set("scope", cfg.scopes.join(" "));
@@ -172,12 +215,16 @@ export interface ChannelTokenResponse {
 /**
  * Exchanges the authorization code the platform sent back for an access
  * (and usually refresh) token. This is the generic OAuth 2.0 shape every
- * channel here documents; the one real per-platform variation known and
- * handled is eBay's Basic-auth client credentials (clientAuthMethod above)
- * vs. everyone else sending them in the request body. A gated platform
- * (Depop/Whatnot/StockX) may have its own further quirks not knowable until
- * Steven has real credentials to test against — worth a quick check against
- * that platform's docs the first time a real connection is attempted.
+ * channel here documents; the two real per-platform variations known and
+ * handled are eBay's Basic-auth client credentials (clientAuthMethod above)
+ * vs. everyone else sending them in the request body, and eBay's redirect_uri
+ * being its RuName rather than the real URL — the token exchange must send
+ * back exactly the same redirect_uri value used in the authorize request,
+ * so this has to resolve it the same way buildChannelAuthorizeUrl does. A
+ * gated platform (Depop/Whatnot/StockX) may have its own further quirks not
+ * knowable until Steven has real credentials to test against — worth a
+ * quick check against that platform's docs the first time a real connection
+ * is attempted.
  */
 export async function exchangeChannelCodeForToken(
   channel: SalesChannelKey,
@@ -191,7 +238,7 @@ export async function exchangeChannelCodeForToken(
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     code: params.code,
-    redirect_uri: params.redirectUri,
+    redirect_uri: resolveRedirectParam(cfg, params.redirectUri),
   });
   if (cfg.usesPkce && params.codeVerifier) body.set("code_verifier", params.codeVerifier);
 

@@ -4,6 +4,9 @@ import {
   calculateStartingBid,
   classifyUrgencyTier,
   computeShopPricing,
+  getMarketplaceCommissionRate,
+  MIN_NET_ROI_PCT,
+  NET_ROI_SHIPPING_ESTIMATE_GBP,
   qualifiesForShop,
   SHOP_ITEM_MAX_UNITS_LISTED,
 } from "@flipsta/shared";
@@ -247,13 +250,26 @@ export async function discoverOpportunities(adapter: SourceAdapter, targetOpport
     // selling it cheaper than the "clearance" source price) — the AI's one
     // resale-evidence listing was misleading. buildPrompt()'s "ON RESALE
     // EVIDENCE" instructions now tell the model to actively check for a
-    // cheaper price elsewhere before ever reporting a candidate, but as a
-    // second, independent line of defence this bar is also raised from 10%
-    // to 20% — real headroom for eBay/marketplace fees (~10-13%), shipping,
-    // and plain estimation error, so a small mistake in the AI's resale
-    // estimate doesn't turn into a loss. Trade-off: fewer candidates will
-    // clear the bar. Revisit this number with Steven if that's a problem.
-    if (marginPct < 0.2) return false;
+    // cheaper price elsewhere before ever reporting a candidate. That was
+    // originally paired with a second, independent line of defence: a flat
+    // 20% GROSS margin bar (up from an original 10%) as informal headroom
+    // for marketplace fees, shipping, and plain estimation error.
+    //
+    // 27 Aug 2026, Steven: "When live oppotunities are available i think
+    // the minimum ROI should be 15% after all costs are taken into
+    // consideration." Replaces that informal gross padding with an
+    // explicit NET calculation — marketplace commission (at the standard
+    // tier's rate, the highest of the three sellable tiers, so this stays
+    // conservative regardless of which tier eventually wins it) and a flat
+    // shipping estimate are actually subtracted from the margin before
+    // checking the bar, rather than just leaving generic headroom and
+    // hoping it covers those costs. See MIN_NET_ROI_PCT /
+    // NET_ROI_SHIPPING_ESTIMATE_GBP (packages/shared/src/constants.ts) for
+    // the exact figures and the "why standard tier" reasoning.
+    const estimatedCommissionGBP = c.estimatedResalePriceGBP * getMarketplaceCommissionRate("standard");
+    const netMarginGBP = marginGBP - estimatedCommissionGBP - NET_ROI_SHIPPING_ESTIMATE_GBP;
+    const netRoiPct = netMarginGBP / c.sourcePriceGBP;
+    if (netRoiPct < MIN_NET_ROI_PCT) return false;
 
     const { data: category } = await db.from("categories").select("id, name").eq("slug", c.categorySlug).single();
     if (!category) return false;

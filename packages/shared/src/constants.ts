@@ -194,3 +194,37 @@ export const LOYALTY_EARN_RATE_PCT = 1;
 // a true count straight from the database. Only worth showing once stock is
 // actually getting low; above this it'd just be noise on every card.
 export const SHOP_LOW_STOCK_THRESHOLD_UNITS = 3;
+
+// 27 Aug 2026, Steven: "i would like to be able to offer my resellers the
+// oppotunity to do live selling via my site. a bit like QVC... i think
+// whatnot does this already." Researched Whatnot/eBay Live/TikTok Shop
+// Live/Amazon Live/QVC (27 Aug 2026, see claude/deployment-checklist.md) —
+// every one of them runs each item as a short, fast-turnover clock (QVC's
+// own on-air segments are typically a few minutes; Whatnot's live auctions
+// commonly run 30-90 seconds per item) to keep momentum and viewer
+// attention up, rather than one long auction per item. 2 minutes is a
+// reasonable first-pass middle ground for Flipsta's own items (higher
+// average value than Whatnot's typical low-cost collectibles, so a little
+// longer than Whatnot's fastest cadence) — easy to tune later from this one
+// constant once Steven has real hosted shows to compare against.
+export const LIVE_SHOW_ITEM_AUCTION_SECONDS = 120;
+
+// Section 8.1-style net-ROI floor for the AI's own opportunity discovery —
+// 27 Aug 2026, Steven: "When live oppotunities are available i think the
+// minimum ROI should be 15% after all costs are taken into consideration."
+// Read as a global discovery floor (opportunities.status = 'live' is the
+// existing generic "available to act on" state used everywhere in this
+// codebase, not something scoped to the new live-show feature specifically
+// — flagged to Steven as this interpretation, open to correction). Applied
+// in apps/worker/src/jobs/discoverOpportunities.ts as a genuine NET
+// calculation — marketplace commission and a flat shipping estimate
+// subtracted before checking the 15% bar — replacing the previous 20%
+// GROSS margin proxy that only informally padded for those same costs.
+export const MIN_NET_ROI_PCT = 0.15;
+// A flat, conservative per-item shipping estimate for the net-ROI check
+// only (courier choice/exact shipping cost isn't known this early in the
+// pipeline — before a listing or order exists) — matches the higher of the
+// two real courier costs already used at actual checkout (see
+// lib/orderCreation.ts: DPD is £4.99, Royal Mail £2.99), so the floor
+// errs conservative rather than overstating margin.
+export const NET_ROI_SHIPPING_ESTIMATE_GBP = 4.99;

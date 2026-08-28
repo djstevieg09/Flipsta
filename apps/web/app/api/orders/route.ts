@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/currentProfile";
-import { getMarketplaceCommissionRate } from "@flipsta/shared";
-import { createEscrowPaymentIntent } from "@/lib/stripe";
-import { awardLoyaltyCredit } from "@/lib/loyalty";
+import { createOrderForListing } from "@/lib/orderCreation";
 
 // Force-dynamic: every route here reads live application data (bids, wallet
 // balances, opportunities, order status) straight from Supabase. Without this,
@@ -29,54 +27,18 @@ export async function POST(req: NextRequest) {
 
   const supabase = await createSupabaseServerClient();
 
-  const { data: listing, error: listingError } = await supabase
-    .from("listings")
-    .select("id, price_gbp, seller_id, sold_at, profiles!listings_seller_id_fkey(subscription_tier, stripe_connect_account_id)")
-    .eq("id", listingId)
-    .single();
-  if (listingError || !listing) return NextResponse.json({ error: "Listing not found." }, { status: 404 });
-  if (listing.sold_at) return NextResponse.json({ error: "This listing has already sold." }, { status: 409 });
-
-  const sellerProfile = Array.isArray(listing.profiles) ? listing.profiles[0] : listing.profiles;
-  const sellerTier = sellerProfile?.subscription_tier ?? "standard";
-  const commissionRate = getMarketplaceCommissionRate(sellerTier);
-  const commissionGBP = Math.round(listing.price_gbp * commissionRate * 100) / 100;
-
-  const shippingGBP = courier === "dpd" ? 4.99 : 2.99;
-
-  const paymentIntent = await createEscrowPaymentIntent({
-    amountGBP: listing.price_gbp + shippingGBP,
-    connectedAccountId: sellerProfile?.stripe_connect_account_id ?? "acct_not_yet_onboarded",
-    metadata: { listingId, buyerId: auth.userId },
+  // 27 Aug 2026 — this now just calls the shared helper (lib/orderCreation.ts),
+  // extracted so a live-show auction win creates an order the identical way.
+  // No behavior change here versus before the extraction.
+  const result = await createOrderForListing(supabase, {
+    listingId,
+    buyerId: auth.userId,
+    courier,
+    extendedHoldRequested,
   });
+  if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
 
-  const { data: order, error: orderError } = await supabase
-    .from("orders")
-    .insert({
-      buyer_id: auth.userId,
-      listing_id: listingId,
-      price_gbp: listing.price_gbp,
-      commission_gbp: commissionGBP,
-      courier: courier ?? "dpd",
-      shipping_gbp: shippingGBP,
-      extended_hold_requested: Boolean(extendedHoldRequested),
-      stripe_payment_intent_id: paymentIntent.id,
-      status: "pending_payment",
-    })
-    .select()
-    .single();
-  if (orderError) return NextResponse.json({ error: orderError.message }, { status: 500 });
-
-  await supabase.from("listings").update({ sold_at: new Date().toISOString() }).eq("id", listingId);
-
-  // 27 Aug 2026: the "investment" stage of the Hook Model — see lib/loyalty.ts.
-  await awardLoyaltyCredit(supabase, {
-    profileId: auth.userId,
-    spendGBP: listing.price_gbp + shippingGBP,
-    referenceOrderId: order.id,
-  });
-
-  return NextResponse.json({ order, clientSecret: (paymentIntent as any).client_secret }, { status: 201 });
+  return NextResponse.json({ order: result.order, clientSecret: result.clientSecret }, { status: 201 });
 }
 
 /**

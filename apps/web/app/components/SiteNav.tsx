@@ -43,6 +43,17 @@ export default function SiteNav({
           buisness." No auth gate — same as Shop, purely a browse-and-
           click-through page, nothing account-specific here. */}
       <a href="/partner-deals" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Partner Deals</a>
+      {/* 27 Aug 2026, Steven: "i would like to be able to offer my resellers
+          the oppotunity to do live selling via my site. a bit like QVC."
+          No auth gate — same as Shop, anyone can watch a live show, sign-in
+          is only required to actually bid/chat/buy (enforced server-side,
+          see api/live-shows/[id]/items/[itemId]/bid). */}
+      <a href="/live" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Live</a>
+      {/* 27 Aug 2026, Steven: "have a leaderboard showing who is the top
+          seller by profit on the site." Confirmed "Fully public" — no auth
+          gate, visible to a pre-signup visitor too (Section 12.1-style
+          social proof to help sell the reseller opportunity). */}
+      <a href="/leaderboard" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Leaderboard</a>
       {/* 26 Aug 2026, Steven: "Need a button that says Flipsta It!" */}
       {isAuthed && <a href="/flipsta-it" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Flipsta It!</a>}
       {/* 27 Aug 2026, Steven: "Sniper mode needs setting up with its own

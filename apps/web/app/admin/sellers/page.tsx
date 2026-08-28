@@ -10,6 +10,7 @@ type Seller = {
   status: string;
   createdAt: string;
   openTickets: number;
+  subscriptionGrantExpiresAt: string | null;
 };
 
 export default function AdminSellersPage() {
@@ -64,6 +65,41 @@ export default function AdminSellersPage() {
     window.alert(`Done — ${amountGBP >= 0 ? "+" : ""}£${amountGBP.toFixed(2)} added to ${displayName}'s wallet.`);
   }
 
+  // 27 Aug 2026, Steven: "we also need an oppotunity to issue a free
+  // months subscription or mulitples of." Prompt-based flow, same shape as
+  // grantCredit above — auto-reverts once the worker's
+  // revertExpiredSubscriptionGrants job sees the expiry pass (see
+  // migration 0027 / api/admin/subscription-grant).
+  async function grantFreeMonths(id: string, displayName: string) {
+    const tier = window.prompt(`Which tier for ${displayName}? Enter standard, pro, or elite:`, "elite");
+    if (tier === null) return;
+    if (!["standard", "pro", "elite"].includes(tier.trim())) {
+      window.alert("Enter exactly one of: standard, pro, elite.");
+      return;
+    }
+    const monthsStr = window.prompt("How many months (1-24)?", "1");
+    if (monthsStr === null) return;
+    const months = Number(monthsStr);
+    if (!Number.isInteger(months) || months < 1 || months > 24) {
+      window.alert("Enter a whole number of months between 1 and 24.");
+      return;
+    }
+    const reason = window.prompt("Reason (goes into the audit log — e.g. \"live-show launch giveaway\"):");
+    if (reason === null) return;
+    const res = await fetch("/api/admin/subscription-grant", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ profileId: id, tier: tier.trim(), months, reason }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      window.alert(data.error ?? "Something went wrong.");
+      return;
+    }
+    window.alert(`Done — ${displayName} is now ${tier.trim()} for ${months} month(s).`);
+    load();
+  }
+
   const filtered = sellers.filter((s) => s.displayName.toLowerCase().includes(q.toLowerCase()));
 
   return (
@@ -98,7 +134,14 @@ export default function AdminSellersPage() {
               {filtered.map((s) => (
                 <tr key={s.id} className="border-b border-border last:border-0">
                   <td className="p-3 font-bold">{s.displayName}</td>
-                  <td className="p-3 capitalize">{s.subscriptionTier}</td>
+                  <td className="p-3 capitalize">
+                    {s.subscriptionTier}
+                    {s.subscriptionGrantExpiresAt && (
+                      <span className="block text-[10px] text-textDim normal-case">
+                        gifted until {new Date(s.subscriptionGrantExpiresAt).toLocaleDateString()}
+                      </span>
+                    )}
+                  </td>
                   <td className="p-3 capitalize">{s.role}</td>
                   <td className="p-3 capitalize">{s.status}</td>
                   <td className="p-3">{s.openTickets}</td>
@@ -111,6 +154,9 @@ export default function AdminSellersPage() {
                     </button>
                     <button className="btn btn-ghost text-xs px-2 py-1" onClick={() => grantCredit(s.id, s.displayName)}>
                       Grant credit
+                    </button>
+                    <button className="btn btn-ghost text-xs px-2 py-1" onClick={() => grantFreeMonths(s.id, s.displayName)}>
+                      Grant free month(s)
                     </button>
                   </td>
                 </tr>

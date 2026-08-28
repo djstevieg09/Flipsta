@@ -167,6 +167,69 @@ the Supabase dashboard, not in your app's own config.
       the user lands back on `/login` with a message, no broken flow.
 - [ ] Seller tax reporting (Section 12.6) — the `seller_tax_info` schema and `isHmrcReportableSeller()` check exist, but confirm the current HMRC digital platform reporting thresholds/deadlines with an accountant before the onboarding UI (still to be built — see STATUS.md) goes live.
 
+## 13. Live selling — Cloudflare Stream + the internal API secret
+
+27 Aug 2026, Steven: "i would like to be able to offer my resellers the
+oppotunity to do live selling via my site. a bit like QVC... i think
+whatnot does this already." Real video streaming (Steven's confirmed
+answer, not a virtual/chat-only event) via **Cloudflare Stream**, chosen
+specifically because it lets a host broadcast straight from their own
+browser tab/camera (WHIP) with no OBS or any other software to install —
+see `apps/web/lib/cloudflareStream.ts`. Any approved reseller can host
+(Steven's confirmed answer) via `/live/new`; anyone can watch at `/live`,
+no sign-in needed; bidding/buying/chat needs an account.
+
+- [ ] **Create a Cloudflare account** if you don't already have one
+      (cloudflare.com — free to sign up; Stream itself is pay-as-you-go, no
+      monthly minimum: roughly £4/1,000 minutes stored + £0.80/1,000
+      minutes watched at today's exchange rate, converted from Cloudflare's
+      USD pricing — cheap to trial with a handful of test shows).
+- [ ] **Enable Stream** on the account — Cloudflare dashboard → Stream (it
+      will ask you to add a payment method even on the pay-as-you-go tier).
+- [ ] **CLOUDFLARE_STREAM_ACCOUNT_ID** — your Account ID, shown on the right
+      side of almost any page in the Cloudflare dashboard once you've
+      selected your account.
+- [ ] **CLOUDFLARE_STREAM_API_TOKEN** — dashboard → My Profile → API Tokens
+      → Create Token. Use the "Edit Cloudflare Stream" template (or a
+      custom token scoped to Account → Stream → Edit) — this is what lets
+      Flipsta create a new Live Input every time a reseller schedules a
+      show.
+- [ ] **CLOUDFLARE_STREAM_CUSTOMER_CODE** — shown on the Stream dashboard's
+      overview page (sometimes labelled "customer subdomain" — it's the
+      short code in `https://customer-<CODE>.cloudflarestream.com/...`,
+      used to build every viewer's playback URL).
+- [ ] Set all three on **flipsta-web only** (not the worker — video
+      creation/playback both happen web-side).
+- [ ] **INTERNAL_API_SECRET** — a new one, needed on **both** flipsta-web
+      and flipsta-worker, and it must be the **exact same value** on both.
+      This is what lets the worker's `closeExpiredLiveItems.ts` job call
+      flipsta-web's own `/api/internal/live-shows/settle-item` route to
+      actually create the order when a live auction's clock runs out
+      (keeps Stripe's SDK/keys living only in the web app, same reasoning
+      already noted — but never actually wired up — in
+      `releaseEscrow.ts`'s comments). Generate any long random string for
+      this, e.g. run `openssl rand -hex 32` in a terminal, or use any
+      password generator for a 40+ character string — paste the SAME value
+      into both services' Render environment tabs.
+- [ ] `WEB_APP_INTERNAL_URL` is already set for you in `render.yaml`
+      (`https://flipsta.co.uk`) — nothing to fill in there.
+- [ ] Until `INTERNAL_API_SECRET` and the three Cloudflare vars are all set,
+      "Schedule a show" on `/live/new` will show a clear "not set up yet"
+      message rather than failing confusingly — nothing breaks by leaving
+      this for later, same as every other optional integration in this doc.
+- [ ] Run `supabase/migrations/0027_live_selling_and_grants.sql` and
+      `0028_orders_rls_gaps.sql` (the second one fixes two real, pre-existing
+      bugs found while building this — see that migration's own comments
+      for the full detail — worth reading, it likely means loyalty credit
+      hasn't actually been awarded to any real buyer yet).
+- [ ] The host's "Start broadcasting" button
+      (`apps/web/app/live/[id]/page.tsx`) uses the browser's own WebRTC/WHIP
+      APIs directly — no library, following Cloudflare's own documented WHIP
+      flow — but this hasn't been exercised against a real Cloudflare
+      account yet (no live credentials in the environment this was built
+      in). Worth a real test broadcast (even solo, to yourself) the first
+      time this runs for real, before relying on it for an actual show.
+
 ---
 
 **Suggested order:** 1 → 2 → 4 (deploy with the mock worker adapter and Stripe

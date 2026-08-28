@@ -10,6 +10,8 @@ import { expireSeasonalStock } from "./jobs/expireSeasonalStock.js";
 import { notifyDealMatches } from "./jobs/notifyDealMatches.js";
 import { runSniperBids } from "./jobs/runSniperBids.js";
 import { syncAwinProducts } from "./jobs/syncAwinProducts.js";
+import { closeExpiredLiveItems } from "./jobs/closeExpiredLiveItems.js";
+import { revertExpiredSubscriptionGrants } from "./jobs/revertExpiredSubscriptionGrants.js";
 import { mockAdapter } from "./adapters/mockAdapter.js";
 import { claudeSearchAdapter, isClaudeSearchConfigured } from "./adapters/claudeSearchAdapter.js";
 
@@ -65,6 +67,13 @@ const INTERVALS_MS = {
   // side, and the pilot scope is 2-3 merchants, so there's no benefit to
   // checking more often than this — see syncAwinProducts.ts.
   awinSync: 6 * 60 * 60 * 1000,
+  // 27 Aug 2026 — live-show item auctions run on a short, fixed clock
+  // (LIVE_SHOW_ITEM_AUCTION_SECONDS, currently 2 minutes) — check often,
+  // same cadence reasoning as closeAuctions/sniperBids above.
+  closeLiveItems: 15 * 1000,
+  // Free-month grants expire on whatever date an admin picked — no need to
+  // check anywhere near as often as a live auction clock.
+  revertGrants: 30 * 60 * 1000,
 };
 
 async function tick(name: string, fn: () => Promise<unknown>) {
@@ -100,6 +109,8 @@ async function main() {
   await tick("expireSeasonalStock", expireSeasonalStock);
   await tick("notifyDealMatches", notifyDealMatches);
   await tick("syncAwinProducts", syncAwinProducts);
+  await tick("closeExpiredLiveItems", closeExpiredLiveItems);
+  await tick("revertExpiredSubscriptionGrants", revertExpiredSubscriptionGrants);
 
   if (!discoveryPaused) {
     setInterval(() => tick("discoverOpportunities", () => discoverOpportunities(discoveryAdapter)), INTERVALS_MS.discovery);
@@ -115,6 +126,8 @@ async function main() {
   setInterval(() => tick("expireSeasonalStock", expireSeasonalStock), INTERVALS_MS.seasonalExpiry);
   setInterval(() => tick("notifyDealMatches", notifyDealMatches), INTERVALS_MS.dealMatchNotifications);
   setInterval(() => tick("syncAwinProducts", syncAwinProducts), INTERVALS_MS.awinSync);
+  setInterval(() => tick("closeExpiredLiveItems", closeExpiredLiveItems), INTERVALS_MS.closeLiveItems);
+  setInterval(() => tick("revertExpiredSubscriptionGrants", revertExpiredSubscriptionGrants), INTERVALS_MS.revertGrants);
 }
 
 main().catch((err) => {

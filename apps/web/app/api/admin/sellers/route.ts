@@ -32,7 +32,7 @@ export async function GET() {
 
   const { data: profiles, error } = await supabase
     .from("profiles")
-    .select("id, display_name, subscription_tier, role, status, created_at")
+    .select("id, display_name, subscription_tier, role, status, created_at, subscription_tier_grant_expires_at")
     .order("created_at", { ascending: false });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -50,6 +50,7 @@ export async function GET() {
     status: p.status,
     createdAt: p.created_at,
     openTickets: ticketCountByProfile.get(p.id) ?? 0,
+    subscriptionGrantExpiresAt: p.subscription_tier_grant_expires_at,
   }));
 
   return NextResponse.json({ sellers });

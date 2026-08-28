@@ -99,6 +99,25 @@ services:
         sync: false
       - key: AWIN_PUBLISHER_ID
         sync: false
+      # 27 Aug 2026, Steven: "i would like to be able to offer my resellers
+      # the oppotunity to do live selling via my site. a bit like QVC."
+      # Cloudflare Stream — lib/cloudflareStream.ts. See
+      # INFRASTRUCTURE_TODO.md #10 for exactly where to get each of these
+      # three from the Cloudflare dashboard.
+      - key: CLOUDFLARE_STREAM_ACCOUNT_ID
+        sync: false
+      - key: CLOUDFLARE_STREAM_API_TOKEN
+        sync: false
+      - key: CLOUDFLARE_STREAM_CUSTOMER_CODE
+        sync: false
+      # 27 Aug 2026 — a shared secret so flipsta-worker can call this one
+      # trusted internal route (api/internal/live-shows/settle-item) to
+      # settle a live-show auction and create the real order, without that
+      # route being callable by anyone else. MUST be set to the EXACT SAME
+      # value here and on flipsta-worker below — see INFRASTRUCTURE_TODO.md
+      # #10 for a one-line way to generate a random value for this.
+      - key: INTERNAL_API_SECRET
+        sync: false
 
   - type: worker
     name: flipsta-worker
@@ -130,4 +149,15 @@ services:
       - key: AWIN_API_TOKEN
         sync: false
       - key: AWIN_PUBLISHER_ID
+        sync: false
+      # 27 Aug 2026 — live-show settlement (jobs/closeExpiredLiveItems.ts)
+      # calls flipsta-web's internal API to actually create the order
+      # (keeps the Stripe SDK living in one place, in the web app — see
+      # that job's own comment). WEB_APP_INTERNAL_URL is just Flipsta's own
+      # public URL, not a secret — set directly rather than sync: false so
+      # it can't be left blank. INTERNAL_API_SECRET MUST be set to the
+      # exact same value as flipsta-web's copy above.
+      - key: WEB_APP_INTERNAL_URL
+        value: https://flipsta.co.uk
+      - key: INTERNAL_API_SECRET
         sync: false

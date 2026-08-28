@@ -112,6 +112,59 @@ channel: with no credentials set, that channel's "Connect" button shows
 - [ ] Register "Flipsta" at Companies House if not already done.
 - [ ] A UK financial services solicitor's review before Version 1 (the short-selling exchange) ever goes live — Section 3.1 flags a real FCA risk around forward-contract regulation.
 - [ ] The draft Terms & Conditions in `legal/terms-and-conditions-draft.md` (Section 12.7) needs a solicitor's review before publishing, alongside a Privacy Policy, Cookie Policy, and Seller Agreement — none of which exist yet.
+
+## 12. Social login (Google, Facebook, Apple)
+
+27 Aug 2026, Steven: "need to have users be able to login with google,
+facebook and apple." The app side is fully built — `/login` and `/signup`
+both show "or continue with" buttons (`SocialAuthButtons.tsx`), and
+`api/auth/callback/route.ts` handles the redirect back from each provider.
+**None of this needs a new env var on Render** — unlike Stripe/Awin/the
+channel OAuth in Section 9, provider credentials for this live entirely in
+the Supabase dashboard, not in your app's own config.
+
+- [ ] **Turn providers on in Supabase first:** Dashboard → Authentication →
+      Providers. Each of Google/Facebook/Apple has a toggle plus a Client
+      ID / Client Secret pair to fill in — and each one shows you the exact
+      **Callback URL** to register with that provider (it'll look like
+      `https://<your-project-ref>.supabase.co/auth/v1/callback` — this is
+      Supabase's own callback, separate from and in addition to our app's
+      `/api/auth/callback`, which only runs after Supabase has already
+      finished the provider handshake).
+- [ ] **Google** — simplest of the three, self-serve, free. Google Cloud
+      Console → APIs & Services → Credentials → Create OAuth client ID
+      (Web application). Add the Supabase callback URL above under
+      "Authorized redirect URIs." Copy the Client ID/Secret into Supabase.
+      You'll also fill in an OAuth consent screen (app name, support email,
+      logo) — this can start in "Testing" mode for now and doesn't need
+      Google's full verification review until you have real volume.
+- [ ] **Facebook** — self-serve, free. developers.facebook.com → create an
+      app (type: Consumer) → add the "Facebook Login" product → Settings →
+      add the Supabase callback URL under "Valid OAuth Redirect URIs."
+      Copy the App ID/Secret into Supabase. Like Google, this can run in
+      development mode for testing before Facebook's app review is needed.
+- [ ] **Apple** — the one with real upfront cost and friction: requires an
+      active Apple Developer Program membership ($99/year) even before you
+      can configure anything. In developer.apple.com → Certificates,
+      Identifiers & Profiles, register a Services ID (this is what acts as
+      the "Sign in with Apple" client), enable Sign in with Apple on it, and
+      register the Supabase callback URL as its return URL. Apple also
+      requires generating a private key and a signed client secret (a JWT,
+      regenerated periodically — Supabase's own Apple provider docs walk
+      through this exact step, worth following directly from their site
+      since Apple's requirements here shift periodically). Given the cost
+      and setup time, it's reasonable to ship Google + Facebook first and
+      add Apple once there's a real reason to prioritise it (e.g. iOS users
+      specifically asking for it).
+- [ ] Run `supabase/migrations/0026_social_login.sql` — without it, a
+      Google/Facebook sign-up will still work but show as a generic email
+      prefix ("steven" rather than "Steven Smith") for display name, and the
+      referral-code pass-through (`/signup?ref=CODE`) silently won't credit
+      OAuth sign-ups at all.
+- [ ] Nothing here is required for launch — email/password sign-in (already
+      live) works completely on its own. Turn a provider on whenever you're
+      ready; until then, that provider's button just returns an error and
+      the user lands back on `/login` with a message, no broken flow.
 - [ ] Seller tax reporting (Section 12.6) — the `seller_tax_info` schema and `isHmrcReportableSeller()` check exist, but confirm the current HMRC digital platform reporting thresholds/deadlines with an accountant before the onboarding UI (still to be built — see STATUS.md) goes live.
 
 ---

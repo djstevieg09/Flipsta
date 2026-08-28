@@ -14,9 +14,9 @@ describe("isValidSalesChannel", () => {
 
 describe("publishListingToChannel (stub)", () => {
   it("simulates a successful publish with an external URL", async () => {
-    const result = await publishListingToChannel("vinted", { id: "abc123", title: "Test item", priceGBP: 20 });
+    const result = await publishListingToChannel("etsy", { id: "abc123", title: "Test item", priceGBP: 20 });
     expect(result.success).toBe(true);
-    expect(result.channel).toBe("vinted");
+    expect(result.channel).toBe("etsy");
     expect(result.externalUrl).toContain("abc123");
   });
 });

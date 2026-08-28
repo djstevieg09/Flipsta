@@ -5,26 +5,41 @@
  */
 export const SALES_CHANNELS = [
   { key: "ebay", name: "eBay" },
+  // 27 Aug 2026 real bug, caught while walking Steven through the Etsy
+  // signup he asked for: this list still said Amazon/Vinted/Facebook
+  // Marketplace, but INFRASTRUCTURE_TODO.md #9 and render.yaml (both
+  // current — CHANNEL_ETSY_CLIENT_ID etc. are already scaffolded there)
+  // and this very file's own publishListingToChannel() doc comment below
+  // all already described the real intended set as eBay/Etsy/Depop/
+  // Whatnot/StockX. A 26 Aug 2026 comment here explained that an earlier
+  // attempt at this exact swap got reverted because updating this file
+  // alone (without also updating channelOAuth.ts's channel-static map,
+  // which is keyed off this union type) broke the build — i.e. the swap
+  // was half-done and the revert papered over the compile error instead
+  // of finishing it. This redoes it properly, updating both files
+  // together — see channelOAuth.ts's matching change.
+  //
+  // Etsy — a strong fit for the same trainers/streetwear/collectibles
+  // audience Depop targets, and Etsy Open API v3 is real, self-serve,
+  // PKCE-based (no client secret) — see channelOAuth.ts.
+  { key: "etsy", name: "Etsy" },
   // Depop isn't in the original doc's list — added because the proof-of-concept
   // audience (trainers/streetwear/collectibles, Section 4/6.1) is a strong
   // fit for it, and it now has an official seller API (via a Vendoo/partner
   // integration) rather than none, as originally documented here.
   { key: "depop", name: "Depop" },
-  // 26 Aug 2026: reverted back to this original Amazon/Vinted/Facebook
-  // Marketplace set to match what's actually deployed on Steven's real
-  // site — a since-removed local commit had swapped these three for
-  // Etsy/Whatnot/StockX, but that change never made it into the real
-  // GitHub repo, and a mismatch here is exactly what broke the
-  // `channelOAuth.ts` build (its channel-static map is keyed off this
-  // union type, so the two must always match what's really deployed).
-  // Amazon needs the seller's own pre-existing Seller Central account and
-  // has no single fixed authorize URL to hardcode; Vinted has no public
-  // seller API at all; Facebook's Graph API deliberately excludes
-  // Marketplace. All three are real named channels sellers will expect,
-  // but none is currently self-serve-connectable — see channelOAuth.ts.
-  { key: "amazon", name: "Amazon" },
-  { key: "vinted", name: "Vinted" },
-  { key: "facebook_marketplace", name: "Facebook Marketplace" },
+  // Whatnot and StockX both have real seller APIs, but both are gated
+  // (a direct application to their developer/partner teams, not
+  // self-serve) — see INFRASTRUCTURE_TODO.md #9 and channelOAuth.ts.
+  { key: "whatnot", name: "Whatnot" },
+  { key: "stockx", name: "StockX" },
+  // Amazon, Vinted, and Facebook Marketplace were all considered and
+  // deliberately deprioritised (not removed from the plan, just not built
+  // against yet) — see INFRASTRUCTURE_TODO.md #9's "kept in mind for
+  // later" note for why each one specifically isn't worth building against
+  // right now (Amazon needs a pre-existing Seller Central account and
+  // often isn't the cheapest source anyway; Vinted has no public seller
+  // API at all; Meta's Graph API deliberately excludes Marketplace).
 ] as const;
 
 export type SalesChannelKey = (typeof SALES_CHANNELS)[number]["key"];

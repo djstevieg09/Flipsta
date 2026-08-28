@@ -1,14 +1,27 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { SocialAuthButtons } from "@/app/components/SocialAuthButtons";
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
+  // 27 Aug 2026 — api/auth/callback/route.ts redirects here with ?error=...
+  // when a Google/Facebook/Apple sign-in is cancelled or fails, so the user
+  // sees why instead of landing back on a silently-empty login page.
+  const oauthError = useSearchParams().get("error");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(oauthError);
 
   async function submit() {
     setError(null);
@@ -47,6 +60,7 @@ export default function LoginPage() {
         No account yet? <a className="underline" href="/signup">Sign up</a> ·{" "}
         <a className="underline" href="/forgot-password">Forgot password?</a>
       </p>
+      <SocialAuthButtons />
     </div>
   );
 }

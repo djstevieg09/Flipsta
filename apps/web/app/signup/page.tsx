@@ -4,6 +4,7 @@ import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { REFERRAL_REWARD_GBP } from "@flipsta/shared";
+import { SocialAuthButtons } from "@/app/components/SocialAuthButtons";
 
 /**
  * There was previously no way for a real user to create an account through
@@ -95,6 +96,7 @@ function SignupForm() {
       <p className="text-xs text-textDim">
         Already have an account? <a className="underline" href="/login">Sign in</a>
       </p>
+      <SocialAuthButtons refCode={refCode} />
     </div>
   );
 }

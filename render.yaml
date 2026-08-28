@@ -57,6 +57,13 @@ services:
         sync: false
       - key: CHANNEL_EBAY_CLIENT_SECRET
         sync: false
+      # 27 Aug 2026 — eBay is the one channel here whose OAuth redirect_uri
+      # isn't a real URL; it's an eBay-generated "RuName" (Your Account >
+      # Application Keys > User Tokens > create a Redirect URL). All three
+      # of this and the two above are required for eBay to be connectable —
+      # see channelOAuth.ts's usesRuNameAsRedirect / INFRASTRUCTURE_TODO.md #9.
+      - key: CHANNEL_EBAY_RUNAME
+        sync: false
       - key: CHANNEL_ETSY_CLIENT_ID
         sync: false
       - key: CHANNEL_DEPOP_CLIENT_ID

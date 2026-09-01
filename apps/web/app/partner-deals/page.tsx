@@ -88,12 +88,7 @@ export default function PartnerDealsPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
           {products.map((p) => (
             <div key={p.id} className="card space-y-3">
-              {p.image_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={p.image_url} alt={p.title} className="w-full h-40 object-contain bg-surface2 rounded-lg border border-border" />
-              ) : (
-                <div className="w-full h-40 rounded-lg border border-border flex items-center justify-center text-xs text-textFaint">No photo</div>
-              )}
+              <ProductImage src={p.image_url} alt={p.title} />
               <div className="space-y-1">
                 <div className="font-bold text-sm line-clamp-2">{p.title}</div>
                 <div className="text-xs text-textDim">{p.categories?.name ?? "Uncategorised"} · via {p.advertiser_name}</div>
@@ -117,5 +112,33 @@ export default function PartnerDealsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * 1 Sept 2026 — a real merchant's own feed can list an image URL that's
+ * simply dead (confirmed directly: Modmo's feed points at Shopify CDN
+ * files that 404). That's the merchant's data, not something Flipsta's
+ * sync can fix — but showing a broken-image icon looks like a Flipsta
+ * bug, so this falls back to the same "No photo" placeholder the missing-
+ * URL case already uses the moment the image actually fails to load.
+ */
+function ProductImage({ src, alt }: { src: string | null; alt: string }) {
+  const [failed, setFailed] = useState(false);
+
+  if (!src || failed) {
+    return (
+      <div className="w-full h-40 rounded-lg border border-border flex items-center justify-center text-xs text-textFaint">No photo</div>
+    );
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={alt}
+      onError={() => setFailed(true)}
+      className="w-full h-40 object-contain bg-surface2 rounded-lg border border-border"
+    />
   );
 }

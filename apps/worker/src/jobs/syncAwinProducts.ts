@@ -38,8 +38,16 @@ export async function syncAwinProducts() {
   }
 
   let products;
+  let feedErrors: string[] = [];
   try {
-    products = await fetchConfiguredFeedProducts();
+    ({ products, feedErrors } = await fetchConfiguredFeedProducts());
+    if (feedErrors.length > 0) {
+      // One configured feed failed but at least one other succeeded (e.g.
+      // AWIN_FEED_URL_2 down while AWIN_FEED_URL is fine) — log it but
+      // keep going with whatever products did come through, rather than
+      // discarding a working feed because a second one had a bad moment.
+      console.error("[syncAwinProducts] one or more feeds failed:", feedErrors.join("; "));
+    }
   } catch (err) {
     console.error("[syncAwinProducts] feed download failed:", (err as Error).message);
     return {
@@ -107,6 +115,7 @@ export async function syncAwinProducts() {
     advertisersFailed,
     advertisersMissingFromFeed,
     productsUpserted,
+    ...(feedErrors.length > 0 ? { feedErrors } : {}),
   };
 }
 

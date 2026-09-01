@@ -157,6 +157,13 @@ services:
       # need this; only the worker downloads the feed.
       - key: AWIN_FEED_URL
         sync: false
+      # 1 Sept 2026 — optional. Awin can't combine "Legacy" and "Enhanced"
+      # (Google Shopping format) merchants into one feed, so a merchant
+      # like MALOA (UK) needs its own separate feed URL from Awin's
+      # "Create a Feed" tool. Only set this if you actually have a second
+      # feed — leave unset otherwise, nothing breaks either way.
+      - key: AWIN_FEED_URL_2
+        sync: false
       # 27 Aug 2026 — live-show settlement (jobs/closeExpiredLiveItems.ts)
       # calls flipsta-web's internal API to actually create the order
       # (keeps the Stripe SDK living in one place, in the web app — see

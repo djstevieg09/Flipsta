@@ -40,22 +40,41 @@
  * Forgetting step 1 shows up in the worker logs as
  * `advertisersMissingFromFeed` — a merchant Flipsta is watching for that
  * never showed up in the downloaded feed, rather than a silent 0.
+ *
+ * 1 Sept 2026, Steven — a second feed URL, same day: Awin's "Create a
+ * Feed" tool refuses to combine advertisers of different "datafeed
+ * formats" into one feed ("You can only select advertisers that use the
+ * same datafeed format") — MALOA (UK) is on what Awin calls an "Enhanced"
+ * feed (their term for a merchant that supplies Awin their catalogue in
+ * Google Shopping feed format), while Al Jazeera Perfumes/Modmo are on
+ * the standard "Legacy" Awin format. Steven has to build a SECOND,
+ * separate feed in Awin's tool for Enhanced-format merchants, with its
+ * own distinct download URL — hence `AWIN_FEED_URL_2` below, optional,
+ * fetched and merged in with the first. Both feeds are parsed with the
+ * exact same column logic — the `columns=...` list in each feed's URL is
+ * something Steven picks himself in Awin's tool and should normalise
+ * either advertiser format into the same output columns, but this is
+ * unverified for a real Enhanced-format feed the way the first one was
+ * verified against Al Jazeera's real data — spot-check the worker logs
+ * once MALOA is wired in the same way.
  */
 
 import { gunzipSync } from "node:zlib";
 
 const API_TOKEN = process.env.AWIN_API_TOKEN;
 const PUBLISHER_ID = process.env.AWIN_PUBLISHER_ID;
-const FEED_URL = process.env.AWIN_FEED_URL;
+const FEED_URLS = [process.env.AWIN_FEED_URL, process.env.AWIN_FEED_URL_2].filter(
+  (u): u is string => Boolean(u),
+);
 
 /** Governs the admin programme-picker (OAuth2 Publisher API — separate system from the feed download below). */
 export function isAwinConfigured(): boolean {
   return Boolean(API_TOKEN && PUBLISHER_ID);
 }
 
-/** Governs the actual product sync — needs the feed URL Steven builds himself in Awin's "Create a Feed" tool. */
+/** Governs the actual product sync — needs at least one feed URL Steven builds himself in Awin's "Create a Feed" tool. */
 export function isAwinFeedConfigured(): boolean {
-  return Boolean(FEED_URL);
+  return FEED_URLS.length > 0;
 }
 
 export interface AwinProgramme {
@@ -100,16 +119,43 @@ export interface AwinProduct {
 }
 
 /**
- * Downloads and parses the one shared feed URL Steven maintains in Awin's
- * "Create a Feed" tool. Returns every merchant's rows found in it — the
- * caller (syncAwinProducts.ts) filters down to whichever merchants are
- * actually active in awin_sync_config, so removing a merchant from the
- * pilot list doesn't require touching the Awin-side feed at all.
+ * Downloads and parses every configured feed URL (AWIN_FEED_URL, plus the
+ * optional AWIN_FEED_URL_2 for a second, differently-formatted feed — see
+ * the file-level comment above), merging every merchant's rows found
+ * across all of them. The caller (syncAwinProducts.ts) filters down to
+ * whichever merchants are actually active in awin_sync_config, so
+ * removing a merchant from the pilot list doesn't require touching the
+ * Awin-side feed at all. One feed URL failing doesn't lose the other's
+ * products — each is fetched independently, and `feedErrors` reports
+ * which (if any) failed so the caller can log it without losing the rest.
  */
-export async function fetchConfiguredFeedProducts(): Promise<AwinProduct[]> {
+export async function fetchConfiguredFeedProducts(): Promise<{ products: AwinProduct[]; feedErrors: string[] }> {
   if (!isAwinFeedConfigured()) throw new Error("Awin product feed isn't configured — set AWIN_FEED_URL.");
 
-  const res = await fetch(FEED_URL!);
+  const results = await Promise.allSettled(FEED_URLS.map((url) => fetchAndParseOneFeed(url)));
+
+  const products: AwinProduct[] = [];
+  const feedErrors: string[] = [];
+  results.forEach((result, i) => {
+    if (result.status === "fulfilled") {
+      products.push(...result.value);
+    } else {
+      feedErrors.push(`feed #${i + 1}: ${(result.reason as Error).message}`);
+    }
+  });
+
+  if (products.length === 0 && feedErrors.length === FEED_URLS.length) {
+    // Every configured feed failed outright — surface as a real error
+    // rather than a quiet empty result, same as the single-feed behaviour
+    // this replaced.
+    throw new Error(feedErrors.join("; "));
+  }
+
+  return { products, feedErrors };
+}
+
+async function fetchAndParseOneFeed(url: string): Promise<AwinProduct[]> {
+  const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`Awin feed download failed (${res.status}): ${await res.text().catch(() => res.statusText)}`);
   }
@@ -119,34 +165,50 @@ export async function fetchConfiguredFeedProducts(): Promise<AwinProduct[]> {
   // Content-Encoding — fetch won't auto-decompress it. Detect the gzip
   // magic bytes ourselves rather than trusting a header, since a future
   // feed URL built without compression/gzip would come back as plain text.
-  const text = bytes.length > 2 && bytes[0] === 0x1f && bytes[1] === 0x8b
+  let text = bytes.length > 2 && bytes[0] === 0x1f && bytes[1] === 0x8b
     ? gunzipSync(bytes).toString("utf-8")
     : bytes.toString("utf-8");
+  // 1 Sept 2026 — the Enhanced/Google-format single-advertiser download
+  // (MALOA's real file) starts with a UTF-8 BOM directly glued onto the
+  // first header cell ("﻿advertiser_id"), which silently broke every
+  // exact/case-insensitive column match below until this was stripped —
+  // confirmed by inspecting the real downloaded bytes. The first Legacy
+  // feed didn't have one, but stripping it unconditionally is harmless
+  // either way.
+  text = text.replace(/^\uFEFF/, "");
 
   const rows = parseDelimited(text);
   const products: AwinProduct[] = [];
   for (const row of rows) {
-    const externalProductId = pickField(row, ["aw_product_id", "product_id", "merchant_product_id"]);
+    // Candidate lists cover both feed formats Steven's account actually
+    // uses: Awin's own "Legacy" column names, and the "Enhanced"/Google
+    // Shopping format (advertiser_id/id/link/image_link/availability/
+    // google_product_category) confirmed 1 Sept 2026 against MALOA's real
+    // downloaded file — not guessed from Google's public spec alone.
+    const externalProductId = pickField(row, ["aw_product_id", "product_id", "merchant_product_id", "id"]);
     const advertiserId = pickField(row, ["merchant_id", "advertiser_id", "merchantId"]);
     const title = pickField(row, ["product_name", "title", "aw_title"]);
     const affiliateUrl = pickField(row, ["aw_deep_link", "deep_link", "merchant_deep_link"]);
-    if (!externalProductId || !advertiserId || !title || !affiliateUrl) continue; // can't use a row missing any of these four
+    if (!externalProductId || !advertiserId || !title || !affiliateUrl) continue; // can't use a row missing any of these four — deliberately NOT falling back to a plain (untracked) product URL (e.g. Google format's own "link" field) here, since that would silently ship a link Flipsta earns no commission on
 
     const searchPrice = parsePrice(pickField(row, ["search_price", "price"]));
     const storePrice = parsePrice(pickField(row, ["store_price", "rrp_price", "base_price"]));
-    const stockRaw = pickField(row, ["stock_status", "in_stock"]).toLowerCase();
+    // Google format has no direct "was price" field of its own — its
+    // `sale_price` is the opposite direction (a discount off `price`), not
+    // a higher original price, so it's deliberately not treated as rrp.
+    const stockRaw = pickField(row, ["stock_status", "in_stock", "availability"]).toLowerCase();
 
     products.push({
       externalProductId,
       advertiserId,
       title,
       description: pickField(row, ["description", "merchant_product_description"]) || null,
-      imageUrl: pickField(row, ["aw_image_url", "merchant_image_url", "image_url"]) || null,
+      imageUrl: pickField(row, ["aw_image_url", "merchant_image_url", "image_url", "image_link"]) || null,
       priceGBP: searchPrice,
       rrpGBP: storePrice,
       inStock: stockRaw ? stockRaw !== "0" && stockRaw !== "false" && stockRaw !== "out_of_stock" && stockRaw !== "out of stock" : true,
       affiliateUrl,
-      categoryName: pickField(row, ["category_name", "merchant_category"]) || undefined,
+      categoryName: pickField(row, ["category_name", "merchant_category", "google_product_category"]) || undefined,
     });
   }
   return products;

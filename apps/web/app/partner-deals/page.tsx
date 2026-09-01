@@ -87,19 +87,19 @@ export default function PartnerDealsPage() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
           {products.map((p) => (
-            <div key={p.id} className="card space-y-2">
+            <div key={p.id} className="card space-y-3">
               {p.image_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={p.image_url} alt={p.title} className="w-full h-40 object-contain bg-surface2 rounded-lg border border-border" />
               ) : (
                 <div className="w-full h-40 rounded-lg border border-border flex items-center justify-center text-xs text-textFaint">No photo</div>
               )}
-              <div>
+              <div className="space-y-1">
                 <div className="font-bold text-sm line-clamp-2">{p.title}</div>
                 <div className="text-xs text-textDim">{p.categories?.name ?? "Uncategorised"} · via {p.advertiser_name}</div>
               </div>
-              <div className="flex items-baseline gap-2">
-                {typeof p.price_gbp === "number" && <span className="font-bold">£{p.price_gbp.toFixed(2)}</span>}
+              <div className="flex items-baseline gap-2 pb-1">
+                {typeof p.price_gbp === "number" && <span className="font-bold text-lg">£{p.price_gbp.toFixed(2)}</span>}
                 {typeof p.rrp_gbp === "number" && typeof p.price_gbp === "number" && p.rrp_gbp > p.price_gbp && (
                   <span className="text-xs text-textFaint line-through">£{p.rrp_gbp.toFixed(2)}</span>
                 )}
@@ -108,7 +108,7 @@ export default function PartnerDealsPage() {
                 href={p.affiliate_url}
                 target="_blank"
                 rel="noopener noreferrer sponsored"
-                className="btn btn-primary w-full text-center text-xs"
+                className="btn btn-primary w-full text-center text-xs block"
               >
                 Buy on {p.advertiser_name} →
               </a>

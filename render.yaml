@@ -150,6 +150,13 @@ services:
         sync: false
       - key: AWIN_PUBLISHER_ID
         sync: false
+      # 1 Sept 2026 — the actual product sync only needs this one. It's the
+      # full download URL from Awin's own "Create a Feed" tool (Tools ->
+      # Create a Feed -> Configure an advertiser-based feed), not the
+      # OAuth2 token above — see awinClient.ts for why. flipsta-web doesn't
+      # need this; only the worker downloads the feed.
+      - key: AWIN_FEED_URL
+        sync: false
       # 27 Aug 2026 — live-show settlement (jobs/closeExpiredLiveItems.ts)
       # calls flipsta-web's internal API to actually create the order
       # (keeps the Stripe SDK living in one place, in the web app — see

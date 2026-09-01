@@ -1,23 +1,30 @@
 import { createDb } from "../db.js";
-import { isAwinConfigured, fetchAdvertiserProducts } from "../adapters/awinClient.js";
+import { isAwinFeedConfigured, fetchConfiguredFeedProducts } from "../adapters/awinClient.js";
 
 /**
  * 27 Aug 2026, Steven: "i need assistance setting up Awin api to fill my
  * store with goods... earn comission off items through affiliate
  * programs." Syncs every active `awin_sync_config` row (the admin-picked
  * pilot list — see api/admin/awin-sync/route.ts) into `affiliate_products`
- * (migration 0025). Deliberately a no-op, not an error, until Steven has
- * actually set AWIN_API_TOKEN/AWIN_PUBLISHER_ID — same pattern as
- * discovery being skipped while DISCOVERY_PAUSED is set.
+ * (migration 0025). Deliberately a no-op, not an error, until
+ * AWIN_FEED_URL is set — same pattern as discovery being skipped while
+ * DISCOVERY_PAUSED is set.
  *
- * One advertiser's feed failing (a transient Awin outage, a programme with
- * no feed generated yet) shouldn't block every other advertiser's sync in
- * the same run — each is wrapped individually so a bad one is logged and
- * skipped rather than aborting the whole tick.
+ * 1 Sept 2026, Steven — revised after the first real sync: there's no
+ * per-advertiser feed lookup any more. Awin only gave us one working way
+ * in ("Create a Feed", not the OAuth2-token-based list/download endpoint
+ * this originally assumed — see awinClient.ts's comment for the full
+ * story), so the whole shared feed is downloaded ONCE per tick and then
+ * split by merchant_id in memory, rather than one network call per
+ * advertiser. A merchant present in awin_sync_config but absent from the
+ * downloaded feed (Steven forgot to add them on Awin's side, or Awin
+ * hasn't regenerated the feed yet) is reported back as
+ * advertisersMissingFromFeed instead of silently showing 0 — that's the
+ * exact confusion that cost real debugging time the first time around.
  */
 export async function syncAwinProducts() {
-  if (!isAwinConfigured()) {
-    return { skipped: true, reason: "AWIN_API_TOKEN/AWIN_PUBLISHER_ID not set" };
+  if (!isAwinFeedConfigured()) {
+    return { skipped: true, reason: "AWIN_FEED_URL not set" };
   }
 
   const db = createDb();
@@ -30,6 +37,20 @@ export async function syncAwinProducts() {
     return { skipped: false, advertisersConfigured: 0, productsUpserted: 0 };
   }
 
+  let products;
+  try {
+    products = await fetchConfiguredFeedProducts();
+  } catch (err) {
+    console.error("[syncAwinProducts] feed download failed:", (err as Error).message);
+    return {
+      skipped: false,
+      advertisersConfigured: activeConfigs.length,
+      advertisersFailed: activeConfigs.length,
+      productsUpserted: 0,
+      feedError: (err as Error).message,
+    };
+  }
+
   // categories fetched once, reused for every advertiser's best-effort
   // category-name match (see mapCategory below) rather than one query per
   // advertiser.
@@ -37,13 +58,21 @@ export async function syncAwinProducts() {
 
   let productsUpserted = 0;
   let advertisersFailed = 0;
+  const advertisersMissingFromFeed: string[] = [];
 
   for (const config of activeConfigs) {
-    try {
-      const products = await fetchAdvertiserProducts(config.advertiser_id);
-      if (products.length === 0) continue;
+    const merchantProducts = products.filter((p) => p.advertiserId === config.advertiser_id);
+    if (merchantProducts.length === 0) {
+      // Not an error — either Steven hasn't added this merchant into the
+      // Awin-side feed yet, or Awin hasn't regenerated it. Flagged
+      // separately from advertisersFailed so it's obvious in logs which
+      // situation this is.
+      advertisersMissingFromFeed.push(config.advertiser_name);
+      continue;
+    }
 
-      const rows = products.map((p) => ({
+    try {
+      const rows = merchantProducts.map((p) => ({
         network: "awin",
         advertiser_id: config.advertiser_id,
         advertiser_name: config.advertiser_name,
@@ -72,7 +101,13 @@ export async function syncAwinProducts() {
     }
   }
 
-  return { skipped: false, advertisersConfigured: activeConfigs.length, advertisersFailed, productsUpserted };
+  return {
+    skipped: false,
+    advertisersConfigured: activeConfigs.length,
+    advertisersFailed,
+    advertisersMissingFromFeed,
+    productsUpserted,
+  };
 }
 
 /** Best-effort match of the feed's free-text category name onto one of Flipsta's own categories — falls back to the admin's configured default (or null) when nothing matches, rather than guessing wrong. */

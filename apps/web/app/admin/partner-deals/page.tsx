@@ -124,6 +124,11 @@ export default function AdminPartnerDealsPage() {
           Products from merchants below sync into /partner-deals every few hours. A shopper who clicks through and
           buys on the merchant's site earns Flipsta a commission — Flipsta never holds or ships these.
         </p>
+        <p className="text-textFaint text-xs pt-1">
+          Two places need updating when you add or remove a merchant: here, and inside Awin's own "Create a Feed"
+          tool (Tools → Create a Feed → your advertiser-based feed) — that's where the actual product data comes
+          from. Added a merchant here but nothing's syncing? Check they're also added on the Awin side.
+        </p>
       </div>
 
       <section className="space-y-2">

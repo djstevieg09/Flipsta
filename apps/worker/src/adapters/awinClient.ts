@@ -13,24 +13,49 @@
  * behalf) and sets AWIN_API_TOKEN / AWIN_PUBLISHER_ID — see
  * INFRASTRUCTURE_TODO.md.
  *
- * IMPORTANT — spot-check the first real sync: the two REST endpoints below
- * (auth + programmes list) are confirmed against Awin's own published API
- * docs. The product feed list/download shape follows Awin's long-standing,
- * widely-documented CSV column conventions (aw_deep_link, aw_image_url,
- * search_price, etc — the same names every Awin integration tool uses) but
- * could not be verified against a real response, since no publisher
- * account/token exists yet to test with. Parsing below is deliberately
- * defensive (tolerant of missing/reordered columns, logs and skips a row
- * it can't make sense of rather than throwing) for exactly that reason —
- * same "verify the first several real runs" discipline already documented
- * for claudeSearchAdapter.ts in INFRASTRUCTURE_TODO.md #6.
+ * 1 Sept 2026, Steven — REVISED after the first real sync attempt failed:
+ * the original assumption below (that the OAuth2 token from
+ * ui.awin.com/awin-api could also list every approved advertiser's product
+ * feed via productdata.awin.com/datafeed/list/apikey/{OAUTH2_TOKEN}) was
+ * wrong. That endpoint kept 500ing. What actually works is Awin's older,
+ * separate "Create a Feed" tool (in Awin's UI: Tools -> Create a Feed ->
+ * "Configure an advertiser-based feed") — Steven manually adds whichever
+ * merchants he wants synced to ONE feed there, and Awin hands back a single
+ * download URL with its own distinct API key baked in (nothing to do with
+ * the OAuth2 token). That URL is what AWIN_FEED_URL below is. Confirmed
+ * against Steven's real account: it's a gzip-compressed CSV
+ * (compression/gzip in the URL) whose header/columns exactly match what
+ * was originally guessed here (aw_deep_link, search_price, merchant_id,
+ * etc) — so the column-parsing logic itself was right, only the discovery
+ * mechanism was wrong.
+ *
+ * Two-step process any time Steven wants to add or remove a synced
+ * merchant:
+ *   1. In Awin's own "Create a Feed" tool, add/remove the merchant from
+ *      that same feed configuration (the feed URL/key stays the same —
+ *      only which merchants' rows come back in the download changes).
+ *   2. In Flipsta's own /admin/partner-deals, add/remove that merchant
+ *      from the pilot list (awin_sync_config) so the sync job knows to
+ *      keep (or filter out) that merchant's rows from the shared feed.
+ * Forgetting step 1 shows up in the worker logs as
+ * `advertisersMissingFromFeed` — a merchant Flipsta is watching for that
+ * never showed up in the downloaded feed, rather than a silent 0.
  */
+
+import { gunzipSync } from "node:zlib";
 
 const API_TOKEN = process.env.AWIN_API_TOKEN;
 const PUBLISHER_ID = process.env.AWIN_PUBLISHER_ID;
+const FEED_URL = process.env.AWIN_FEED_URL;
 
+/** Governs the admin programme-picker (OAuth2 Publisher API — separate system from the feed download below). */
 export function isAwinConfigured(): boolean {
   return Boolean(API_TOKEN && PUBLISHER_ID);
+}
+
+/** Governs the actual product sync — needs the feed URL Steven builds himself in Awin's "Create a Feed" tool. */
+export function isAwinFeedConfigured(): boolean {
+  return Boolean(FEED_URL);
 }
 
 export interface AwinProgramme {
@@ -60,41 +85,10 @@ export async function fetchJoinedProgrammes(): Promise<AwinProgramme[]> {
   }));
 }
 
-interface AwinFeedListing {
-  advertiserId: string;
-  advertiserName: string;
-  url: string;
-  lastImported?: string;
-}
-
-/**
- * The Product Feed List Download — Awin's own recommended programmatic
- * path (rather than hand-constructing a Create-a-Feed URL): one call
- * returns every feed the publisher can access, each with a ready-to-use
- * download URL and a last-updated time, so a sync only needs to re-fetch
- * feeds that actually changed.
- */
-async function fetchProductFeedList(): Promise<AwinFeedListing[]> {
-  const res = await fetch(`https://productdata.awin.com/datafeed/list/apikey/${encodeURIComponent(API_TOKEN!)}`);
-  if (!res.ok) {
-    throw new Error(`Awin feed list download failed (${res.status}): ${await res.text().catch(() => res.statusText)}`);
-  }
-  const text = await res.text();
-  const rows = parseDelimited(text);
-  if (rows.length === 0) return [];
-
-  return rows
-    .map((row) => ({
-      advertiserId: pickField(row, ["Advertiser ID", "advertiser_id", "merchant_id", "MerchantId"]),
-      advertiserName: pickField(row, ["Advertiser Name", "advertiser_name", "merchant_name", "MerchantName"]),
-      url: pickField(row, ["URL", "Url", "feed_url", "FeedURL"]),
-      lastImported: pickField(row, ["Last Imported", "last_imported", "LastChecked"]) || undefined,
-    }))
-    .filter((f) => f.advertiserId && f.url);
-}
-
 export interface AwinProduct {
   externalProductId: string;
+  /** Awin's merchant_id — matched against awin_sync_config.advertiser_id to decide which merchants' rows to keep. */
+  advertiserId: string;
   title: string;
   description: string | null;
   imageUrl: string | null;
@@ -105,52 +99,57 @@ export interface AwinProduct {
   categoryName?: string;
 }
 
-/** Downloads and parses one advertiser's product feed, already resolved to a full feed URL by fetchProductFeedList(). */
-async function fetchAndParseFeed(feedUrl: string): Promise<AwinProduct[]> {
-  const res = await fetch(feedUrl);
-  if (!res.ok) {
-    throw new Error(`Awin feed download failed (${res.status}) for ${feedUrl}`);
-  }
-  const text = await res.text();
-  const rows = parseDelimited(text);
+/**
+ * Downloads and parses the one shared feed URL Steven maintains in Awin's
+ * "Create a Feed" tool. Returns every merchant's rows found in it — the
+ * caller (syncAwinProducts.ts) filters down to whichever merchants are
+ * actually active in awin_sync_config, so removing a merchant from the
+ * pilot list doesn't require touching the Awin-side feed at all.
+ */
+export async function fetchConfiguredFeedProducts(): Promise<AwinProduct[]> {
+  if (!isAwinFeedConfigured()) throw new Error("Awin product feed isn't configured — set AWIN_FEED_URL.");
 
+  const res = await fetch(FEED_URL!);
+  if (!res.ok) {
+    throw new Error(`Awin feed download failed (${res.status}): ${await res.text().catch(() => res.statusText)}`);
+  }
+  const bytes = Buffer.from(await res.arrayBuffer());
+  // The feed URL requests gzip compression explicitly (compression/gzip),
+  // but that's Awin packaging the file itself as gzip, not an HTTP
+  // Content-Encoding — fetch won't auto-decompress it. Detect the gzip
+  // magic bytes ourselves rather than trusting a header, since a future
+  // feed URL built without compression/gzip would come back as plain text.
+  const text = bytes.length > 2 && bytes[0] === 0x1f && bytes[1] === 0x8b
+    ? gunzipSync(bytes).toString("utf-8")
+    : bytes.toString("utf-8");
+
+  const rows = parseDelimited(text);
   const products: AwinProduct[] = [];
   for (const row of rows) {
     const externalProductId = pickField(row, ["aw_product_id", "product_id", "merchant_product_id"]);
+    const advertiserId = pickField(row, ["merchant_id", "advertiser_id", "merchantId"]);
     const title = pickField(row, ["product_name", "title", "aw_title"]);
     const affiliateUrl = pickField(row, ["aw_deep_link", "deep_link", "merchant_deep_link"]);
-    if (!externalProductId || !title || !affiliateUrl) continue; // can't use a row missing any of these three
+    if (!externalProductId || !advertiserId || !title || !affiliateUrl) continue; // can't use a row missing any of these four
 
     const searchPrice = parsePrice(pickField(row, ["search_price", "price"]));
     const storePrice = parsePrice(pickField(row, ["store_price", "rrp_price", "base_price"]));
-    const inStockRaw = pickField(row, ["in_stock", "stock_status"]).toLowerCase();
+    const stockRaw = pickField(row, ["stock_status", "in_stock"]).toLowerCase();
 
     products.push({
       externalProductId,
+      advertiserId,
       title,
       description: pickField(row, ["description", "merchant_product_description"]) || null,
       imageUrl: pickField(row, ["aw_image_url", "merchant_image_url", "image_url"]) || null,
       priceGBP: searchPrice,
       rrpGBP: storePrice,
-      inStock: inStockRaw ? inStockRaw !== "0" && inStockRaw !== "false" && inStockRaw !== "out of stock" : true,
+      inStock: stockRaw ? stockRaw !== "0" && stockRaw !== "false" && stockRaw !== "out_of_stock" && stockRaw !== "out of stock" : true,
       affiliateUrl,
       categoryName: pickField(row, ["category_name", "merchant_category"]) || undefined,
     });
   }
   return products;
-}
-
-/** One advertiser's currently-live product set, resolved through the feed list. Returns [] (not an error) if this advertiser has no feed yet — a newly-approved programme can lag a day or two before Awin generates one. */
-export async function fetchAdvertiserProducts(advertiserId: string): Promise<AwinProduct[]> {
-  const feeds = await fetchProductFeedList();
-  const matching = feeds.filter((f) => f.advertiserId === advertiserId);
-  if (matching.length === 0) return [];
-
-  const results: AwinProduct[] = [];
-  for (const feed of matching) {
-    results.push(...(await fetchAndParseFeed(feed.url)));
-  }
-  return results;
 }
 
 // ---- small local helpers, no external dependency ----
@@ -161,12 +160,20 @@ function parsePrice(raw: string): number | null {
   return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : null;
 }
 
+/**
+ * Returns the first candidate field with an actual (non-empty) value,
+ * rather than stopping at the first candidate whose column merely exists
+ * in the header — Awin's real feed has plenty of columns present but
+ * blank (e.g. an empty `in_stock` column sitting alongside a populated
+ * `stock_status` one), and stopping on "exists" rather than "has a value"
+ * silently loses the real data behind it.
+ */
 function pickField(row: Record<string, string>, candidates: string[]): string {
   for (const c of candidates) {
-    if (row[c] !== undefined) return row[c].trim();
+    if (row[c] !== undefined && row[c] !== "") return row[c].trim();
     const lower = c.toLowerCase();
     const match = Object.keys(row).find((k) => k.toLowerCase() === lower);
-    if (match) return row[match].trim();
+    if (match && row[match] !== "") return row[match].trim();
   }
   return "";
 }

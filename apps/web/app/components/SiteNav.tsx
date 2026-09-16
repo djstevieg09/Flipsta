@@ -38,6 +38,12 @@ export default function SiteNav({
           them by a direct link anyway (see wants/page.tsx, sell/new/page.tsx). */}
       {isAuthed && <a href="/wants" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Buyer Wants</a>}
       <a href="/shop" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Shop</a>
+      {/* 16 Sept 2026, Steven: coin shop page for Flippy Coins (see
+          app/coins/page.tsx and planning/coin-economy-proposal.md) — no
+          auth gate, same as Shop/Partner Deals, since anyone should be able
+          to see coin pricing before signing up. UI-only for now: there's no
+          coin ledger or Stripe product behind it yet. */}
+      <a href="/coins" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Flippy Coins</a>
       {/* 27 Aug 2026, Steven: "i need assistance setting up Awin api to
           fill my store with goods... this is seperate from our core
           buisness." No auth gate — same as Shop, purely a browse-and-

@@ -2,207 +2,112 @@
 
 import { useEffect, useState } from "react";
 
-type SyncConfigRow = {
+type PendingItem = {
   id: string;
-  advertiserId: string;
-  advertiserName: string;
-  categoryId: string | null;
-  active: boolean;
-  addedAt: string;
-  productCount: number;
+  product_name: string;
+  description: string | null;
+  rrp_gbp: number;
+  our_price_gbp: number;
+  source_retailer: string;
+  source_url: string;
+  categories: { name: string } | null;
 };
-type Programme = { id: string; name: string; status: string };
-type Category = { id: string; name: string };
 
 /**
- * 27 Aug 2026, Steven: "i need assistance setting up Awin api to fill my
- * store with goods... earn comission off items through affiliate
- * programs, this is seperate from our core buisness." Two states this page
- * can be in: not configured yet (Steven hasn't signed up as an Awin
- * publisher / set the token) — shows exactly what to go get; configured —
- * pick from the merchant programmes actually approved, one at a time, per
- * the confirmed "small pilot — 2-3 merchants first" scope. Synced products
- * show on /partner-deals (public) — see api/affiliate-products/route.ts.
+ * 26 Aug 2026, Steven: "if any pictures missing from listings it goes to
+ * admin dashboard to add a picture before its uploaded to shop." Items land
+ * here instead of /shop whenever the AI sourced a genuine discount but
+ * couldn't find a usable product photo — adding a URL here is what makes
+ * the item start showing on the public shop (see
+ * /api/shop-items-missing-photos/[id]'s comment).
  */
-export default function AdminPartnerDealsPage() {
-  const [awinConfigured, setAwinConfigured] = useState<boolean | null>(null);
-  const [programmes, setProgrammes] = useState<Programme[]>([]);
-  const [programmesError, setProgrammesError] = useState<string | null>(null);
-  const [syncConfig, setSyncConfig] = useState<SyncConfigRow[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [addingId, setAddingId] = useState<string | null>(null);
-  const [categoryDrafts, setCategoryDrafts] = useState<Record<string, string>>({});
-  const [busyAdvertiserId, setBusyAdvertiserId] = useState<string | null>(null);
+export default function AdminShopPhotosPage() {
+  const [items, setItems] = useState<PendingItem[]>([]);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<Record<string, boolean>>({});
+  const [message, setMessage] = useState<string | null>(null);
 
   function load() {
-    setLoading(true);
-    fetch("/api/admin/awin-sync")
+    fetch("/api/admin/shop-items-missing-photos")
       .then((r) => r.json())
-      .then((d) => {
-        setAwinConfigured(Boolean(d.awinConfigured));
-        setProgrammes(d.joinedProgrammes ?? []);
-        setProgrammesError(d.programmesError ?? null);
-        setSyncConfig(d.syncConfig ?? []);
-        setCategories(d.categories ?? []);
-      })
-      .finally(() => setLoading(false));
+      .then((d) => setItems(d.items ?? []));
   }
 
   useEffect(load, []);
 
-  const syncedAdvertiserIds = new Set(syncConfig.map((c) => c.advertiserId));
-
-  async function addAdvertiser(programme: Programme) {
-    setAddingId(programme.id);
-    await fetch("/api/admin/awin-sync", {
-      method: "POST",
+  async function savePhoto(id: string) {
+    const imageUrl = (drafts[id] ?? "").trim();
+    if (!imageUrl) return;
+    setBusy((b) => ({ ...b, [id]: true }));
+    const res = await fetch(`/api/admin/shop-items-missing-photos/${id}`, {
+      method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        advertiserId: programme.id,
-        advertiserName: programme.name,
-        categoryId: categoryDrafts[programme.id] || null,
-      }),
+      body: JSON.stringify({ imageUrl }),
     });
-    setAddingId(null);
+    const data = await res.json();
+    setBusy((b) => ({ ...b, [id]: false }));
+    if (!res.ok) {
+      setMessage(data.error);
+      return;
+    }
+    setMessage(`Photo added — ${items.find((i) => i.id === id)?.product_name} is now live on the shop.`);
     load();
-  }
-
-  async function removeAdvertiser(advertiserId: string) {
-    setBusyAdvertiserId(advertiserId);
-    await fetch(`/api/admin/awin-sync?advertiserId=${encodeURIComponent(advertiserId)}`, { method: "DELETE" });
-    setBusyAdvertiserId(null);
-    load();
-  }
-
-  if (loading) return <p className="text-textDim text-sm">Loading…</p>;
-
-  if (!awinConfigured) {
-    return (
-      <div className="space-y-4 max-w-2xl">
-        <h1 className="text-xl font-bold">Partner Deals — Awin affiliate integration</h1>
-        <div className="card space-y-3 text-sm">
-          <p className="text-gold font-bold">Not set up yet.</p>
-          <p className="text-textDim">
-            This section is a separate revenue stream from Flipsta's core buy/resell business — products stay
-            listed on the merchant's own site, and Flipsta earns a commission when a shopper clicks through and
-            buys there. Nothing here touches payment, shipping, or your Stripe account.
-          </p>
-          <p className="text-textDim">To turn this on:</p>
-          <ol className="list-decimal list-inside text-textDim space-y-1">
-            <li>
-              Sign up as an Awin publisher at{" "}
-              <a href="https://www.awin.com" target="_blank" rel="noopener noreferrer" className="text-brand2 underline">
-                awin.com
-              </a>{" "}
-              (free — this needs your own business details, so it has to be you).
-            </li>
-            <li>Apply to join 2-3 merchant programmes relevant to Flipsta's categories — each approves separately, usually within a few days.</li>
-            <li>
-              Once approved, generate your API token at{" "}
-              <a href="https://ui.awin.com/awin-api" target="_blank" rel="noopener noreferrer" className="text-brand2 underline">
-                ui.awin.com/awin-api
-              </a>
-              , and find your Publisher ID on your Awin account dashboard.
-            </li>
-            <li>Send both to whoever manages Render, to set as <code>AWIN_API_TOKEN</code> and <code>AWIN_PUBLISHER_ID</code> on flipsta-web and flipsta-worker.</li>
-          </ol>
-          <p className="text-textFaint text-xs pt-1">
-            Once both are set and the site redeploys, this page will show every merchant programme you're approved
-            for — pick 2-3 to start syncing.
-          </p>
-        </div>
-      </div>
-    );
   }
 
   return (
-    <div className="space-y-6 max-w-3xl">
-      <div>
-        <h1 className="text-xl font-bold">Partner Deals — Awin affiliate integration</h1>
-        <p className="text-textDim text-sm">
-          Products from merchants below sync into /partner-deals every few hours. A shopper who clicks through and
-          buys on the merchant's site earns Flipsta a commission — Flipsta never holds or ships these.
-        </p>
-        <p className="text-textFaint text-xs pt-1">
-          Two places need updating when you add or remove a merchant: here, and inside Awin's own "Create a Feed"
-          tool (Tools → Create a Feed → your advertiser-based feed) — that's where the actual product data comes
-          from. Added a merchant here but nothing's syncing? Check they're also added on the Awin side.
-        </p>
-      </div>
-
-      <section className="space-y-2">
-        <h2 className="font-bold text-sm text-textDim uppercase tracking-wide">Currently syncing ({syncConfig.length})</h2>
-        {syncConfig.length === 0 ? (
-          <p className="text-textDim text-sm">Nothing added yet — pick a merchant from your approved programmes below.</p>
-        ) : (
-          <div className="card p-0 overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-textDim text-xs uppercase border-b border-border">
-                  <th className="p-3">Merchant</th>
-                  <th className="p-3">Products synced</th>
-                  <th className="p-3">Added</th>
-                  <th className="p-3"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {syncConfig.map((c) => (
-                  <tr key={c.id} className="border-b border-border last:border-0">
-                    <td className="p-3 font-bold">{c.advertiserName}</td>
-                    <td className="p-3">{c.productCount === 0 ? <span className="text-textFaint">Not synced yet</span> : c.productCount}</td>
-                    <td className="p-3 text-textDim">{new Date(c.addedAt).toLocaleDateString()}</td>
-                    <td className="p-3">
-                      <button
-                        className="btn btn-ghost text-xs px-2 py-1 text-red"
-                        disabled={busyAdvertiserId === c.advertiserId}
-                        onClick={() => removeAdvertiser(c.advertiserId)}
-                      >
-                        Remove
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
-      <section className="space-y-2">
-        <h2 className="font-bold text-sm text-textDim uppercase tracking-wide">Your approved Awin programmes</h2>
-        {programmesError && <p className="text-red text-sm">{programmesError}</p>}
-        {programmes.length === 0 && !programmesError && (
-          <p className="text-textDim text-sm">No approved programmes yet — apply to a few merchants on Awin first.</p>
-        )}
-        <div className="space-y-2">
-          {programmes
-            .filter((p) => !syncedAdvertiserIds.has(p.id))
-            .map((p) => (
-              <div key={p.id} className="card flex items-center justify-between gap-3">
-                <div>
-                  <div className="font-bold text-sm">{p.name}</div>
-                  <div className="text-xs text-textDim capitalize">{p.status}</div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <select
-                    className="bg-surface2 border border-border rounded-lg px-2 py-1.5 text-xs"
-                    value={categoryDrafts[p.id] ?? ""}
-                    onChange={(e) => setCategoryDrafts((d) => ({ ...d, [p.id]: e.target.value }))}
-                  >
-                    <option value="">Uncategorised</option>
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                  <button className="btn btn-primary text-xs px-3 py-1.5" disabled={addingId === p.id} onClick={() => addAdvertiser(p)}>
-                    {addingId === p.id ? "Adding…" : "Add to sync"}
-                  </button>
-                </div>
+    <div className="space-y-4">
+      <p className="text-textDim text-sm">
+        Genuine discounts the AI sourced but couldn&apos;t find a photo for — these stay off <code>/shop</code> until
+        a photo is added here. Source retailer/link is shown here (admin-only) to help find a real product photo.
+      </p>
+      {message && <p className="text-xs text-brand2">{message}</p>}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {items.map((item) => (
+          <div key={item.id} className="card space-y-2">
+            <div className="flex justify-between items-start gap-2">
+              <div>
+                <div className="font-bold text-sm">{item.product_name}</div>
+                <div className="text-xs text-textDim">{item.categories?.name}</div>
               </div>
-            ))}
-        </div>
-      </section>
+              <div className="text-right shrink-0">
+                <div className="font-bold text-sm">£{item.our_price_gbp.toFixed(2)}</div>
+                <div className="text-[10px] text-textFaint line-through">RRP £{item.rrp_gbp.toFixed(2)}</div>
+              </div>
+            </div>
+            {item.description && <div className="text-xs text-textDim line-clamp-2">{item.description}</div>}
+            {/* 26 Aug 2026, Steven: "i will need the link for the item on
+                the admin dashboard so i know where to get the photos
+                from." Made this a full-width button rather than an inline
+                text link — it's the first thing to click on this card. */}
+            <a
+              href={item.source_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block w-full text-center text-xs font-bold border border-brand2 text-brand2 rounded-lg py-1.5 hover:bg-brand2/10"
+            >
+              Open on {item.source_retailer} ↗
+            </a>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={drafts[item.id] ?? ""}
+                onChange={(e) => setDrafts((d) => ({ ...d, [item.id]: e.target.value }))}
+                placeholder="Photo URL…"
+                className="flex-1 bg-surface2 border border-border rounded-lg py-1.5 px-2 text-xs text-text placeholder:text-textFaint focus:outline-none focus:border-brand2"
+              />
+              <button
+                onClick={() => savePhoto(item.id)}
+                disabled={busy[item.id] || !(drafts[item.id] ?? "").trim()}
+                className="text-xs font-bold text-white rounded-lg px-3 disabled:opacity-50"
+                style={{ background: "linear-gradient(135deg,#f2b545,#ffd77a)" }}
+              >
+                Add photo
+              </button>
+            </div>
+          </div>
+        ))}
+        {items.length === 0 && <p className="text-textDim text-sm col-span-full">Nothing waiting on a photo right now.</p>}
+      </div>
     </div>
   );
 }

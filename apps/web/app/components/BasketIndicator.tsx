@@ -14,7 +14,7 @@ export default function BasketIndicator() {
       {count > 0 && (
         <span
           className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold text-white flex items-center justify-center"
-          style={{ background: "linear-gradient(135deg,#5b7cfa,#22d3ee)" }}
+          style={{ background: "linear-gradient(135deg,#f2b545,#ffd77a)" }}
         >
           {count}
         </span>

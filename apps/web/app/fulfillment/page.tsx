@@ -141,7 +141,7 @@ export default function FulfillmentPage() {
                 onClick={() => claim(job.id)}
                 disabled={busy[job.id]}
                 className="w-full rounded-lg py-2 text-sm font-bold text-white disabled:opacity-50 mt-1"
-                style={{ background: "linear-gradient(135deg,#5b7cfa,#22d3ee)" }}
+                style={{ background: "linear-gradient(135deg,#f2b545,#ffd77a)" }}
               >
                 Claim this job
               </button>

@@ -187,7 +187,7 @@ export default function AccountPage() {
             onClick={toggleNotifyDealMatches}
             disabled={notifyDealMatches === null || notifySaving}
             className={`shrink-0 w-12 h-7 rounded-full relative transition-colors disabled:opacity-50 ${notifyDealMatches ? "" : "bg-surface2 border border-border"}`}
-            style={notifyDealMatches ? { background: "linear-gradient(135deg,#5b7cfa,#22d3ee)" } : undefined}
+            style={notifyDealMatches ? { background: "linear-gradient(135deg,#f2b545,#ffd77a)" } : undefined}
             aria-pressed={Boolean(notifyDealMatches)}
             aria-label="Toggle deal-match email notifications"
           >

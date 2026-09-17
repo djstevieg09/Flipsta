@@ -72,7 +72,7 @@ export default function ReferralsPage() {
               onClick={copyLink}
               disabled={!link}
               className="rounded-lg px-4 text-sm font-bold text-white disabled:opacity-50"
-              style={{ background: "linear-gradient(135deg,#5b7cfa,#22d3ee)" }}
+              style={{ background: "linear-gradient(135deg,#f2b545,#ffd77a)" }}
             >
               {copied ? "Copied!" : "Copy"}
             </button>

@@ -89,7 +89,7 @@ export default function WishlistPage() {
                 <a
                   href={`/shop?q=${encodeURIComponent(item.product_name)}`}
                   className="flex-1 text-center text-xs font-bold rounded-lg py-1.5 text-white"
-                  style={{ background: "linear-gradient(135deg,#5b7cfa,#22d3ee)" }}
+                  style={{ background: "linear-gradient(135deg,#f2b545,#ffd77a)" }}
                 >
                   View in shop
                 </a>

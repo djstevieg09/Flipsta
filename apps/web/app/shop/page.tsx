@@ -445,7 +445,7 @@ function ShopPageInner() {
                   onClick={() => buyNow(item)}
                   disabled={busy[item.id]}
                   className="w-full rounded-lg py-2 text-sm font-bold text-white disabled:opacity-50"
-                  style={{ background: "linear-gradient(135deg,#5b7cfa,#22d3ee)" }}
+                  style={{ background: "linear-gradient(135deg,#f2b545,#ffd77a)" }}
                 >
                   Buy Now — £{item.our_price_gbp.toFixed(2)}
                 </button>
@@ -566,7 +566,7 @@ function ShopPageInner() {
               onClick={() => buyNow(expanded)}
               disabled={busy[expanded.id]}
               className="w-full rounded-lg py-2.5 text-sm font-bold text-white disabled:opacity-50"
-              style={{ background: "linear-gradient(135deg,#5b7cfa,#22d3ee)" }}
+              style={{ background: "linear-gradient(135deg,#f2b545,#ffd77a)" }}
             >
               Buy Now — £{expanded.our_price_gbp.toFixed(2)}
             </button>

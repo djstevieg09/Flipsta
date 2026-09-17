@@ -120,7 +120,7 @@ export default function BasketPage() {
             onClick={checkout}
             disabled={checkingOut}
             className="rounded-lg py-2.5 px-6 text-sm font-bold text-white disabled:opacity-50"
-            style={{ background: "linear-gradient(135deg,#5b7cfa,#22d3ee)" }}
+            style={{ background: "linear-gradient(135deg,#f2b545,#ffd77a)" }}
           >
             {checkingOut ? "Checking out…" : "Checkout"}
           </button>

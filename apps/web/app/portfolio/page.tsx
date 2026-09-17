@@ -285,7 +285,7 @@ export default function PortfolioPage() {
                 <a
                   href={`/sell/new?opportunityId=${o.id}`}
                   className="block text-center text-xs font-bold text-white rounded-lg py-1.5 mt-1"
-                  style={{ background: "linear-gradient(135deg,#5b7cfa,#22d3ee)" }}
+                  style={{ background: "linear-gradient(135deg,#f2b545,#ffd77a)" }}
                 >
                   ⚡ List this item
                 </a>
@@ -360,7 +360,7 @@ export default function PortfolioPage() {
                       onClick={() => confirmDelivery(p.id)}
                       disabled={confirming[p.id]}
                       className="w-full rounded-lg py-2 text-sm font-bold text-white disabled:opacity-50 mt-1"
-                      style={{ background: "linear-gradient(135deg,#5b7cfa,#22d3ee)" }}
+                      style={{ background: "linear-gradient(135deg,#f2b545,#ffd77a)" }}
                     >
                       Confirm delivery
                     </button>

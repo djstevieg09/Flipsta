@@ -99,7 +99,7 @@ export default function AdminShopPhotosPage() {
                 onClick={() => savePhoto(item.id)}
                 disabled={busy[item.id] || !(drafts[item.id] ?? "").trim()}
                 className="text-xs font-bold text-white rounded-lg px-3 disabled:opacity-50"
-                style={{ background: "linear-gradient(135deg,#5b7cfa,#22d3ee)" }}
+                style={{ background: "linear-gradient(135deg,#f2b545,#ffd77a)" }}
               >
                 Add photo
               </button>

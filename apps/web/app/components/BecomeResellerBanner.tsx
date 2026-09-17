@@ -18,7 +18,7 @@ export default function BecomeResellerBanner() {
       <a
         href="/upgrade"
         className="text-xs font-bold text-white rounded-full px-4 py-2 whitespace-nowrap"
-        style={{ background: "linear-gradient(135deg,#5b7cfa,#22d3ee)" }}
+        style={{ background: "linear-gradient(135deg,#f2b545,#ffd77a)" }}
       >
         Become a reseller →
       </a>

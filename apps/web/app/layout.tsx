@@ -28,13 +28,23 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {/* 18 Sept 2026, Steven: "the font at the top of the page should be
             like the photo i have sent you" — Kaushan Script (a Google Font)
             for the homepage's "The future is here." brush-script accent
-            text (see app/page.tsx). Loaded as a plain stylesheet link
-            rather than next/font/google so it's a normal runtime fetch in
-            the visitor's browser, not a build-time one. */}
+            text (see app/page.tsx).
+            18 Sept 2026, Steven, later the same day: "can we please sort
+            out the font on this" (the nav) — the site was rendering in
+            whatever plain system sans-serif each visitor's OS happens to
+            ship (the old body font stack in globals.css), which is why the
+            nav looked generic/unbranded in the screenshot he sent. Added
+            Inter — a clean, highly-legible UI font used across the weights
+            the site already asks for (font-bold/font-extrabold) — as the
+            new sitewide body font (see globals.css). Both fonts load off
+            one stylesheet link rather than next/font/google, since that
+            fetches at build time and this sandbox's network policy blocks
+            fonts.googleapis.com then (it's fine as an ordinary runtime
+            fetch in the visitor's own browser). */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Kaushan+Script&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Kaushan+Script&display=swap"
           rel="stylesheet"
         />
       </head>
@@ -77,9 +87,21 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   </form>
                 </div>
               ) : (
+                // 18 Sept 2026, Steven: "make the top right look the same
+                // theme" — Sign up was a plain grey-bordered pill, the one
+                // spot in the header not using the site's gold-on-black
+                // treatment. Now the same gold gradient as every other
+                // primary action (.btn-primary, globals.css), kept as a
+                // rounded-full pill to match its own existing shape rather
+                // than switching to .btn's square-ish radius.
                 <div className="flex items-center gap-2 whitespace-nowrap">
-                  <a href="/login" className="text-xs font-bold text-textDim hover:text-text transition px-2">Sign in</a>
-                  <a href="/signup" className="text-xs font-bold border border-border rounded-full px-3 py-1.5 hover:text-text hover:border-brand transition">Sign up</a>
+                  <a href="/login" className="text-xs font-bold text-textDim hover:text-gold transition px-2">Sign in</a>
+                  <a
+                    href="/signup"
+                    className="text-xs font-bold text-white rounded-full px-4 py-1.5 transition bg-gradient-to-r from-gold to-brand2 hover:brightness-110"
+                  >
+                    Sign up
+                  </a>
                 </div>
               )}
             </div>

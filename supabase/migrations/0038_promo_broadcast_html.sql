@@ -1,0 +1,16 @@
+-- 0038: HTML support for promo_broadcasts.
+--
+-- 18 Sept 2026, Steven uploaded an HTML welcome-email template and asked
+-- to "send out the email to all users on the site like before" — reusing
+-- the promo_broadcasts + sendPromoBroadcasts.ts pipeline built earlier
+-- today (migration 0037), rather than a brand new one-off mechanism.
+--
+-- html_body is nullable and optional: a broadcast composed from the
+-- plain-text /admin/broadcasts form still works exactly as before (no
+-- html_body set, Resend gets text only). This one-time welcome blast is
+-- the first row to actually set it — seeded directly (not through the
+-- admin UI, which only has a plain-text textarea today) with
+-- packages/shared/src/notifications.ts's WELCOME_EMAIL_HTML_TEMPLATE_RAW,
+-- {{FirstName}} placeholder intact, substituted per recipient by
+-- sendPromoBroadcasts.ts.
+alter table promo_broadcasts add column if not exists html_body text;

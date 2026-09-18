@@ -23,7 +23,7 @@ export async function sendPromoBroadcasts() {
 
   const { data: pending, error } = await db
     .from("promo_broadcasts")
-    .select("id, subject, body, audience")
+    .select("id, subject, body, audience, html_body")
     .eq("status", "pending")
     .order("created_at", { ascending: true })
     .limit(1);
@@ -40,7 +40,7 @@ export async function sendPromoBroadcasts() {
     // audience: 'opted_in' (default) only reaches profiles that haven't
     // switched notify_promotions off — 'all' is an intentional override
     // for e.g. a mandatory service announcement, used sparingly.
-    let query = db.from("profiles").select("id, notify_promotions");
+    let query = db.from("profiles").select("id, notify_promotions, display_name");
     if (broadcast.audience === "opted_in") query = query.eq("notify_promotions", true);
     const { data: recipients, error: recipientsError } = await query;
     if (recipientsError) throw new Error(recipientsError.message);
@@ -51,7 +51,14 @@ export async function sendPromoBroadcasts() {
         const { data: userRes } = await db.auth.admin.getUserById(recipient.id);
         const email = userRes?.user?.email;
         if (email) {
-          await sendPromoBroadcastEmail(email, broadcast.subject, broadcast.body);
+          // {{FirstName}} lets one stored broadcast (e.g. the 18 Sept 2026
+          // welcome-template blast, migration 0038) personalise per
+          // recipient instead of baking one name into a single shared row.
+          const firstName = (recipient.display_name || "there").trim().split(/\s+/)[0] || "there";
+          const subject = broadcast.subject.split("{{FirstName}}").join(firstName);
+          const body = broadcast.body.split("{{FirstName}}").join(firstName);
+          const html = broadcast.html_body ? broadcast.html_body.split("{{FirstName}}").join(firstName) : undefined;
+          await sendPromoBroadcastEmail(email, subject, body, html);
           sent++;
         }
       } catch (e) {

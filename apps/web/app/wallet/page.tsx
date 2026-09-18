@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import PageHero from "@/app/components/PageHero";
 
 type Transaction = {
   id: string;
@@ -37,11 +38,19 @@ export default function WalletPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold">Wallet</h1>
-      <p className="text-textDim text-sm">
-        Real transaction ledger — payouts land here the moment{" "}
-        <code>apps/worker/src/jobs/releaseEscrow.ts</code> releases escrowed funds for a delivered order.
-      </p>
+      <PageHero
+        title={
+          <>
+            Your <span className="text-gold">Wallet</span>
+          </>
+        }
+        subtitle="Your real transaction ledger — payouts land here the moment a delivered order's escrowed funds are released."
+        decorations={[
+          { emoji: "💷", className: "-top-4 -left-6", animate: "bob" },
+          { emoji: "💷", className: "top-1 -right-7", animate: "sway", delay: "0.3s" },
+          { emoji: "🏦", className: "-bottom-3 left-1/3 w-11 h-11", boxed: true, animate: "bob", delay: "0.5s" },
+        ]}
+      />
       <div className="card max-w-xs">
         <div className="text-xs text-textDim uppercase tracking-wide mb-2">Balance</div>
         <div className="text-3xl font-extrabold">£{balance.toFixed(2)}</div>

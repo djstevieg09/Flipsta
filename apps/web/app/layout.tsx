@@ -4,6 +4,7 @@ import "./globals.css";
 import { getCurrentProfile } from "@/lib/currentProfile";
 import { TIER_ENTITLEMENTS } from "@/lib/tierGuard";
 import { BasketProvider } from "./BasketProvider";
+import AvatarMenu from "./components/AvatarMenu";
 import BasketIndicator from "./components/BasketIndicator";
 import HeaderSearch from "./components/HeaderSearch";
 import SiteNav from "./components/SiteNav";
@@ -69,8 +70,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   image (illegible at header scale, and the tagline's
                   already handled by metadata.description). Re-saved as
                   WebP rather than PNG — ~60KB vs. ~300KB+ for a photo-real
-                  render like this, no visible quality loss. Old file kept
-                  at /public/logo-previous.png rather than deleted. */}
+                  render like this, no visible quality loss. The old
+                  /public/logo.png is unreferenced now but still on disk —
+                  this session's device access can write files but not
+                  delete them, so removing it needs either Steven deleting
+                  it himself or a future session with shell access to his
+                  clone. */}
               <a href="/" className="flex items-center whitespace-nowrap shrink-0">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/logo.webp" alt="Flipsta" className="h-9 w-auto" />
@@ -84,19 +89,17 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               </div>
               <BasketIndicator />
               {auth ? (
-                <div className="flex items-center gap-3 whitespace-nowrap">
-                  <span className="text-xs text-textDim">
-                    {auth.profile.displayName} · <span className="capitalize">{auth.profile.subscriptionTier}</span>
-                  </span>
-                  {(auth.profile.role === "admin" || auth.profile.role === "support") && (
-                    <a href="/admin" className="text-xs font-bold text-textDim border border-border rounded-full px-3 py-1.5 hover:text-text hover:border-brand transition">
-                      Staff
-                    </a>
-                  )}
-                  <form action="/api/auth/signout" method="post">
-                    <button className="text-xs font-bold text-textDim hover:text-text transition">Sign out</button>
-                  </form>
-                </div>
+                // 18 Sept 2026, Steven: "instead of an account tab,
+                // referrals, wallet, FAQ, maybe put them when you click a
+                // circle with your avatar... on top right it shows a drop
+                // down with these tabs in them." The plain text
+                // name/tier + Staff + Sign out this used to be is now all
+                // inside AvatarMenu's dropdown (see that component).
+                <AvatarMenu
+                  displayName={auth.profile.displayName}
+                  tier={auth.profile.subscriptionTier}
+                  isStaff={auth.profile.role === "admin" || auth.profile.role === "support"}
+                />
               ) : (
                 // 18 Sept 2026, Steven: "make the top right look the same
                 // theme" — Sign up was a plain grey-bordered pill, the one

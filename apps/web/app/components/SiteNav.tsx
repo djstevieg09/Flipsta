@@ -54,10 +54,15 @@ export default function SiteNav({
       <a href="/how-it-works" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">How It Works</a>
       {/* 18 Sept 2026, Steven: "need a FAQ section... add this to the tabs" —
           full 10-question FAQ lives at its own /faq page (app/faq/page.tsx).
-          No auth gate, same as the tab above. */}
-      <a href="/faq" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">FAQ</a>
-      {/* 26 Aug 2026, Steven: "Need a button that says Flipsta It!" */}
-      {isAuthed && <a href="/flipsta-it" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Flipsta It!</a>}
+          18 Sept 2026, same day, later: "instead of an account tab,
+          referrals, wallet, FAQ, maybe put them when you click a circle
+          with your avatar" — FAQ moved into the new AvatarMenu dropdown
+          (layout.tsx) alongside Account/Referrals/Wallet, so it's dropped
+          from this bar; the page itself is unchanged and still reachable
+          directly (e.g. from How It Works) for signed-out visitors.
+          18 Sept 2026, same request: "Also remove Flipsta It!" — its own
+          tab (previously right here) is gone the same way; /flipsta-it
+          still works as a direct link, just unlinked from this nav. */}
       {/* 27 Aug 2026, Steven: "Sniper mode needs setting up with its own
           tab." Gated the same way Fulfillment jobs is — Pro/Elite only
           (TIER_ENTITLEMENTS[tier].sniperMode). */}
@@ -73,9 +78,10 @@ export default function SiteNav({
       {isAuthed && canFulfill && (
         <a href="/fulfillment" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Fulfillment jobs</a>
       )}
-      {isAuthed && <a href="/wallet" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Wallet</a>}
-      {isAuthed && <a href="/referrals" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Referrals</a>}
-      {isAuthed && <a href="/account" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Account</a>}
+      {/* Wallet, Referrals and Account moved into the avatar dropdown
+          (AvatarMenu, layout.tsx) — see the FAQ comment above. Connected
+          accounts stays here: the user's request only named
+          Account/Referrals/Wallet/FAQ for the dropdown. */}
       {isAuthed && <a href="/settings/connections" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Connected accounts</a>}
     </nav>
   );

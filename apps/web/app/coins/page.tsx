@@ -90,7 +90,7 @@ export default function CoinsPage() {
               Find it. <span className="text-gold">Flip it.</span> Profit.
             </div>
             <p className="text-textDim text-sm leading-relaxed max-w-md mb-6">
-              Buy Flippy Coins to unlock opportunities, purchase listings, access premium AI-sourced
+              Buy Flippy Coins to unlock opportunities, purchase listings, access premium
               deals and take part in the Flipsta ecosystem.
             </p>
             <button
@@ -118,6 +118,16 @@ export default function CoinsPage() {
               alt="Flippy, the Flipsta mascot"
               className="relative w-full max-w-xs rounded-2xl"
             />
+            {/* 18 Sept 2026, Steven: "mascots with relevent animations
+                around them" — this hero already had the mascot (16 Sept),
+                just no animated decorations like the other pages now have
+                (see components/PageHero.tsx's hero-bob/sway/spin, added
+                the same day). Coin-themed rather than the generic PageHero
+                component since this hero's two-column pricing layout is
+                bespoke and worth keeping. */}
+            <span className="absolute top-6 left-4 text-3xl select-none hero-spin" aria-hidden>🪙</span>
+            <span className="absolute bottom-10 right-2 text-2xl select-none hero-bob" aria-hidden>🪙</span>
+            <span className="absolute top-1/2 -right-2 text-2xl select-none hero-sway" style={{ animationDelay: "0.3s" }} aria-hidden>💰</span>
           </div>
         </div>
       </div>

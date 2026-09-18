@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import PageHero from "@/app/components/PageHero";
 
 type Category = { id: string; name: string; slug: string };
 type StockItem = {
@@ -118,13 +119,19 @@ export default function SellStockPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">My Stock</h1>
-        <p className="text-textDim text-sm">
-          Add items you already have on hand to sell — no AI opportunity needed. "List it" turns a stock item into a
-          real marketplace listing, which you can then queue into a live show.
-        </p>
-      </div>
+      <PageHero
+        title={
+          <>
+            My <span className="text-gold">Stock</span>
+          </>
+        }
+        subtitle={'Add items you already have on hand to sell — no opportunity needed. "List it" turns a stock item into a real marketplace listing.'}
+        decorations={[
+          { emoji: "📦", className: "-top-4 -left-6", animate: "bob" },
+          { emoji: "🔁", className: "top-1 -right-7", animate: "spin" },
+          { emoji: "🏷️", className: "-bottom-3 left-1/3 w-11 h-11", boxed: true, animate: "sway", delay: "0.4s" },
+        ]}
+      />
 
       <div className="card p-4 space-y-3">
         <p className="text-xs font-bold text-textDim uppercase">Add stock</p>

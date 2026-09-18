@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { REFERRAL_REWARD_GBP } from "@flipsta/shared";
+import PageHero from "@/app/components/PageHero";
 
 /**
  * 26 Aug 2026, Steven: "we need a referral program." Confirmed via a
@@ -50,13 +51,19 @@ export default function ReferralsPage() {
 
   return (
     <div className="space-y-6 max-w-lg">
-      <div>
-        <h1 className="text-2xl font-bold">Refer a friend</h1>
-        <p className="text-textDim text-sm">
-          You both get £{REFERRAL_REWARD_GBP.toFixed(2)} in your wallet the moment they sign up with your link — no
-          purchase needed on either side.
-        </p>
-      </div>
+      <PageHero
+        title={
+          <>
+            Refer a <span className="text-gold">Friend</span>
+          </>
+        }
+        subtitle={`You both get £${REFERRAL_REWARD_GBP.toFixed(2)} in your wallet the moment they sign up with your link — no purchase needed on either side.`}
+        decorations={[
+          { emoji: "🤝", className: "-top-4 -left-6", animate: "bob" },
+          { emoji: "🎁", className: "top-1 -right-7", animate: "sway" },
+          { emoji: "💷", className: "-bottom-3 left-1/3 w-11 h-11", boxed: true, animate: "bob", delay: "0.4s" },
+        ]}
+      />
 
       <div className="card space-y-3">
         <div>

@@ -19,19 +19,30 @@
  * Find/Sell/Source/Repeat: you secure the sale first, sourcing only
  * happens afterwards, and no stock is ever held. Matches the same fix
  * on the homepage (see app/page.tsx).
+ *
+ * 18 Sept 2026, Steven, later the same day: picked up the shared PageHero
+ * component (see components/PageHero.tsx) in the same pass as every other
+ * nav-reachable page — "mascots with relevent animations around them."
  */
+import PageHero from "@/app/components/PageHero";
+
 export default function HowItWorksPage() {
   return (
     <div className="space-y-16 py-8">
-      <section className="text-center space-y-4 max-w-2xl mx-auto">
-        <h1 className="text-4xl md:text-5xl font-extrabold">
-          How <span className="text-gold">Flipsta</span> Works
-        </h1>
-        <p className="text-textDim">
-          We do the hunting, you do the deciding. Here's what happens from a genuine discount appearing online to
-          money landing in your wallet.
-        </p>
-      </section>
+      <PageHero
+        eyebrow="The full walkthrough"
+        title={
+          <>
+            How <span className="text-gold">Flipsta</span> Works
+          </>
+        }
+        subtitle="We do the hunting, you do the deciding. Here's what happens from a genuine discount appearing online to money landing in your wallet."
+        decorations={[
+          { emoji: "🧭", className: "-top-4 -left-6", animate: "sway" },
+          { emoji: "🔎", className: "top-1 -right-7", animate: "bob" },
+          { emoji: "💡", className: "-bottom-3 left-1/3 w-11 h-11", boxed: true, animate: "bob", delay: "0.4s" },
+        ]}
+      />
 
       <section className="space-y-10">
         {STEPS.map((step, i) => (

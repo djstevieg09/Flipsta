@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import PageHero from "@/app/components/PageHero";
 
 type Want = {
   id: string;
@@ -123,14 +124,20 @@ export default function WantsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Buyer Wants</h1>
-          <p className="text-textDim text-sm">
-            Section 11.10's reverse auction — post exactly what you want and your max price; any reseller holding it
-            can offer, undercutting each other live, backed by real <code>buyer_wants</code> / <code>want_offers</code> rows.
-          </p>
-        </div>
+      <PageHero
+        title={
+          <>
+            Buyer <span className="text-gold">Wants</span>
+          </>
+        }
+        subtitle="Post exactly what you're after and your max price. Any reseller holding it can offer — undercutting each other live until one wins."
+        decorations={[
+          { emoji: "🔍", className: "-top-4 -left-6", animate: "sway" },
+          { emoji: "📝", className: "top-1 -right-7", animate: "bob" },
+          { emoji: "🤝", className: "-bottom-3 left-1/3 w-11 h-11", boxed: true, animate: "bob", delay: "0.4s" },
+        ]}
+      />
+      <div className="flex items-center justify-end">
         <button className="btn btn-primary whitespace-nowrap" onClick={() => setShowPostForm((v) => !v)}>
           {showPostForm ? "Cancel" : "Post a want"}
         </button>

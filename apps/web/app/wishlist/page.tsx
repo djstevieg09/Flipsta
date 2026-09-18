@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import PageHero from "@/app/components/PageHero";
 
 type WishlistItem = {
   id: string;
@@ -63,8 +64,19 @@ export default function WishlistPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold">Wishlist</h1>
-      <p className="text-textDim text-sm">Items you&apos;ve saved for later. Availability is checked live.</p>
+      <PageHero
+        title={
+          <>
+            Your <span className="text-gold">Wishlist</span>
+          </>
+        }
+        subtitle="Items you've saved for later — availability is checked live, so you'll always know if one's sold out."
+        decorations={[
+          { emoji: "❤️", className: "-top-4 -left-6", animate: "bob" },
+          { emoji: "⭐", className: "top-1 -right-7", animate: "sway" },
+          { emoji: "🛍️", className: "-bottom-3 left-1/3 w-11 h-11", boxed: true, animate: "bob", delay: "0.4s" },
+        ]}
+      />
       {loading && <p className="text-textDim text-sm">Loading…</p>}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {items.map((item) => (

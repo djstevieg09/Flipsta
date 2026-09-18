@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { SALES_CHANNELS, suggestListingFromOpportunity } from "@flipsta/shared";
+import PageHero from "@/app/components/PageHero";
 
 type ChannelConnection = { channel: string; connectable: boolean; connected: boolean };
 
@@ -252,13 +253,19 @@ export default function NewListingPage() {
 
   return (
     <div className="space-y-6 max-w-3xl">
-      <div>
-        <h1 className="text-2xl font-bold">List an item</h1>
-        <p className="text-textDim text-sm">
-          Every field below — title, photo, description, and a suggested price — is pulled straight from the
-          opportunity you won. Hit Quick list to publish instantly, or edit anything first if you'd rather.
-        </p>
-      </div>
+      <PageHero
+        title={
+          <>
+            List an <span className="text-gold">Item</span>
+          </>
+        }
+        subtitle="Title, photo, description and a suggested price — all pulled straight from the opportunity you won. Quick list to publish instantly, or edit first."
+        decorations={[
+          { emoji: "🏷️", className: "-top-4 -left-6", animate: "sway" },
+          { emoji: "📸", className: "top-1 -right-7", animate: "bob" },
+          { emoji: "📦", className: "-bottom-3 left-1/3 w-11 h-11", boxed: true, animate: "bob", delay: "0.4s" },
+        ]}
+      />
 
       {notice && (
         <p className={`text-sm ${notice.kind === "success" ? "text-green" : "text-red"}`}>{notice.text}</p>

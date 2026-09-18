@@ -10,18 +10,33 @@
  * up. Same rules as the rest of the site: no "AI" mentions, no explaining
  * the deal-sourcing/verification mechanism, and sell-first/no-inventory
  * throughout.
+ *
+ * 18 Sept 2026, Steven, later the same day: "instead of an account tab,
+ * referrals, wallet, FAQ, maybe put them when you click a circle with
+ * your avatar" — this page's own SiteNav tab moved into the new avatar
+ * dropdown (see layout.tsx's AvatarMenu); the page itself is unchanged and
+ * still reachable directly, so it also picked up the shared PageHero here
+ * in the same pass as every other nav-reachable page.
  */
+import PageHero from "@/app/components/PageHero";
+
 export default function FaqPage() {
   return (
     <div className="space-y-12 py-8">
-      <section className="text-center space-y-4 max-w-2xl mx-auto">
-        <h1 className="text-4xl md:text-5xl font-extrabold">
-          Frequently Asked <span className="text-gold">Questions</span>
-        </h1>
-        <p className="text-textDim">
-          Everything you need to know about buying, selling and flipping on Flipsta.
-        </p>
-      </section>
+      <PageHero
+        eyebrow="Frequently asked"
+        title={
+          <>
+            Got <span className="text-gold">Questions?</span>
+          </>
+        }
+        subtitle="Everything you need to know about buying, selling and flipping on Flipsta."
+        decorations={[
+          { emoji: "❓", className: "-top-4 -left-6", animate: "sway" },
+          { emoji: "💡", className: "top-1 -right-7", animate: "bob" },
+          { emoji: "📖", className: "-bottom-3 left-1/3 w-11 h-11", boxed: true, animate: "bob", delay: "0.4s" },
+        ]}
+      />
 
       <section className="grid md:grid-cols-2 gap-4 max-w-4xl mx-auto">
         {FAQS.map((f) => (

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import BecomeResellerBanner from "@/app/components/BecomeResellerBanner";
+import PageHero from "@/app/components/PageHero";
 import ReviewForm from "@/app/components/ReviewForm";
 
 type WonOpportunity = {
@@ -205,7 +206,19 @@ export default function PortfolioPage() {
 
   return (
     <div className="space-y-8">
-      <h1 className="text-2xl font-bold">Portfolio</h1>
+      <PageHero
+        title={
+          <>
+            Your <span className="text-gold">Portfolio</span>
+          </>
+        }
+        subtitle="Everything you've done on Flipsta — wins, listings with their cross-post status, and orders both bought and sold."
+        decorations={[
+          { emoji: "📈", className: "-top-4 -left-6", animate: "bob" },
+          { emoji: "📊", className: "top-1 -right-7", animate: "sway" },
+          { emoji: "💷", className: "-bottom-3 left-1/3 w-11 h-11", boxed: true, animate: "bob", delay: "0.4s" },
+        ]}
+      />
 
       {(tier === "free" || tier === "standard") && <BecomeResellerBanner />}
 

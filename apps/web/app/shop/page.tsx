@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useBasket } from "../BasketProvider";
 import CategorySidebar from "../components/CategorySidebar";
+import PageHero from "../components/PageHero";
 import ShopperSwitch from "../components/ShopperSwitch";
 import { SHOP_LOW_STOCK_THRESHOLD_UNITS } from "@flipsta/shared";
 
@@ -287,10 +288,19 @@ function ShopPageInner() {
       />
 
       <div className="flex-1 min-w-0 space-y-10">
-        <div>
-          <h1 className="text-2xl font-bold">Shop</h1>
-          <p className="text-textDim text-sm">Buy Flipsta Sourced deals, or from other Flipsta sellers, all in one place.</p>
-        </div>
+        <PageHero
+          title={
+            <>
+              Shop <span className="text-gold">Flipsta</span>
+            </>
+          }
+          subtitle="Sourced deals and listings from other Flipsta sellers, side by side — filter by category and who you're shopping for."
+          decorations={[
+            { emoji: "🛍️", className: "-top-4 -left-6", animate: "bob" },
+            { emoji: "🏷️", className: "top-1 -right-7", animate: "sway" },
+            { emoji: "📦", className: "-bottom-3 left-1/3 w-11 h-11", boxed: true, animate: "bob", delay: "0.4s" },
+          ]}
+        />
 
         {/* 26 Aug 2026, Steven: "Need a banner explaining this on the main
             page of the shop." — the "Flipsta It!" request-a-deal feature. */}

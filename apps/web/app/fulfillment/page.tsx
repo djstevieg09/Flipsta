@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import PageHero from "@/app/components/PageHero";
 import TradingFloorTicker from "./TradingFloorTicker";
 
 type ClaimableJob = {
@@ -109,17 +110,22 @@ export default function FulfillmentPage() {
 
   return (
     <div className="space-y-8">
+      <PageHero
+        title={
+          <>
+            Fulfillment <span className="text-gold">Jobs</span>
+          </>
+        }
+        subtitle="A free button to press: claim a paid-for order, go buy it, ship it, get paid once the buyer confirms delivery."
+        decorations={[
+          { emoji: "🚚", className: "-top-4 -left-6", animate: "bob" },
+          { emoji: "✅", className: "top-1 -right-7", animate: "sway" },
+          { emoji: "📦", className: "-bottom-3 left-1/3 w-11 h-11", boxed: true, animate: "bob", delay: "0.4s" },
+        ]}
+      />
       <TradingFloorTicker
         jobs={claimable.map((j) => ({ id: j.id, productName: j.product_name, rewardGBP: j.fulfillment_reward_gbp }))}
       />
-      <div>
-        <h1 className="text-2xl font-bold">Fulfillment jobs</h1>
-        <p className="text-textDim text-sm">
-          A free button to press: claim a paid-for order, go buy it, ship it, get paid once the buyer confirms
-          delivery. Claims are capped per person and auto-release if not shipped in time, so everyone gets a fair
-          shot as orders come in.
-        </p>
-      </div>
       {message && <p className="text-sm text-brand2">{message}</p>}
       {loading && <p className="text-textDim text-sm">Loading…</p>}
 

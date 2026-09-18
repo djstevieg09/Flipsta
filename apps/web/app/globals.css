@@ -116,6 +116,28 @@ a:hover { opacity: 0.85; }
   animation: live-dot-pulse 1.4s ease-in-out infinite;
 }
 
+/* 18 Sept 2026, Steven: "mascots with relevent animations around them" —
+   shared PageHero component (components/PageHero.tsx), reused across every
+   nav-reachable page. Three generic motions so each page's own emoji
+   decorations feel alive without needing a bespoke animation per page —
+   deliberately positioning-only in each page's className (no static
+   rotate utility), since these keyframes set `transform` themselves. */
+@keyframes hero-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-7px); }
+}
+@keyframes hero-sway {
+  0%, 100% { transform: rotate(-8deg); }
+  50% { transform: rotate(8deg); }
+}
+@keyframes hero-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.hero-bob { animation: hero-bob 2.6s ease-in-out infinite; }
+.hero-sway { animation: hero-sway 2.3s ease-in-out infinite; }
+.hero-spin { animation: hero-spin 5s linear infinite; }
+
 /* Instant-win celebration overlay. */
 @keyframes win-pop-in {
   0% { opacity: 0; transform: scale(0.6) rotate(-8deg); }

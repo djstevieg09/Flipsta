@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/currentProfile";
 import { TIER_ENTITLEMENTS } from "@/lib/tierGuard";
 import BecomeResellerBanner from "@/app/components/BecomeResellerBanner";
+import PageHero from "@/app/components/PageHero";
 
 /**
  * Section 7/12.1 — a real, tier-aware home base. Not a pixel port of the
@@ -37,11 +38,22 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Welcome back, {auth.profile.displayName}</h1>
-          <p className="text-textDim text-sm capitalize">{auth.profile.subscriptionTier} plan</p>
-        </div>
+      <PageHero
+        eyebrow={`${auth.profile.subscriptionTier} plan`}
+        title={
+          <>
+            Welcome back, <span className="text-gold">{auth.profile.displayName}</span>
+          </>
+        }
+        subtitle="Everything about your account in one place — your plan, quick links to every part of the site, and what's included."
+        decorations={[
+          { emoji: "📊", className: "-top-4 -left-6", animate: "bob" },
+          { emoji: "📈", className: "top-1 -right-7", animate: "sway" },
+          { emoji: "💰", className: "-bottom-3 left-1/3 w-11 h-11", boxed: true, animate: "bob", delay: "0.4s" },
+        ]}
+      />
+
+      <div className="flex justify-end">
         <a href="/upgrade" className="btn btn-primary">
           {auth.profile.subscriptionTier === "elite" ? "Manage billing" : "Upgrade plan"}
         </a>

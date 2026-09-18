@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import PageHero from "@/app/components/PageHero";
 
 type ShopperProfile = {
   id: string;
@@ -31,6 +33,7 @@ const BLANK_FORM = {
  * filter on it at all rather than hiding everything.
  */
 export default function AccountPage() {
+  const router = useRouter();
   const [signedIn, setSignedIn] = useState(true);
   const [profiles, setProfiles] = useState<ShopperProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,6 +46,16 @@ export default function AccountPage() {
   const [portalError, setPortalError] = useState<string | null>(null);
   const [notifyDealMatches, setNotifyDealMatches] = useState<boolean | null>(null);
   const [notifySaving, setNotifySaving] = useState(false);
+
+  // 18 Sept 2026, Steven: "they should also be able to name themselves how
+  // they will be displayed on Flipsta." displayName loads from /api/me
+  // (the source of truth, profiles.display_name) and saves via PATCH
+  // /api/account/profile — the only self-editable profile field so far.
+  const [displayName, setDisplayName] = useState("");
+  const [nameInput, setNameInput] = useState("");
+  const [editingName, setEditingName] = useState(false);
+  const [nameSaving, setNameSaving] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
 
   function loadProfiles() {
     fetch("/api/account/shopper-profiles").then(async (r) => {
@@ -64,7 +77,44 @@ export default function AccountPage() {
       const d = await r.json();
       setNotifyDealMatches(Boolean(d.notifyDealMatches));
     });
+    fetch("/api/me")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.profile?.displayName) {
+          setDisplayName(d.profile.displayName);
+          setNameInput(d.profile.displayName);
+        }
+      })
+      .catch(() => {});
   }, []);
+
+  async function saveDisplayName() {
+    const trimmed = nameInput.trim();
+    if (!trimmed) {
+      setNameError("Enter a display name.");
+      return;
+    }
+    setNameSaving(true);
+    setNameError(null);
+    const res = await fetch("/api/account/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ displayName: trimmed }),
+    });
+    const data = await res.json();
+    setNameSaving(false);
+    if (!res.ok) {
+      setNameError(data.error ?? "Couldn't save that right now.");
+      return;
+    }
+    setDisplayName(data.displayName);
+    setNameInput(data.displayName);
+    setEditingName(false);
+    // The header's avatar dropdown (layout.tsx, a Server Component) reads
+    // display_name at render time — refresh so it doesn't keep showing the
+    // old name until the next full navigation.
+    router.refresh();
+  }
 
   // 27 Aug 2026 — see claude/deployment-checklist.md's #-5 research: this
   // is on by default, so switching it off needs to be exactly as easy as
@@ -154,10 +204,61 @@ export default function AccountPage() {
 
   return (
     <div className="space-y-8 max-w-2xl">
-      <div>
-        <h1 className="text-2xl font-bold">Account</h1>
-        <p className="text-textDim text-sm">Payment methods and the shopping profiles that power &quot;who are you shopping for&quot; on the Shop.</p>
-      </div>
+      <PageHero
+        eyebrow="Your account"
+        title={
+          <>
+            Hey, <span className="text-gold">{displayName || "there"}</span>
+          </>
+        }
+        subtitle="Your display name, payment methods, and the shopping profiles that power &quot;who are you shopping for&quot; on the Shop."
+        decorations={[
+          { emoji: "👤", className: "-top-4 -left-6", animate: "bob" },
+          { emoji: "⚙️", className: "top-1 -right-7", animate: "sway" },
+          { emoji: "🔒", className: "-bottom-3 left-1/3 w-10 h-10", boxed: true, sizeClassName: "text-lg", animate: "bob", delay: "0.5s" },
+        ]}
+      />
+
+      <section className="space-y-2">
+        <h2 className="font-bold text-lg">Display name</h2>
+        <div className="card space-y-3">
+          <p className="text-sm text-textDim">How you show up on Flipsta — activity feeds, the trading floor ticker, and anywhere else your name appears.</p>
+          {editingName ? (
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                className="flex-1 bg-surface2 border border-border rounded-lg px-3 py-2 text-sm"
+                value={nameInput}
+                maxLength={40}
+                onChange={(e) => setNameInput(e.target.value)}
+                autoFocus
+              />
+              <div className="flex gap-2">
+                <button onClick={saveDisplayName} disabled={nameSaving} className="btn btn-primary disabled:opacity-50">
+                  {nameSaving ? "Saving…" : "Save"}
+                </button>
+                <button
+                  onClick={() => {
+                    setEditingName(false);
+                    setNameInput(displayName);
+                    setNameError(null);
+                  }}
+                  className="btn btn-ghost"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-3">
+              <span className="font-bold text-sm">{displayName || "—"}</span>
+              <button onClick={() => setEditingName(true)} className="text-xs font-bold border border-border rounded-lg px-3 py-1.5 hover:border-brand2">
+                Change
+              </button>
+            </div>
+          )}
+          {nameError && <p className="text-xs text-red">{nameError}</p>}
+        </div>
+      </section>
 
       <section className="space-y-2">
         <h2 className="font-bold text-lg">Payment methods</h2>

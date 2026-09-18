@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { SubscriptionTier } from "@flipsta/shared";
+import PageHero from "@/app/components/PageHero";
 
 type Category = { id: string; name: string; slug: string };
 type SniperRule = {
@@ -153,15 +154,20 @@ export default function SniperPage() {
 
   return (
     <div className="space-y-4 max-w-3xl">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Sniper Mode</h1>
-          <p className="text-textDim text-sm">
-            Fully automatic bidding. In the last 5 minutes of an opportunity's action clock, Flipsta bids on your
-            behalf — only in categories you choose, only up to the budget you set, and only when the deal still
-            clears your minimum margin.
-          </p>
-        </div>
+      <PageHero
+        title={
+          <>
+            Sniper <span className="text-gold">Mode</span>
+          </>
+        }
+        subtitle="Fully automatic bidding. In the last 5 minutes of the action clock, Flipsta bids for you — only in categories you choose, only up to your budget, only when the margin still clears your bar."
+        decorations={[
+          { emoji: "🎯", className: "-top-4 -left-6", animate: "sway" },
+          { emoji: "⚡", className: "top-1 -right-7", animate: "bob" },
+          { emoji: "💰", className: "-bottom-3 left-1/3 w-11 h-11", boxed: true, animate: "bob", delay: "0.4s" },
+        ]}
+      />
+      <div className="flex items-center justify-end">
         <button className="btn btn-primary whitespace-nowrap" onClick={() => setShowForm((v) => !v)}>
           {showForm ? "Cancel" : "New rule"}
         </button>

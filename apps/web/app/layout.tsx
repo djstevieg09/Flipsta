@@ -6,6 +6,7 @@ import { TIER_ENTITLEMENTS } from "@/lib/tierGuard";
 import { BasketProvider } from "./BasketProvider";
 import AvatarMenu from "./components/AvatarMenu";
 import BasketIndicator from "./components/BasketIndicator";
+import CoinBalance from "./components/CoinBalance";
 import HeaderSearch from "./components/HeaderSearch";
 import SiteNav from "./components/SiteNav";
 import SupportChatWidget from "./components/SupportChatWidget";
@@ -95,11 +96,18 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 // down with these tabs in them." The plain text
                 // name/tier + Staff + Sign out this used to be is now all
                 // inside AvatarMenu's dropdown (see that component).
-                <AvatarMenu
-                  displayName={auth.profile.displayName}
-                  tier={auth.profile.subscriptionTier}
-                  isStaff={auth.profile.role === "admin" || auth.profile.role === "support"}
-                />
+                <div className="flex items-center gap-3 whitespace-nowrap">
+                  {/* 18 Sept 2026, Steven: "need to get the coins working
+                      with the wallet amount showing in the top right hand
+                      corner with the flipsta coin spinning next to the
+                      amount." */}
+                  <CoinBalance />
+                  <AvatarMenu
+                    displayName={auth.profile.displayName}
+                    tier={auth.profile.subscriptionTier}
+                    isStaff={auth.profile.role === "admin" || auth.profile.role === "support"}
+                  />
+                </div>
               ) : (
                 // 18 Sept 2026, Steven: "make the top right look the same
                 // theme" — Sign up was a plain grey-bordered pill, the one

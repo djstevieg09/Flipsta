@@ -138,6 +138,55 @@ export async function createBillingPortalSession(params: { stripeCustomerId: str
  * server or database (the same PCI-safe boundary createEscrowPaymentIntent
  * and Checkout already rely on).
  */
+/**
+ * 18 Sept 2026, Steven: "get the flippy coins shop all working." A one-off
+ * payment (not a subscription) for a Flippy Coin bundle — priceGBP/coins
+ * come from COIN_BUNDLES (packages/shared/src/constants.ts) by bundle id,
+ * looked up server-side in the route that calls this, never trusted from
+ * the client. Uses an inline `price_data` line item rather than a
+ * pre-created Stripe Price (unlike createTierCheckoutSession's
+ * subscriptions) since there's no dashboard setup needed for a one-off
+ * amount — this works the moment STRIPE_SECRET_KEY/STRIPE_WEBHOOK_SECRET
+ * are set. metadata.kind = "coin_purchase" is how the webhook (see
+ * app/api/webhooks/stripe/route.ts) tells this apart from any other
+ * checkout.session.completed event.
+ */
+export async function createCoinCheckoutSession(params: {
+  bundleId: string;
+  coins: number;
+  bundleName: string;
+  priceGBP: number;
+  profileId: string;
+  email: string;
+  existingStripeCustomerId?: string | null;
+  successUrl: string;
+  cancelUrl: string;
+}) {
+  if (!isStripeConfigured()) {
+    throw new Error("Buying Flippy Coins isn't set up yet — set STRIPE_SECRET_KEY on Render (see INFRASTRUCTURE_TODO.md).");
+  }
+
+  return stripe.checkout.sessions.create({
+    mode: "payment",
+    line_items: [
+      {
+        price_data: {
+          currency: "gbp",
+          product_data: { name: `${params.bundleName} — ${params.coins} Flippy Coin${params.coins === 1 ? "" : "s"}` },
+          unit_amount: Math.round(params.priceGBP * 100),
+        },
+        quantity: 1,
+      },
+    ],
+    customer: params.existingStripeCustomerId ?? undefined,
+    customer_email: params.existingStripeCustomerId ? undefined : params.email,
+    client_reference_id: params.profileId,
+    metadata: { kind: "coin_purchase", profile_id: params.profileId, bundle_id: params.bundleId, coins: String(params.coins) },
+    success_url: params.successUrl,
+    cancel_url: params.cancelUrl,
+  });
+}
+
 export async function getOrCreateStripeCustomer(params: {
   existingStripeCustomerId?: string | null;
   email: string;

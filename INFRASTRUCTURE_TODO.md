@@ -293,6 +293,26 @@ step only you can do.
       — Supabase's Attack Protection settings have their own separate
       rate-limiting for that, on by default.
 
+## 16. Flippy Coins shop
+
+- [ ] Run `supabase/migrations/0031_flippy_coins.sql` — adds the real
+      Flippy Coin balance/ledger (`profiles.flippy_coin_balance`,
+      `coin_transactions`) that `/coins` now actually charges into and
+      the header balance reads from. Without this, buying coins will
+      fail server-side rather than silently doing nothing.
+- [ ] Nothing new to add in Stripe or on Render — this reuses
+      `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET` from Section 3, and
+      `checkout.session.completed` (which credits a purchase) is already
+      on the list of events that section asks you to subscribe the
+      webhook endpoint to. Just double check that event is actually
+      ticked on the webhook endpoint in the Stripe dashboard if coin
+      purchases ever don't land.
+- [ ] Per-tier discounted coin pricing, spending coins to unlock an
+      opportunity, the free trial/daily bonus, and the Flippy mascot's
+      random reward are all still open decisions in
+      `planning/coin-economy-proposal.md` — not built as part of this;
+      the shop only sells coins and holds a balance for now.
+
 ---
 
 **Suggested order:** 1 → 2 → 4 (deploy with the mock worker adapter and Stripe

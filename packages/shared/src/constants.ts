@@ -228,3 +228,32 @@ export const MIN_NET_ROI_PCT = 0.15;
 // lib/orderCreation.ts: DPD is £4.99, Royal Mail £2.99), so the floor
 // errs conservative rather than overstating margin.
 export const NET_ROI_SHIPPING_ESTIMATE_GBP = 4.99;
+
+/**
+ * 18 Sept 2026, Steven: "get the flippy coins shop all working." Real
+ * money changes hands here, so the bundle→price mapping has to live
+ * server-side and be looked up by id — never trust a price the client
+ * sends. These numbers are exactly what /coins already displayed as
+ * "coming soon" pricing (16 Sept) — this just makes them real.
+ *
+ * planning/coin-economy-proposal.md still has several open decisions this
+ * does NOT implement: per-tier discounted pricing (the "Subscriber
+ * Prices" panel on /coins stays informational only), the monthly
+ * subscription coin allowance, spending coins to unlock an opportunity,
+ * the free trial / daily login bonus, and the Flippy mascot's random
+ * reward. This is scoped to exactly what was asked: buy Flippy Coins,
+ * hold a balance, see it in the header.
+ */
+export type CoinBundleId = "single" | "starter" | "growth" | "arbitrage" | "empire";
+
+export const COIN_BUNDLES: Record<CoinBundleId, { name: string; coins: number; priceGBP: number }> = {
+  single: { name: "Single Flippy Coin", coins: 1, priceGBP: 1.0 },
+  starter: { name: "Starter Bundle", coins: 10, priceGBP: 9.5 },
+  growth: { name: "Growth Bundle", coins: 25, priceGBP: 21.25 },
+  arbitrage: { name: "Arbitrage Bundle", coins: 75, priceGBP: 56.25 },
+  empire: { name: "Empire Bundle", coins: 150, priceGBP: 90.0 },
+};
+
+export function isValidCoinBundle(id: string): id is CoinBundleId {
+  return id in COIN_BUNDLES;
+}

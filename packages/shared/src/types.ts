@@ -65,6 +65,12 @@ export interface Profile {
   city?: string | null;
   postcode?: string | null;
   country?: string | null;
+  // 18 Sept 2026, Steven: "get the flippy coins shop all working" — the
+  // real, tamper-proof balance from profiles.flippy_coin_balance (see
+  // migration 0031_flippy_coins.sql). Optional for the same reason as the
+  // signup fields above: every account has a real value (default 0), but
+  // Profile literals built before this date don't set it.
+  flippyCoinBalance?: number;
 }
 
 /** Section 12.1 — Ultimate Admin Dashboard & Ticketing System */

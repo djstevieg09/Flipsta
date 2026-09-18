@@ -34,6 +34,19 @@
  * sell, i.e. holding stock). Corrected here and in the feature strip /
  * steps below to sell first, then source from the partner/deal — no
  * inventory sitting around either way.
+ *
+ * 18 Sept 2026, Steven, later still: "the font at the top of the page
+ * should be like the photo i have sent you" — the mockup's "The future
+ * is here." accent text is a flowing gold brush script. The inline
+ * `Brush Script MT` fallback only renders as that on Windows/Mac and
+ * falls back to a generic, un-styled cursive everywhere else (browsers,
+ * Linux, most phones) — which is why it didn't match. Swapped for
+ * Kaushan Script, a bold brush-script Google Font that's the standard
+ * web substitute for Brush Script MT, loaded via the <link> tag in
+ * app/layout.tsx (a runtime stylesheet fetch, same as any Google Font —
+ * next/font/google's build-time fetch isn't reachable from this
+ * sandbox's network, but a plain <link> works the same in the browser
+ * and needs no build-time network access at all).
  */
 export default function HomePage() {
   return (
@@ -68,8 +81,8 @@ export default function HomePage() {
 
         <div className="relative flex justify-center md:justify-end">
           <span
-            className="hidden md:block absolute -top-8 right-10 text-2xl text-brand2 -rotate-6"
-            style={{ fontFamily: "Brush Script MT, cursive" }}
+            className="hidden md:block absolute -top-8 right-10 text-3xl text-brand2 -rotate-6"
+            style={{ fontFamily: "'Kaushan Script', cursive" }}
           >
             The future is here.
           </span>

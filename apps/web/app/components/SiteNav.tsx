@@ -52,6 +52,10 @@ export default function SiteNav({
           pages/routes still exist and work, they're just no longer linked
           from the main nav; reachable again here if that changes. */}
       <a href="/how-it-works" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">How It Works</a>
+      {/* 18 Sept 2026, Steven: "need a FAQ section... add this to the tabs" —
+          full 10-question FAQ lives at its own /faq page (app/faq/page.tsx).
+          No auth gate, same as the tab above. */}
+      <a href="/faq" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">FAQ</a>
       {/* 26 Aug 2026, Steven: "Need a button that says Flipsta It!" */}
       {isAuthed && <a href="/flipsta-it" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Flipsta It!</a>}
       {/* 27 Aug 2026, Steven: "Sniper mode needs setting up with its own

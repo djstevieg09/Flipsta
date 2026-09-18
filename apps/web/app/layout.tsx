@@ -24,6 +24,20 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const auth = await getCurrentProfile();
   return (
     <html lang="en">
+      <head>
+        {/* 18 Sept 2026, Steven: "the font at the top of the page should be
+            like the photo i have sent you" — Kaushan Script (a Google Font)
+            for the homepage's "The future is here." brush-script accent
+            text (see app/page.tsx). Loaded as a plain stylesheet link
+            rather than next/font/google so it's a normal runtime fetch in
+            the visitor's browser, not a build-time one. */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Kaushan+Script&display=swap"
+          rel="stylesheet"
+        />
+      </head>
       <body>
         {/* BasketProvider wraps the whole app (not just /shop and /basket) so
             the header's count indicator stays accurate on every page — a

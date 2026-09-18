@@ -261,6 +261,38 @@ configure globally.
       direction (out from Whatnot, not in). This is a hard technical
       limitation on their side, not something Flipsta can build around.
 
+## 15. Signup bot protection — Cloudflare Turnstile
+
+18 Sept 2026, Steven: "need to protect from bots making accounts also."
+Two parts to this — one code change (already done) and one dashboard
+step only you can do.
+
+- [ ] **Create a Turnstile site** — dash.cloudflare.com → Turnstile → Add
+      site. Free, no Google account needed (unlike reCAPTCHA). Add
+      `flipsta.co.uk` (and `localhost` if you want it working in local
+      dev) as the domain. This gives you a **Site Key** and a **Secret
+      Key**.
+- [ ] Set `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (the Site Key) on the
+      `flipsta-web` service on Render. Until this is set, the widget on
+      `/signup` just doesn't render and signup works exactly as before —
+      nothing breaks by leaving this for later.
+- [ ] **The Secret Key goes into Supabase, not into this app**: Supabase
+      Dashboard → Authentication → Attack Protection → enable "Enable
+      Captcha protection," choose Cloudflare Turnstile, paste the Secret
+      Key. This is the step that actually matters — the widget on the
+      page alone only stops naive scripted form submissions; this toggle
+      is what makes Supabase's own Auth API reject a signup that skips
+      the widget entirely (e.g. a bot calling the API directly with the
+      public anon key, bypassing the page altogether).
+- [ ] Run `supabase/migrations/0030_signup_profile_details.sql` — adds
+      the address/business/date-of-birth fields the redesigned `/signup`
+      form now collects, and enforces the 16+ minimum as a DB check
+      constraint (so it can't be bypassed the same way).
+- [ ] Google/Facebook/Apple signup (Section 12) goes through Supabase's
+      OAuth flow directly, which isn't covered by Turnstile the same way
+      — Supabase's Attack Protection settings have their own separate
+      rate-limiting for that, on by default.
+
 ---
 
 **Suggested order:** 1 → 2 → 4 (deploy with the mock worker adapter and Stripe

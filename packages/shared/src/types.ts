@@ -51,6 +51,20 @@ export interface Profile {
   role: StaffRole;
   status: AccountStatus;
   createdAt: string;
+  // 18 Sept 2026, Steven: "need more info like address and maybe if they
+  // are a business or personal flipping... ask for business name if there
+  // is one and age" — collected at signup (see app/signup/page.tsx and
+  // supabase/migrations/0030_signup_profile_details.sql). Optional here
+  // (rather than widening every existing Profile literal across the app)
+  // since accounts created before this date have none of it.
+  accountType?: "personal" | "business";
+  businessName?: string | null;
+  dateOfBirth?: string | null;
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  city?: string | null;
+  postcode?: string | null;
+  country?: string | null;
 }
 
 /** Section 12.1 — Ultimate Admin Dashboard & Ticketing System */

@@ -8,6 +8,8 @@ import { crossPostListings } from "./jobs/crossPostListings.js";
 import { releaseExpiredFulfillmentClaims } from "./jobs/releaseExpiredFulfillmentClaims.js";
 import { expireSeasonalStock } from "./jobs/expireSeasonalStock.js";
 import { notifyDealMatches } from "./jobs/notifyDealMatches.js";
+import { sendWelcomeEmails } from "./jobs/sendWelcomeEmails.js";
+import { sendPromoBroadcasts } from "./jobs/sendPromoBroadcasts.js";
 import { runSniperBids } from "./jobs/runSniperBids.js";
 import { syncAwinProducts } from "./jobs/syncAwinProducts.js";
 import { closeExpiredLiveItems } from "./jobs/closeExpiredLiveItems.js";
@@ -61,6 +63,12 @@ const INTERVALS_MS = {
   fulfillmentClaims: 15 * 60 * 1000, // fairness sweep — see releaseExpiredFulfillmentClaims.ts
   seasonalExpiry: 60 * 60 * 1000, // dates, not minutes, matter here — hourly is plenty; see expireSeasonalStock.ts
   dealMatchNotifications: 30 * 60 * 1000, // 27 Aug 2026 — real-time-ish without spamming; see notifyDealMatches.ts
+  // 18 Sept 2026 — Resend setup ("emails for sign ups and promo stuff").
+  // Welcome emails should feel prompt after someone signs up, so check
+  // often; broadcasts are staff-triggered and rare, so once every few
+  // minutes is plenty responsive without polling promo_broadcasts hard.
+  welcomeEmails: 5 * 60 * 1000,
+  promoBroadcasts: 5 * 60 * 1000,
   // 27 Aug 2026 — Awin affiliate sync (Steven: "fill my store with goods
   // ... earn comission off items through affiliate programs"). Product
   // feeds are typically only refreshed a handful of times a day on Awin's
@@ -108,6 +116,8 @@ async function main() {
   await tick("releaseExpiredFulfillmentClaims", releaseExpiredFulfillmentClaims);
   await tick("expireSeasonalStock", expireSeasonalStock);
   await tick("notifyDealMatches", notifyDealMatches);
+  await tick("sendWelcomeEmails", sendWelcomeEmails);
+  await tick("sendPromoBroadcasts", sendPromoBroadcasts);
   await tick("syncAwinProducts", syncAwinProducts);
   await tick("closeExpiredLiveItems", closeExpiredLiveItems);
   await tick("revertExpiredSubscriptionGrants", revertExpiredSubscriptionGrants);
@@ -125,6 +135,8 @@ async function main() {
   setInterval(() => tick("releaseExpiredFulfillmentClaims", releaseExpiredFulfillmentClaims), INTERVALS_MS.fulfillmentClaims);
   setInterval(() => tick("expireSeasonalStock", expireSeasonalStock), INTERVALS_MS.seasonalExpiry);
   setInterval(() => tick("notifyDealMatches", notifyDealMatches), INTERVALS_MS.dealMatchNotifications);
+  setInterval(() => tick("sendWelcomeEmails", sendWelcomeEmails), INTERVALS_MS.welcomeEmails);
+  setInterval(() => tick("sendPromoBroadcasts", sendPromoBroadcasts), INTERVALS_MS.promoBroadcasts);
   setInterval(() => tick("syncAwinProducts", syncAwinProducts), INTERVALS_MS.awinSync);
   setInterval(() => tick("closeExpiredLiveItems", closeExpiredLiveItems), INTERVALS_MS.closeLiveItems);
   setInterval(() => tick("revertExpiredSubscriptionGrants", revertExpiredSubscriptionGrants), INTERVALS_MS.revertGrants);

@@ -17,22 +17,42 @@ export async function GET() {
   if (!auth) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
 
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.from("profiles").select("notify_deal_matches").eq("id", auth.userId).single();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("notify_deal_matches, notify_promotions")
+    .eq("id", auth.userId)
+    .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ notifyDealMatches: data.notify_deal_matches });
+  return NextResponse.json({ notifyDealMatches: data.notify_deal_matches, notifyPromotions: data.notify_promotions });
 }
 
 export async function PATCH(req: NextRequest) {
   const auth = await getCurrentProfile();
   if (!auth) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
 
-  const { notifyDealMatches } = await req.json();
-  if (typeof notifyDealMatches !== "boolean") {
-    return NextResponse.json({ error: "notifyDealMatches must be true or false." }, { status: 400 });
+  const { notifyDealMatches, notifyPromotions } = await req.json();
+  const update: Record<string, boolean> = {};
+  if (notifyDealMatches !== undefined) {
+    if (typeof notifyDealMatches !== "boolean") {
+      return NextResponse.json({ error: "notifyDealMatches must be true or false." }, { status: 400 });
+    }
+    update.notify_deal_matches = notifyDealMatches;
+  }
+  // 18 Sept 2026 — the opt-out side of promo_broadcasts (migration 0037),
+  // same "on by default, one click off" pattern as notify_deal_matches
+  // above.
+  if (notifyPromotions !== undefined) {
+    if (typeof notifyPromotions !== "boolean") {
+      return NextResponse.json({ error: "notifyPromotions must be true or false." }, { status: 400 });
+    }
+    update.notify_promotions = notifyPromotions;
+  }
+  if (Object.keys(update).length === 0) {
+    return NextResponse.json({ error: "No recognised fields to update." }, { status: 400 });
   }
 
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.from("profiles").update({ notify_deal_matches: notifyDealMatches }).eq("id", auth.userId);
+  const { error } = await supabase.from("profiles").update(update).eq("id", auth.userId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, notifyDealMatches });
+  return NextResponse.json({ ok: true, ...update });
 }

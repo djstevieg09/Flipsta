@@ -74,8 +74,10 @@ The worker currently uses a mock data source (`apps/worker/src/adapters/mockAdap
 
 ## 8. Email
 
-- [ ] Now wired into the codebase (`apps/web/lib/notifications.ts`, used on ticket status changes) but running in console-stub mode until you set a key. **Resend** or **Postmark** are both good fits for a Next.js app.
-- [ ] Sign up, verify your sending domain (flipsta.co.uk), copy the API key → `RESEND_API_KEY`, and set `NOTIFICATIONS_FROM_EMAIL` to a real address on that domain.
+- [x] Done 18 Sept 2026 — Resend is live. See Section 21 for the full setup
+      (domain, DNS, API key, welcome emails, and the new promo/broadcast
+      feature) and Section 20/19 for the other 18 Sept work shipped
+      alongside it.
 
 ## 9. Multi-platform listing — external marketplace accounts
 
@@ -555,6 +557,70 @@ the bot clever."
       added — **revisit `/admin/trending` periodically and refresh what's
       actually still hot**, or this quietly goes back to having no trend
       signal at all once they lapse.
+
+## 21. Resend email — welcome emails and promo broadcasts (18 Sept 2026)
+
+Steven: "i need to setup resend so it can send emails for sign ups and promo
+stuff." + "i already have an account as using it for another project"
+(PSO Installations, `psoinstallationsltd.co.uk` — confirmed the same Resend
+account, a separate verified domain there).
+
+- [x] **Domain.** `flipsta.co.uk` added in Resend, region Ireland
+      (eu-west-1). Resend auto-detected the DNS host as **Namecheap** and
+      offered a direct link there — used it to add the DKIM (TXT,
+      `resend._domainkey`), SPF (two CNAMEs, `rsend`/`send`), and DMARC
+      (TXT, `_dmarc`, `p=none`) records alongside the existing `@`/`www`/
+      `privateemail._domainkey` records, which were left untouched.
+      "Enable Receiving" (an MX record) was left off — not asked for, only
+      sending. Verification is DNS-propagation-dependent (Resend's own
+      estimate: "a few hours") — check `/domains` on Resend; status was
+      still "Pending" right after adding the records, which is normal.
+- [x] **API key.** Created a new key scoped to **Sending access only**
+      (not Full access — this app only ever calls the send endpoint) named
+      `flipsta-production`. Couldn't scope it to the `flipsta.co.uk` domain
+      specifically because that domain wasn't selectable in the scope
+      dropdown yet at creation time (still pending verification) — it's
+      currently usable against any domain on the account, including the
+      PSO one. Worth tightening once `flipsta.co.uk` verifies: Resend →
+      API keys → this key → check whether it can be re-scoped, or delete
+      and recreate it once the domain dropdown offers it.
+- [x] **Render.** `RESEND_API_KEY` and `NOTIFICATIONS_FROM_EMAIL` (`Flipsta
+      <notifications@flipsta.co.uk>`) set on both `flipsta-web` and
+      `flipsta-worker`. Both auto-redeployed to pick them up. Until DNS
+      verification finishes, `packages/shared/src/notifications.ts`'s real
+      Resend call will get rejected (unverified domain) and log an error —
+      that stops on its own once `/domains` shows Verified, no action
+      needed.
+- [x] **Welcome email.** Signup itself is a client-side
+      `supabase.auth.signUp()` call with no server hook Flipsta controls —
+      the actual send happens from a new periodic worker job,
+      `sendWelcomeEmails.ts`, same "worker polls for what's unhandled and
+      sends" pattern as `notifyDealMatches.ts`. `profiles.welcome_email_
+      sent_at` (migration 0037) is the idempotency marker, checked every 5
+      minutes. `NotificationEvents.welcome` in `notifications.ts` is the
+      template — deliberately separate from Supabase Auth's own "confirm
+      your email" message.
+- [x] **Promo/marketing emails.** New `/admin/broadcasts` page: staff write
+      a subject + body, pick an audience ("Opted-in only" — the default,
+      respects the new `notify_promotions` account toggle at `/account`,
+      same on-by-default/one-click-off pattern as deal-match
+      notifications — or "Everyone", an explicit override for e.g. a
+      mandatory announcement), and hit send. That queues a `pending` row in
+      `promo_broadcasts` (migration 0037); a new worker job,
+      `sendPromoBroadcasts.ts`, picks it up within 5 minutes and does the
+      actual sending — kept out of the API route so emailing a whole user
+      base can't time out a web request. `/admin/broadcasts` shows status
+      (Pending → Sending → Sent/Failed) and recipient count once sent, and
+      a still-pending broadcast can be cancelled.
+- [ ] **Not built:** Resend's own native Broadcasts/Audience feature was
+      considered instead of the custom `/admin/broadcasts` page, but the
+      custom route keeps everything staff-facing inside Flipsta's own admin
+      panel (consistent with every other admin feature) and ties audience
+      selection to the real `profiles`/`notify_promotions` data rather than
+      a separately-maintained Resend contact list. Revisit only if the
+      volume/sophistication of promo email ever outgrows a plain-text
+      subject+body broadcast (templates, segments, A/B, etc. — all things
+      Resend's own Broadcasts tool would give for free).
 
 ---
 

@@ -46,6 +46,8 @@ export default function AccountPage() {
   const [portalError, setPortalError] = useState<string | null>(null);
   const [notifyDealMatches, setNotifyDealMatches] = useState<boolean | null>(null);
   const [notifySaving, setNotifySaving] = useState(false);
+  const [notifyPromotions, setNotifyPromotions] = useState<boolean | null>(null);
+  const [promoSaving, setPromoSaving] = useState(false);
 
   // 18 Sept 2026, Steven: "they should also be able to name themselves how
   // they will be displayed on Flipsta." displayName loads from /api/me
@@ -76,6 +78,7 @@ export default function AccountPage() {
       if (!r.ok) return;
       const d = await r.json();
       setNotifyDealMatches(Boolean(d.notifyDealMatches));
+      setNotifyPromotions(Boolean(d.notifyPromotions));
     });
     fetch("/api/me")
       .then((r) => r.json())
@@ -131,6 +134,21 @@ export default function AccountPage() {
     });
     if (!res.ok) setNotifyDealMatches(!next); // revert on failure
     setNotifySaving(false);
+  }
+
+  // 18 Sept 2026 — opt-out for the admin-composed promo broadcasts
+  // (/admin/broadcasts, migration 0037), same instant-toggle treatment.
+  async function toggleNotifyPromotions() {
+    const next = !notifyPromotions;
+    setPromoSaving(true);
+    setNotifyPromotions(next);
+    const res = await fetch("/api/account/notification-prefs", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notifyPromotions: next }),
+    });
+    if (!res.ok) setNotifyPromotions(!next);
+    setPromoSaving(false);
   }
 
   async function openPaymentPortal() {
@@ -295,6 +313,28 @@ export default function AccountPage() {
             <span
               className="absolute top-0.5 w-6 h-6 rounded-full bg-white transition-transform"
               style={{ transform: notifyDealMatches ? "translateX(22px)" : "translateX(2px)" }}
+            />
+          </button>
+        </div>
+        <div className="card flex items-center justify-between gap-3">
+          <div>
+            <div className="font-bold text-sm">Email me promos and offers</div>
+            <div className="text-xs text-textDim">
+              Occasional marketing emails from Flipsta. Turn this off any time — it won&apos;t affect deal-match
+              alerts above.
+            </div>
+          </div>
+          <button
+            onClick={toggleNotifyPromotions}
+            disabled={notifyPromotions === null || promoSaving}
+            className={`shrink-0 w-12 h-7 rounded-full relative transition-colors disabled:opacity-50 ${notifyPromotions ? "" : "bg-surface2 border border-border"}`}
+            style={notifyPromotions ? { background: "linear-gradient(135deg,#f2b545,#ffd77a)" } : undefined}
+            aria-pressed={Boolean(notifyPromotions)}
+            aria-label="Toggle promotional email notifications"
+          >
+            <span
+              className="absolute top-0.5 w-6 h-6 rounded-full bg-white transition-transform"
+              style={{ transform: notifyPromotions ? "translateX(22px)" : "translateX(2px)" }}
             />
           </button>
         </div>

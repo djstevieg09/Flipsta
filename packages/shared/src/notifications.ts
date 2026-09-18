@@ -73,4 +73,50 @@ export const NotificationEvents = {
         .concat(["", "See it on flipsta.co.uk/shop", "", "Don't want these emails? Turn them off any time from your Account page."])
         .join("\n"),
     }),
+  /**
+   * 18 Sept 2026, Steven: "i need to setup resend so it can send emails for
+   * sign ups." Sent once per new signup by apps/worker/src/jobs/
+   * sendWelcomeEmails.ts (welcome_email_sent_at on profiles is the
+   * idempotency marker — see migration 0037). Deliberately separate from
+   * Supabase Auth's own "confirm your email" message, which is about
+   * proving the address works, not about welcoming anyone.
+   */
+  welcome: (to: string, displayName: string) =>
+    sendNotificationEmail({
+      to,
+      subject: "Welcome to Flipsta 🎉",
+      body: [
+        `Hey ${displayName},`,
+        "",
+        "You're in — welcome to Flipsta. Sell first, source after: no inventory, no risk.",
+        "",
+        "A few things worth doing next:",
+        "- Set your sizes on your Account page so we can match you to deals",
+        "- Add anything you're after to your wishlist",
+        "- Invite a friend for Flippy Coins",
+        "",
+        "See you on flipsta.co.uk.",
+        "",
+        "Don't want marketing emails from us? You can turn those off any time from your Account page — this welcome email is a one-off either way.",
+      ].join("\n"),
+    }),
 };
+
+/**
+ * 18 Sept 2026, Steven: "...and promo stuff." Unlike the templated events
+ * above, an admin-composed broadcast's subject/body IS the content — this
+ * just appends the same opt-out footer every other marketing-flavoured
+ * email in this file carries, so staff writing a broadcast from
+ * /admin/broadcasts don't have to remember to add it themselves. Sent by
+ * apps/worker/src/jobs/sendPromoBroadcasts.ts, never from the API route
+ * that creates the promo_broadcasts row (see migration 0037's comment for
+ * why: sending a whole user base synchronously from a web request risks a
+ * timeout).
+ */
+export function sendPromoBroadcastEmail(to: string, subject: string, body: string) {
+  return sendNotificationEmail({
+    to,
+    subject,
+    body: `${body}\n\n---\nDon't want promo emails from Flipsta? Turn them off any time from your Account page.`,
+  });
+}

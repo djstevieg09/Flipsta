@@ -130,8 +130,7 @@ export default function OpportunitiesPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold">Live Opportunities</h1>
-      <p className="text-textDim text-sm">Real opportunities our AI has found and verified. Sign in as a Standard tier member or above to bid.</p>
+      <OpportunitiesHero />
       {message && <div className="card text-sm">{message}</div>}
       {loading && <p className="text-textDim">Loading…</p>}
 
@@ -139,7 +138,11 @@ export default function OpportunitiesPage() {
 
       <ActivityTicker />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      {/* 18 Sept 2026, Steven: "need the list view only" — this was a
+          responsive card grid (1/2/3 columns); every card is now a single
+          full-width row instead, stacked in one list (see
+          OpportunityCard's own layout below for the row redesign). */}
+      <div className="flex flex-col gap-3">
         {opportunities.map((o) => (
           <OpportunityCard
             key={o.id}
@@ -155,6 +158,54 @@ export default function OpportunitiesPage() {
 
       {celebration && <InstantWinCelebration priceGBP={celebration.priceGBP} exiting={celebration.exiting} />}
     </div>
+  );
+}
+
+/**
+ * 18 Sept 2026, Steven: "can you have the mascot holding loads of money
+ * notes on this page? with boxes around him." No image-generation tool is
+ * available in this session to draw Flippy actually holding cash, so this
+ * reuses the existing mascot photo (same one as the homepage/signup) and
+ * builds the "money and boxes around him" scene the same way the
+ * homepage's hero did for its own graphics that had no source art to
+ * hand — small floating card/emoji elements around the image rather than
+ * a new illustration. Also drops the one leftover "our AI has found" from
+ * the old plain heading (18 Sept 2026's "remove AI from the webpage" pass
+ * hadn't reached this page yet).
+ */
+function OpportunitiesHero() {
+  return (
+    <section className="card relative overflow-hidden p-6 md:p-8">
+      <div className="relative flex flex-col md:flex-row items-center gap-6 md:gap-10">
+        <div className="relative shrink-0">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/flippy-mascot.jpg"
+            alt="Flippy, the Flipsta mascot"
+            className="w-32 md:w-40 rounded-2xl drop-shadow-[0_0_40px_rgba(242,181,69,0.35)]"
+          />
+          {/* Banknotes "held" around him rather than in-hand (no art to
+              composite that into the photo itself). */}
+          <span className="absolute -top-5 -left-7 text-3xl -rotate-[18deg] select-none" aria-hidden>💷</span>
+          <span className="absolute top-1 -right-8 text-2xl rotate-[14deg] select-none" aria-hidden>💷</span>
+          <span className="absolute -bottom-4 left-1/3 text-2xl rotate-[8deg] select-none" aria-hidden>💷</span>
+          {/* Boxes around him — stock/shipping boxes, echoing "no
+              inventory... we source it" rather than contradicting it: this
+              is the moment right after a sale sources, not a warehouse. */}
+          <div className="card absolute -left-9 bottom-3 w-14 h-14 flex items-center justify-center text-2xl -rotate-[10deg] shadow-xl hidden sm:flex" aria-hidden>📦</div>
+          <div className="card absolute -right-9 top-4 w-12 h-12 flex items-center justify-center text-xl rotate-[12deg] shadow-xl hidden sm:flex" aria-hidden>📦</div>
+          <div className="card absolute -right-6 -bottom-5 w-10 h-10 flex items-center justify-center text-lg rotate-[-6deg] shadow-xl hidden sm:flex" aria-hidden>📦</div>
+        </div>
+        <div className="flex-1 text-center md:text-left space-y-1.5">
+          <h1 className="text-2xl md:text-3xl font-extrabold">
+            Live <span className="text-gold">Opportunities</span>
+          </h1>
+          <p className="text-textDim text-sm max-w-md mx-auto md:mx-0">
+            Real opportunities we've found and verified. Sign in as a Standard tier member or above to bid.
+          </p>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -194,87 +245,104 @@ function OpportunityCard({
   const totalPriceGBP = o.instant_win_price_gbp * quantity;
   const buybackPremiumGBP = totalPriceGBP > 0 ? calculateBuybackPremium(totalPriceGBP, 1 - o.confidence_score, tier) : 0;
 
+  // 18 Sept 2026, Steven: "need the list view only" — reflowed from a
+  // vertical tile (stacked for a multi-column grid) into a single wide
+  // row: a fixed-width identity column on the left, the stat grid filling
+  // the middle, and the action column pinned to the right — the standard
+  // "list view" shape for a feed like this, one row per opportunity, only
+  // stacking back to vertical on small screens where a row can't fit.
   return (
-    <div className="card space-y-2">
-      <div className="flex justify-between items-center">
-        <span className={`text-xs font-bold uppercase flex items-center gap-1 ${urgencyColorClass}`}>
-          {o.urgency_tier === "hot" && <span className="flame-icon">🔥</span>}
-          {o.urgency_tier}
-        </span>
-        <span className="text-xs text-textDim">{Math.round(o.confidence_score * 100)}% confidence</span>
+    <div className="card flex flex-col md:flex-row md:items-center gap-4">
+      <div className="md:w-40 shrink-0 space-y-1">
+        <div className="flex items-center justify-between md:justify-start md:gap-2">
+          <span className={`text-xs font-bold uppercase flex items-center gap-1 ${urgencyColorClass}`}>
+            {o.urgency_tier === "hot" && <span className="flame-icon">🔥</span>}
+            {o.urgency_tier}
+          </span>
+          <span className="text-xs text-textDim">{Math.round(o.confidence_score * 100)}%</span>
+        </div>
+        <div className="text-sm text-textDim">{o.source_tier}</div>
+        {remainingSeconds !== null && o.status === "live" && (
+          <div className={`text-xs font-bold ${remainingSeconds <= 300 ? "text-red" : "text-gold"}`}>
+            {remainingSeconds > 0 ? `Closes in ${formatCountdown(remainingSeconds)}` : "Closing…"}
+          </div>
+        )}
       </div>
-      <div className="text-sm text-textDim">{o.source_tier}</div>
 
-      {/* Outlay/returns — Steven's ask, 26 Aug 2026: outlay is what it
-          costs to actually buy the item once you've won it (est., since
-          the exact retailer + link stay hidden until then — see
-          estimatedOutlay() above); returns is the profit, not the resale
-          price, since "returns" means what you keep. Resale price and the
-          Flipsta win price are still shown as the smaller supporting line
-          — nothing removed, just the headline numbers changed to match
-          what Steven asked to see first. */}
-      <div className="grid grid-cols-2 gap-2 py-2 border-y border-border">
+      <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-3 md:border-x border-border md:px-4 py-2 md:py-0">
+        {/* Outlay/returns — Steven's ask, 26 Aug 2026: outlay is what it
+            costs to actually buy the item once you've won it (est., since
+            the exact retailer + link stay hidden until then — see
+            estimatedOutlay() above); returns is the profit, not the resale
+            price, since "returns" means what you keep. */}
         <div>
           <div className="text-[10px] text-textDim uppercase tracking-wide">Outlay</div>
           <div className="font-bold">
             {estimatedOutlay(o) !== null ? `£${estimatedOutlay(o)!.toFixed(2)}` : "—"}
           </div>
-          <div className="text-[10px] text-textDim">est. to buy the item · win it from £{o.instant_win_price_gbp.toFixed(2)}</div>
+          <div className="text-[10px] text-textDim">win it from £{o.instant_win_price_gbp.toFixed(2)}</div>
         </div>
         <div>
           <div className="text-[10px] text-textDim uppercase tracking-wide">Returns</div>
           <div className="font-bold text-green">£{o.expected_margin_gbp.toFixed(2)}</div>
           <div className="text-[10px] text-textDim">
-            est. profit · resells ~
-            {typeof o.estimated_resale_price_gbp === "number" ? `£${o.estimated_resale_price_gbp.toFixed(2)}` : "—"}
+            resells ~{typeof o.estimated_resale_price_gbp === "number" ? `£${o.estimated_resale_price_gbp.toFixed(2)}` : "—"}
           </div>
         </div>
+        <div>
+          <div className="text-[10px] text-textDim uppercase tracking-wide">Units</div>
+          <div className="font-bold">~{o.estimated_stock_units}</div>
+          <div className="text-[10px] text-textDim">available</div>
+        </div>
+        {o.ai_reasoning ? (
+          <div className="col-span-2 md:col-span-1">
+            <div className="text-[10px] text-textDim uppercase tracking-wide">Why it's here</div>
+            <div className="text-xs text-textDim italic">{o.ai_reasoning}</div>
+          </div>
+        ) : (
+          <div />
+        )}
       </div>
 
-      <div className="text-xs text-textDim">~{o.estimated_stock_units} units available</div>
-      {o.ai_reasoning && <div className="text-xs text-textDim italic">{o.ai_reasoning}</div>}
-      {remainingSeconds !== null && o.status === "live" && (
-        <div className={`text-xs font-bold ${remainingSeconds <= 300 ? "text-red" : "text-gold"}`}>
-          {remainingSeconds > 0 ? `Closes in ${formatCountdown(remainingSeconds)}` : "Closing…"}
-        </div>
-      )}
-      {showQuantityPicker && (
-        <div className="flex items-center justify-between text-xs">
-          <label htmlFor={`qty-${o.id}`} className="text-textDim">
-            Units to buy
+      <div className="md:w-64 shrink-0 space-y-2">
+        {showQuantityPicker && (
+          <div className="flex items-center justify-between text-xs">
+            <label htmlFor={`qty-${o.id}`} className="text-textDim">
+              Units to buy
+            </label>
+            <select
+              id={`qty-${o.id}`}
+              className="bg-surface2 border border-border rounded-lg px-2 py-1"
+              value={quantity}
+              onChange={(e) => setQuantity(Number(e.target.value))}
+            >
+              {Array.from({ length: maxQuantity }, (_, i) => i + 1).map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {o.status === "live" && tier !== "free" && (
+          <label className="flex items-center justify-between gap-2 text-xs cursor-pointer">
+            <span className="flex items-center gap-1.5">
+              <input type="checkbox" checked={addBuyback} onChange={(e) => setAddBuyback(e.target.checked)} />
+              Buyback protection
+            </span>
+            <span className="text-textDim">+£{buybackPremiumGBP.toFixed(2)}</span>
           </label>
-          <select
-            id={`qty-${o.id}`}
-            className="bg-surface2 border border-border rounded-lg px-2 py-1"
-            value={quantity}
-            onChange={(e) => setQuantity(Number(e.target.value))}
-          >
-            {Array.from({ length: maxQuantity }, (_, i) => i + 1).map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
+        )}
+
+        <div className="flex gap-2">
+          <button className="btn btn-ghost flex-1" onClick={onBid}>
+            Bid £{(o.starting_bid_gbp + 2).toFixed(2)}
+          </button>
+          <button className="btn btn-primary flex-1" onClick={() => onInstantWin(quantity, addBuyback)}>
+            Win £{(totalPriceGBP + (addBuyback ? buybackPremiumGBP : 0)).toFixed(2)}
+          </button>
         </div>
-      )}
-
-      {o.status === "live" && tier !== "free" && (
-        <label className="flex items-center justify-between gap-2 text-xs pt-1 cursor-pointer">
-          <span className="flex items-center gap-1.5">
-            <input type="checkbox" checked={addBuyback} onChange={(e) => setAddBuyback(e.target.checked)} />
-            Add buyback protection
-          </span>
-          <span className="text-textDim">+£{buybackPremiumGBP.toFixed(2)} · get {Math.round(BUYBACK_PAYOUT_PCT * 100)}% back if it doesn't sell</span>
-        </label>
-      )}
-
-      <div className="flex gap-2 pt-2">
-        <button className="btn btn-ghost flex-1" onClick={onBid}>
-          Bid £{(o.starting_bid_gbp + 2).toFixed(2)}
-        </button>
-        <button className="btn btn-primary flex-1" onClick={() => onInstantWin(quantity, addBuyback)}>
-          Instant win £{(totalPriceGBP + (addBuyback ? buybackPremiumGBP : 0)).toFixed(2)}
-        </button>
       </div>
     </div>
   );
@@ -337,9 +405,15 @@ function ActivityTicker() {
     };
   }, []);
 
+  // 18 Sept 2026, Steven: "the scrolling banner needs to be more visual
+  // and fitting to the theme of the site" — was a plain-bordered card
+  // with plain text items. Same live /api/activity data and marquee
+  // mechanics, now with a gold gradient glow (.ticker-glow, globals.css),
+  // a pulsing "live" label above it, and a per-item avatar badge instead
+  // of bare text.
   if (items.length === 0) {
     return (
-      <div className="card py-2 px-4 text-xs text-textDim">No bidding activity yet — be the first.</div>
+      <div className="ticker-glow rounded-xl py-2.5 px-4 text-xs text-textDim">No bidding activity yet — be the first.</div>
     );
   }
 
@@ -347,24 +421,33 @@ function ActivityTicker() {
   const track = [...items, ...items];
 
   return (
-    <div className="ticker-wrap card p-0">
-      <div className="ticker-track">
-        {track.map((a, i) => (
-          <span key={`${a.id}-${i}`} className="ticker-item border-r border-border">
-            {a.urgencyTier === "hot" && <span className="flame-icon">🔥</span>}
-            <span className="text-textFaint uppercase text-[10px] tracking-wide">{a.categoryName}</span>
-            <b className="text-brand2">{a.displayName}</b>
-            {a.isInstantWin ? (
-              <span className="text-gold font-bold">
-                WON £{a.amountGBP.toFixed(2)} 🏆
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-gold px-1">
+        <span className="live-dot" />
+        Live activity
+      </div>
+      <div className="ticker-wrap ticker-glow rounded-xl">
+        <div className="ticker-track">
+          {track.map((a, i) => (
+            <span key={`${a.id}-${i}`} className="ticker-item border-r border-gold/20">
+              <span className="w-6 h-6 rounded-full bg-gold/15 text-gold text-[11px] font-bold flex items-center justify-center shrink-0">
+                {a.displayName.charAt(0).toUpperCase()}
               </span>
-            ) : (
-              <span className="text-green font-bold">
-                £{a.amountGBP.toFixed(2)} ▲
-              </span>
-            )}
-          </span>
-        ))}
+              {a.urgencyTier === "hot" && <span className="flame-icon">🔥</span>}
+              <span className="text-textFaint uppercase text-[10px] tracking-wide">{a.categoryName}</span>
+              <b className="text-brand2">{a.displayName}</b>
+              {a.isInstantWin ? (
+                <span className="text-gold font-bold">
+                  WON £{a.amountGBP.toFixed(2)} 🏆
+                </span>
+              ) : (
+                <span className="text-green font-bold">
+                  £{a.amountGBP.toFixed(2)} ▲
+                </span>
+              )}
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   );

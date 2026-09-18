@@ -85,6 +85,30 @@ a:hover { opacity: 0.85; }
   white-space: nowrap;
 }
 
+/* 18 Sept 2026, Steven: "the scrolling banner needs to be more visual and
+   fitting to the theme of the site" — the ticker itself (.ticker-wrap
+   above) was a plain card with a flat border; this is a gold gradient
+   border + soft glow wrapping it instead, matching the gold-on-black
+   theme rather than looking like any other neutral card on the page. */
+.ticker-glow {
+  background: linear-gradient(90deg, rgba(242, 181, 69, 0.12), rgba(255, 215, 122, 0.05), rgba(242, 181, 69, 0.12));
+  border: 1px solid rgba(242, 181, 69, 0.35);
+  box-shadow: 0 0 30px rgba(242, 181, 69, 0.12);
+}
+
+@keyframes live-dot-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.75); }
+}
+.live-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #f2495c;
+  animation: live-dot-pulse 1.4s ease-in-out infinite;
+}
+
 /* Instant-win celebration overlay. */
 @keyframes win-pop-in {
   0% { opacity: 0; transform: scale(0.6) rotate(-8deg); }

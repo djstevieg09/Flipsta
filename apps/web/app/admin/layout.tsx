@@ -66,6 +66,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             caps and other items that people can buy." Where a paid order
             actually gets fulfilled from. */}
         <a href="/admin/merch-orders" className="px-3 py-2 rounded-lg hover:bg-surface2">Merch Orders</a>
+        {/* 18 Sept 2026, Steven: "add ali express products and add them
+            into our shop with a 25% markup and when someone orders it
+            then a dropship order is created." */}
+        <a href="/admin/dropship-products" className="px-3 py-2 rounded-lg hover:bg-surface2">Dropship Products</a>
+        <a href="/admin/dropship-orders" className="px-3 py-2 rounded-lg hover:bg-surface2">Dropship Orders</a>
       </nav>
       <SundayDealsReminder />
       {children}

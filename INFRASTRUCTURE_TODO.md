@@ -343,6 +343,57 @@ step only you can do.
       or automatic customer notification on shipment yet; both are still
       manual.
 
+## 18. AliExpress dropship (18 Sept 2026)
+
+Steven: "add ali express products and add them into our shop with a 25%
+markup and when someone orders it then a dropship order is created." Who
+fulfils: "Just you / staff" (Steven's own answer).
+
+- [ ] Run `supabase/migrations/0033_dropship_products.sql` — adds
+      `dropship_products` (the catalogue) and `dropship_orders` (the paid
+      orders `/admin/dropship-orders` reads from). Without this, a
+      dropship purchase would still take payment via Stripe but have
+      nowhere to land.
+- [ ] Nothing new to add in Stripe or on Render — reuses
+      `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET` and the existing
+      `checkout.session.completed` webhook, same as Sections 16 and 17.
+- [ ] **This is deliberately admin-entered, not an automated feed sync.**
+      Real research this session found two hard constraints: (1)
+      AliExpress's Affiliate/Dropshipping APIs need their own
+      developer-portal signup and approval — the same kind of external
+      gate you already hit with eBay and Etsy — and even the Affiliate
+      API has no reliable way to pull full product descriptions; (2) per
+      DSers' own official help docs (DSers being AliExpress's own
+      sanctioned dropshipping tool), paying for an AliExpress order can
+      never be automated by anyone, including DSers itself — a human
+      always has to go to AliExpress's own checkout and click "Pay now."
+      So automating the import wouldn't actually remove the one manual
+      step that matters (placing and paying for the order) — it would
+      just add a second external approval wait for little benefit. If you
+      later do get AliExpress API approval and want a real feed sync
+      anyway, mirror `apps/worker/src/jobs/syncAwinProducts.ts` — the
+      table shapes here were designed to slot a sync job in without
+      changes.
+- [ ] **To add a product:** go to `/admin/dropship-products`, paste the
+      AliExpress product page URL, and fill in the title, photo, and
+      AliExpress's current price — the 25% markup price is suggested
+      automatically (`packages/shared`'s `computeDropshipPriceGBP`) but
+      you can override it per item. It then appears on `/shop`'s
+      "AliExpress Finds" section immediately.
+- [ ] **To fulfil an order:** once a customer pays, it lands in
+      `/admin/dropship-orders`. Copy the shipping address shown, go place
+      and pay for that same item on AliExpress yourself using that
+      address, then mark it "Ordered" (optionally noting AliExpress's own
+      order id) — and "Shipped" once AliExpress gives you tracking.
+- [ ] Shipping is UK-only, same as merch, and defaults to £0
+      (`DROPSHIP_SHIPPING_GBP` in `packages/shared/src/constants.ts`)
+      since most AliExpress listings already bake shipping into their
+      price — raise it if a particular product needs it.
+- [ ] No customer-facing delivery estimate beyond the fixed 2-4 week note
+      on `/shop` — AliExpress shipping times vary a lot by item and
+      supplier, so don't promise a tighter window without checking the
+      specific listing first.
+
 ---
 
 **Suggested order:** 1 → 2 → 4 (deploy with the mock worker adapter and Stripe

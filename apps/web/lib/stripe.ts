@@ -240,6 +240,80 @@ export async function createMerchCheckoutSession(params: {
 }
 
 /**
+ * 18 Sept 2026, Steven: "add ali express products and add them into our
+ * shop with a 25% markup and when someone orders it then a dropship order
+ * is created." Same shape as createMerchCheckoutSession just above — a
+ * one-off "payment"-mode Checkout Session with Stripe's own hosted
+ * shipping-address collection, since staff need a real address to place
+ * the matching order on AliExpress. metadata.kind = "dropship_purchase"
+ * distinguishes this in the webhook handler; metadata.dropship_product_id
+ * is what lets the webhook snapshot the product into dropship_orders
+ * (migration 0033) without a second lookup.
+ */
+export async function createDropshipCheckoutSession(params: {
+  dropshipProductId: string;
+  productTitle: string;
+  productImageUrl?: string | null;
+  quantity: number;
+  priceGBP: number;
+  shippingGBP: number;
+  profileId: string;
+  email: string;
+  existingStripeCustomerId?: string | null;
+  successUrl: string;
+  cancelUrl: string;
+}) {
+  if (!isStripeConfigured()) {
+    throw new Error("Buying isn't set up yet — set STRIPE_SECRET_KEY on Render (see INFRASTRUCTURE_TODO.md).");
+  }
+
+  return stripe.checkout.sessions.create({
+    mode: "payment",
+    line_items: [
+      {
+        price_data: {
+          currency: "gbp",
+          product_data: {
+            name: params.productTitle,
+            images: params.productImageUrl ? [params.productImageUrl] : undefined,
+          },
+          unit_amount: Math.round(params.priceGBP * 100),
+        },
+        quantity: params.quantity,
+      },
+    ],
+    shipping_address_collection: { allowed_countries: ["GB"] },
+    shipping_options:
+      params.shippingGBP > 0
+        ? [
+            {
+              shipping_rate_data: {
+                type: "fixed_amount",
+                fixed_amount: { amount: Math.round(params.shippingGBP * 100), currency: "gbp" },
+                display_name: "UK Standard Shipping",
+              },
+            },
+          ]
+        : undefined,
+    customer: params.existingStripeCustomerId ?? undefined,
+    customer_email: params.existingStripeCustomerId ? undefined : params.email,
+    client_reference_id: params.profileId,
+    metadata: {
+      kind: "dropship_purchase",
+      profile_id: params.profileId,
+      dropship_product_id: params.dropshipProductId,
+      product_title: params.productTitle,
+      product_image_url: params.productImageUrl ?? "",
+      quantity: String(params.quantity),
+      price_gbp: String(params.priceGBP),
+      shipping_gbp: String(params.shippingGBP),
+    },
+    success_url: params.successUrl,
+    cancel_url: params.cancelUrl,
+  });
+}
+
+/**
  * 26 Aug 2026, Steven: "Need an accounts page so people can setup their
  * payment methods." Until now a stripe_customer_id only ever got created
  * as a side effect of subscribing to a paid tier (createTierCheckoutSession

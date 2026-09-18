@@ -86,6 +86,31 @@ export async function POST(req: NextRequest) {
             },
             { onConflict: "stripe_checkout_session_id", ignoreDuplicates: true },
           );
+      } else if (session.payment_status === "paid" && session.metadata?.kind === "dropship_purchase") {
+        // 18 Sept 2026, Steven: "add ali express products... when someone
+        // orders it then a dropship order is created." Same reasoning as
+        // merch_purchase just above — this is the row Steven actually
+        // needs (see dropship_orders, migration 0033), and
+        // stripe_checkout_session_id's unique constraint makes this safe
+        // against a redelivered webhook event.
+        const d = session.metadata;
+        await supabase
+          .from("dropship_orders")
+          .upsert(
+            {
+              profile_id: d.profile_id,
+              dropship_product_id: d.dropship_product_id || null,
+              product_title: d.product_title,
+              product_image_url: d.product_image_url || null,
+              quantity: Number(d.quantity) || 1,
+              price_gbp: Number(d.price_gbp) || 0,
+              shipping_gbp: Number(d.shipping_gbp) || 0,
+              shipping_name: session.shipping_details?.name ?? session.customer_details?.name ?? null,
+              shipping_address: session.shipping_details?.address ?? null,
+              stripe_checkout_session_id: session.id,
+            },
+            { onConflict: "stripe_checkout_session_id", ignoreDuplicates: true },
+          );
       }
       break;
     }

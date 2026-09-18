@@ -8,6 +8,23 @@ import PageHero from "../components/PageHero";
 import ShopperSwitch from "../components/ShopperSwitch";
 import { MERCH_ITEMS, MERCH_SHIPPING_GBP, MerchItemId, SHOP_LOW_STOCK_THRESHOLD_UNITS } from "@flipsta/shared";
 
+type DropshipProduct = {
+  id: string;
+  title: string;
+  description: string | null;
+  image_url: string | null;
+  our_price_gbp: number;
+  categories: { name: string } | null;
+};
+
+// 18 Sept 2026, Steven: "add ali express products... when someone orders
+// it then a dropship order is created." Real research this session
+// (AliExpress's own tooling, plus DSers' own official docs) confirmed
+// AliExpress shipping is genuinely slower than Flipsta's other sections —
+// worth being upfront about rather than letting a buyer assume next-day.
+const DROPSHIP_NOTE =
+  "Shipped directly from our supplier once your order is placed — please allow 2-4 weeks for delivery.";
+
 type ShopItem = {
   id: string;
   product_name: string;
@@ -123,6 +140,38 @@ function ShopPageInner() {
   const [merchBusy, setMerchBusy] = useState<MerchItemId | null>(null);
   const [merchError, setMerchError] = useState<string | null>(null);
 
+  // 18 Sept 2026, Steven: "add ali express products and add them into our
+  // shop with a 25% markup." Same one-off Stripe Checkout pattern as merch
+  // just above, except the catalogue itself is real data from
+  // dropship_products (migration 0033) rather than a fixed in-code list —
+  // see api/admin/dropship-products for how staff add one.
+  const [dropshipProducts, setDropshipProducts] = useState<DropshipProduct[]>([]);
+  const [dropshipLoading, setDropshipLoading] = useState(true);
+  const [dropshipBusy, setDropshipBusy] = useState<string | null>(null);
+  const [dropshipError, setDropshipError] = useState<string | null>(null);
+
+  async function buyDropship(id: string) {
+    setDropshipError(null);
+    setDropshipBusy(id);
+    try {
+      const res = await fetch("/api/dropship/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId: id, quantity: 1 }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setDropshipError(data.error ?? "Couldn't start checkout right now.");
+        setDropshipBusy(null);
+        return;
+      }
+      window.location.href = data.url;
+    } catch {
+      setDropshipError("Couldn't start checkout right now.");
+      setDropshipBusy(null);
+    }
+  }
+
   async function buyMerch(id: MerchItemId) {
     const item = MERCH_ITEMS[id];
     const size = item.sizes ? merchSizes[id] ?? item.sizes[0] : undefined;
@@ -190,6 +239,11 @@ function ShopPageInner() {
       .then((r) => r.json())
       .then((d) => setRecommended(d.items ?? []))
       .catch(() => {});
+    fetch("/api/dropship-products")
+      .then((r) => r.json())
+      .then((d) => setDropshipProducts(d.products ?? []))
+      .catch(() => {})
+      .finally(() => setDropshipLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -568,6 +622,47 @@ function ShopPageInner() {
               </div>
             );
           })}
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <div>
+          <h2 className="font-bold text-lg">AliExpress Finds</h2>
+          <p className="text-textDim text-sm">{DROPSHIP_NOTE}</p>
+        </div>
+        {dropshipError && <div className="card text-sm text-red">{dropshipError}</div>}
+        {dropshipLoading && <p className="text-textDim text-sm">Loading…</p>}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {dropshipProducts.map((p) => (
+            <div key={p.id} className="card space-y-2">
+              <div className="w-full aspect-square rounded-lg bg-surface2 border border-border overflow-hidden flex items-center justify-center">
+                {p.image_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={p.image_url} alt={p.title} className="w-full h-full object-contain" />
+                ) : (
+                  <span className="text-[10px] text-textFaint">No photo</span>
+                )}
+              </div>
+              <div>
+                <div className="font-bold text-sm line-clamp-2">{p.title}</div>
+                {p.categories?.name && <div className="text-xs text-textDim">{p.categories.name}</div>}
+              </div>
+              {p.description && <div className="text-xs text-textDim line-clamp-2">{p.description}</div>}
+              <div className="text-lg font-extrabold">£{p.our_price_gbp.toFixed(2)}</div>
+              <button
+                type="button"
+                disabled={dropshipBusy !== null}
+                onClick={() => buyDropship(p.id)}
+                className="w-full rounded-lg py-2 text-sm font-bold text-white disabled:opacity-50"
+                style={{ background: "linear-gradient(135deg,#f2b545,#ffd77a)" }}
+              >
+                {dropshipBusy === p.id ? "Redirecting…" : "Buy Now"}
+              </button>
+            </div>
+          ))}
+          {!dropshipLoading && dropshipProducts.length === 0 && (
+            <p className="text-textDim text-sm col-span-full">No AliExpress finds listed yet — check back soon.</p>
+          )}
         </div>
       </section>
 

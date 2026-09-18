@@ -296,3 +296,30 @@ export function isValidMerchItem(id: string): id is MerchItemId {
 
 /** Flat, single placeholder UK shipping rate — also Steven's to adjust. */
 export const MERCH_SHIPPING_GBP = 3.99;
+
+/**
+ * 18 Sept 2026, Steven: "add ali express products and add them into our
+ * shop with a 25% markup and when someone orders it then a dropship order
+ * is created." Unlike merch, these products aren't a fixed in-code
+ * catalogue — they're rows in dropship_products (migration 0033), added
+ * one at a time by staff from the admin panel (see
+ * api/admin/dropship-products/route.ts) since AliExpress's own APIs need
+ * their own developer-portal approval (same external gate as eBay/Etsy)
+ * and, per DSers' own docs, can never fully automate the AliExpress
+ * checkout step anyway. This constant is just the markup formula shared
+ * between the admin "add product" form (suggesting a price) and anywhere
+ * else that needs to recompute it.
+ */
+export const DROPSHIP_MARKUP_MULTIPLIER = 1.25;
+
+/** source price -> suggested sale price, rounded to the nearest penny. Staff can still hand-override the result — see dropship_products.our_price_gbp. */
+export function computeDropshipPriceGBP(sourcePriceGBP: number): number {
+  return Math.round(sourcePriceGBP * DROPSHIP_MARKUP_MULTIPLIER * 100) / 100;
+}
+
+/**
+ * Flat placeholder — most AliExpress listings already bake shipping into
+ * their price, so this starts at £0 rather than merch's £3.99. Steven's to
+ * adjust if a particular product needs it.
+ */
+export const DROPSHIP_SHIPPING_GBP = 0;

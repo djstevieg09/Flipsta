@@ -129,6 +129,21 @@ export interface DiscoveryContext {
    * or before Steven has set up any Awin sync at all.
    */
   realPriceBenchmarks: Record<string, { medianPriceGBP: number; sampleSize: number }>;
+  /**
+   * 18 Sept 2026, Steven, after asking what's hot on TikTok right now and
+   * being told: "yes add this to make the bot clever." Real, researched
+   * TikTok/TikTok Shop trend signals — a keyword plus which category
+   * (categorySlugs, empty = any) it's exploding in right now — admin-
+   * editable via /admin/trending (migration 0036's trending_signals table).
+   * Unlike seasonalGuidance above (a fixed calendar date everyone already
+   * knows is coming), a trend can appear and fade within weeks, so every
+   * row has a hard expiry and only currently-unexpired ones are ever in
+   * this array — see discoverOpportunities.ts's loadDiscoveryContext. This
+   * doesn't relax the real-discount/margin/resale-evidence bar a candidate
+   * still has to clear; it just tells the adapter what's worth actively
+   * looking for on a page that already has a genuine discount.
+   */
+  trendingSignals: { keyword: string; categorySlugs: string[]; note: string }[];
 }
 
 /** One adapter run's full output — the two different outcomes of the same search. */

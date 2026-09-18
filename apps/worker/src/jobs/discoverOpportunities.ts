@@ -88,7 +88,7 @@ async function loadDiscoveryContext(
   const recentSinceIso = new Date(Date.now() - RECENT_HISTORY_DAYS * 24 * 60 * 60 * 1000).toISOString();
   const perfSinceIso = new Date(Date.now() - PERFORMANCE_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-  const [focusResult, seasonalResult, recentOppsResult, recentShopResult, categoriesResult, perfShopResult, perfOppResult, awinResult] = await Promise.all([
+  const [focusResult, seasonalResult, recentOppsResult, recentShopResult, categoriesResult, perfShopResult, perfOppResult, awinResult, trendingResult] = await Promise.all([
     db.from("discovery_focus").select("category_slug, status, focus_note"),
     db
       .from("seasonal_events")
@@ -104,6 +104,12 @@ async function loadDiscoveryContext(
     // this info to help search better" half of Steven's ask. in_stock only
     // — a delisted/out-of-stock price isn't a live market signal.
     db.from("affiliate_products").select("category_id, price_gbp").eq("in_stock", true).not("price_gbp", "is", null),
+    // 18 Sept 2026 — real TikTok trend signals (migration 0036), "add this
+    // to make the bot clever." expires_on >= today only — a stale trend
+    // (fashion moves on within weeks, unlike a seasonal calendar date)
+    // should fall out of the AI's context on its own rather than needing a
+    // separate cleanup job.
+    db.from("trending_signals").select("keyword, category_slugs, note").gte("expires_on", todayIso),
   ]);
 
   const pausedCategorySlugs = (focusResult.data ?? [])
@@ -176,6 +182,10 @@ async function loadDiscoveryContext(
     }
   }
 
+  const trendingSignals = ((trendingResult.data ?? []) as { keyword: string; category_slugs: string[] | null; note: string }[]).map(
+    (row) => ({ keyword: row.keyword, categorySlugs: row.category_slugs ?? [], note: row.note }),
+  );
+
   return {
     context: {
       pausedCategorySlugs,
@@ -184,6 +194,7 @@ async function loadDiscoveryContext(
       recentProductNames: Array.from(recentNamesSet),
       categoryPerformance,
       realPriceBenchmarks,
+      trendingSignals,
     },
     seasonalEventIdByName,
   };

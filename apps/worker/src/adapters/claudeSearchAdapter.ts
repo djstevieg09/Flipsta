@@ -314,6 +314,19 @@ function buildContextSections(source: CuratedSource, context: DiscoveryContext |
     sections.push(`SEASONAL PRIORITY — one or more seasonal events are currently active for this category:\n${lines.join("\n")}\nIf a product you report genuinely matches one of these, set seasonal_event_name to that event's exact name (character for character). This doesn't relax the real-discount/margin rules above — a seasonal item still needs a genuine discount and (for deals) real resale evidence.`);
   }
 
+  // 18 Sept 2026, Steven, after asking what's hottest on TikTok right now
+  // and being told: "yes add this to make the bot clever." Real, researched
+  // trend signals (migration 0036's trending_signals, admin-editable via
+  // /admin/trending) — categorySlugs empty means it applies regardless of
+  // this source's own category.
+  const matchingTrends = context.trendingSignals.filter(
+    (t) => source.category === "any" || t.categorySlugs.length === 0 || t.categorySlugs.includes(source.category),
+  );
+  if (matchingTrends.length > 0) {
+    const lines = matchingTrends.map((t) => `- "${t.keyword}" — ${t.note}`);
+    sections.push(`TIKTOK TREND SIGNAL — these are genuinely trending on TikTok/TikTok Shop right now (real, researched figures, not a guess):\n${lines.join("\n")}\nActively favour a product matching one of these if you see one on the page. This doesn't relax the real-discount/margin/resale-evidence rules above — a trending item still needs a genuine discount and real evidence it resells for more than the source price; being trending on TikTok is a reason to look harder for one of these, not a reason to lower the bar once found.`);
+  }
+
   if (context.recentProductNames.length > 0) {
     // Capped so the prompt doesn't balloon on a busy history — the most
     // recent ~40 names is plenty to steer away from near-term repeats

@@ -12,12 +12,19 @@ describe("isValidSalesChannel", () => {
   });
 });
 
-describe("publishListingToChannel (stub)", () => {
+describe("publishListingToChannel (stub — depop/etsy/whatnot/stockx, and eBay with no connection)", () => {
   it("simulates a successful publish with an external URL", async () => {
     const result = await publishListingToChannel("etsy", { id: "abc123", title: "Test item", priceGBP: 20 });
     expect(result.success).toBe(true);
     expect(result.channel).toBe("etsy");
     expect(result.externalUrl).toContain("abc123");
+  });
+
+  it("still stubs eBay when no connection tokens are passed (e.g. an un-updated caller)", async () => {
+    const result = await publishListingToChannel("ebay", { id: "xyz789", title: "Test item", priceGBP: 20 });
+    expect(result.success).toBe(true);
+    expect(result.channel).toBe("ebay");
+    expect(result.externalUrl).toContain("xyz789");
   });
 });
 

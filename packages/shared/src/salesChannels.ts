@@ -1,3 +1,5 @@
+import { publishListingToEbay, type EbayConnectionTokens } from "./ebayListing.js";
+
 /**
  * Section 7's "multi-platform listing" Pro/Elite entitlement, made real:
  * once a seller has an item to list, they can flip a switch and have it
@@ -53,23 +55,66 @@ export interface ChannelPublishResult {
   success: boolean;
   externalUrl?: string;
   error?: string;
+  /** eBay only for now — see ebayListing.ts's EbayPublishResult.updatedTokens doc comment. */
+  updatedTokens?: EbayConnectionTokens;
+}
+
+export interface ChannelListingInput {
+  id: string;
+  title: string;
+  priceGBP: number;
+  description?: string | null;
+  imageUrl?: string | null;
+  condition?: string | null;
+  quantity?: number;
+}
+
+/** The caller's own connected-account tokens for this channel, from channel_connections. */
+export interface ChannelConnection {
+  accessToken: string;
+  refreshToken: string | null;
+  tokenExpiresAt: string | null;
+}
+
+/** Enough of the seller's profile to satisfy a channel's own listing prerequisites (e.g. eBay's merchant location). */
+export interface ChannelSellerContext {
+  businessName?: string | null;
+  displayName?: string | null;
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  city?: string | null;
+  postcode?: string | null;
+  country?: string | null;
 }
 
 /**
- * Publishes one listing to one external channel. Every one of these
- * platforms (eBay, Depop, Etsy, Whatnot, StockX) requires its own
- * seller/developer API account and OAuth credentials before this can make a
- * real call — see INFRASTRUCTURE_TODO.md's cross-posting entry. Until those
- * exist, this simulates success so the auto-post toggle, the listing submit
- * flow, and the worker's retry sweep are all exercisable end to end. Swap
- * the body of this one function out per channel once real API access
- * exists — every call site already goes through here, so the submit
- * handler and the retry job don't need to change.
+ * Publishes one listing to one external channel. 18 Sept 2026: eBay now has
+ * a real implementation (ebayListing.ts) — Depop/Etsy/Whatnot/StockX are
+ * still the original stub, since none of the five have Flipsta developer
+ * credentials registered yet (INFRASTRUCTURE_TODO.md #9) and eBay was the
+ * one Steven explicitly asked for. `connection`/`seller` are optional and
+ * only used for eBay right now; every call site already passes them
+ * through (see apps/web/app/api/listings/route.ts and
+ * apps/worker/src/jobs/crossPostListings.ts) so wiring up the next channel
+ * is just adding another `channel === "..."` branch here, not touching
+ * either caller again.
  */
 export async function publishListingToChannel(
   channel: SalesChannelKey,
-  listing: { id: string; title: string; priceGBP: number },
+  listing: ChannelListingInput,
+  connection?: ChannelConnection,
+  seller?: ChannelSellerContext,
 ): Promise<ChannelPublishResult> {
+  if (channel === "ebay" && connection) {
+    const result = await publishListingToEbay(listing, connection, seller ?? {});
+    return { channel, ...result };
+  }
+
+  // Depop/Etsy/Whatnot/StockX (and eBay called with no connection — e.g. a
+  // caller that hasn't been updated, or existing test coverage) — still a
+  // labelled stub. Simulates success so the auto-post toggle, the listing
+  // submit flow, and the worker's retry sweep all stay exercisable end to
+  // end until each channel gets its own real integration like eBay's.
   return {
     channel,
     success: true,

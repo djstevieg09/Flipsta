@@ -175,3 +175,15 @@ services:
         value: https://flipsta.co.uk
       - key: INTERNAL_API_SECRET
         sync: false
+      # 18 Sept 2026 — eBay auto-listing (packages/shared/src/ebayListing.ts).
+      # The worker's retry sweep (jobs/crossPostListings.ts) calls eBay's API
+      # directly too, so it needs its own copy of the same two eBay app
+      # credentials already declared on flipsta-web above — same values,
+      # Render env vars are per-service. No RUNAME needed here: only the web
+      # app ever builds an OAuth authorize URL (the seller-facing "Connect
+      # eBay" redirect); the worker only refreshes/uses tokens that are
+      # already connected. See INFRASTRUCTURE_TODO.md #9.
+      - key: CHANNEL_EBAY_CLIENT_ID
+        sync: false
+      - key: CHANNEL_EBAY_CLIENT_SECRET
+        sync: false

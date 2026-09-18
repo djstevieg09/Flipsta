@@ -227,18 +227,64 @@ export async function POST(req: NextRequest) {
     // post to it. Previously every channel "succeeded" unconditionally,
     // which was honest about the post itself being a stub but glossed
     // over the fact there was no real seller account behind it at all.
+    // 18 Sept 2026: now selecting the full token row, not just the channel
+    // name — eBay's real implementation (ebayListing.ts) needs the actual
+    // access/refresh token to call eBay's API with.
     const { data: connectedRows } = await supabase
       .from("channel_connections")
-      .select("channel")
+      .select("channel, access_token, refresh_token, token_expires_at")
       .eq("profile_id", auth.userId)
       .eq("status", "connected")
       .in("channel", validChannels);
-    const connectedChannels = new Set((connectedRows ?? []).map((r) => r.channel));
+    const connectionsByChannel = new Map((connectedRows ?? []).map((r) => [r.channel, r]));
+
+    // auth.profile already carries the seller's signup address (migration
+    // 0030) — that's exactly what eBay's merchant-location step needs, with
+    // no extra query.
+    const sellerContext = {
+      businessName: auth.profile.businessName,
+      displayName: auth.profile.displayName,
+      addressLine1: auth.profile.addressLine1,
+      addressLine2: auth.profile.addressLine2,
+      city: auth.profile.city,
+      postcode: auth.profile.postcode,
+      country: auth.profile.country,
+    };
 
     for (const channel of validChannels) {
-      const result = connectedChannels.has(channel)
-        ? await publishListingToChannel(channel, { id: listing.id, title, priceGBP })
+      const connectionRow = connectionsByChannel.get(channel);
+      const result = connectionRow
+        ? await publishListingToChannel(
+            channel,
+            { id: listing.id, title, priceGBP, description, imageUrl, condition, quantity: listedQuantity },
+            {
+              accessToken: connectionRow.access_token,
+              refreshToken: connectionRow.refresh_token,
+              tokenExpiresAt: connectionRow.token_expires_at,
+            },
+            sellerContext,
+          )
         : { channel, success: false, error: "Not connected — connect this account at /settings/connections first." };
+
+      // eBay's implementation may have had to refresh the access token to
+      // make this call at all — persist the new one now, or the very next
+      // publish attempt (this listing or any other) would refresh again
+      // using an access token that's about to go stale anyway, and once
+      // eBay rotates the refresh_token itself, the old one on file stops
+      // working entirely.
+      if ("updatedTokens" in result && result.updatedTokens) {
+        await supabase
+          .from("channel_connections")
+          .update({
+            access_token: result.updatedTokens.accessToken,
+            refresh_token: result.updatedTokens.refreshToken,
+            token_expires_at: result.updatedTokens.tokenExpiresAt,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("profile_id", auth.userId)
+          .eq("channel", channel);
+      }
+
       const { data: postRow } = await supabase
         .from("listing_channel_posts")
         .insert({

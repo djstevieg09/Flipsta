@@ -7,5 +7,6 @@ export * from "./tickets.js";
 export * from "./tax.js";
 export * from "./reviews.js";
 export * from "./salesChannels.js";
+export * from "./ebayListing.js";
 export * from "./shopPricing.js";
 export * from "./notifications.js";

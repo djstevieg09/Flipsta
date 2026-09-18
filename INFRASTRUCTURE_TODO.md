@@ -517,6 +517,45 @@ and 0035.
       `packages/shared/src/pricing.test.ts`. Worth adding if this pricing
       formula gets tuned later.
 
+## 20. TikTok trend signals for the discovery bot (18 Sept 2026)
+
+Steven asked what's hottest on TikTok right now, then: "yes add this to make
+the bot clever."
+
+- [ ] New `trending_signals` table (migration 0036) — same admin-editable
+      shape as `discovery_focus`/`seasonal_events` (Section 9's calendar):
+      a keyword, which category slug(s) it applies to (blank = all), a free-
+      text note, a source label, and an **expiry date that's required on
+      every row**. That's the one deliberate difference from the seasonal
+      calendar: Halloween is a fixed date everyone already knows is coming,
+      but a TikTok trend can appear and fade within weeks, so a stale row
+      needs to fall out of the AI's prompt on its own rather than needing a
+      separate cleanup job.
+- [ ] Manage it at `/admin/trending` (mirrors `/admin/seasonal`'s UI) or via
+      `POST /api/admin/trending-signals` — staff-only, same RLS pattern
+      (enabled, no policy, service-role/worker only).
+- [ ] `discoverOpportunities.ts`'s `loadDiscoveryContext` reads every
+      currently-unexpired row into `DiscoveryContext.trendingSignals`, and
+      `claudeSearchAdapter.ts`'s `buildContextSections` turns matching ones
+      into a "TIKTOK TREND SIGNAL" section in the search prompt — same
+      treatment as the seasonal-priority and admin-focus-note sections
+      already there. This never lowers the bar: a trending item still needs
+      a genuine discount and real resale evidence to become an opportunity,
+      it's just told what's worth actively looking harder for.
+- [ ] There's no live TikTok API integration — none exists that fits this
+      use case, and none was asked for. Rows are added from real research
+      (web search) via `/admin/trending`, same as the four seeded on 18
+      Sept 2026 (real, sourced figures, not invented): Medicube's PDRN Pink
+      Collagen Volume Multi Balm (`beauty` — named TikTok Shop's single
+      best-selling product overall in July 2026), SEESE's cordless
+      pressure washer (`home-kitchen` — $1.97m in July 2026), ADDWIN's
+      Fascia Ring massage device (`tech`/`beauty` — $1.78m in July 2026 at
+      $22.39/unit), and Momcozy's electric baby nail trimmer (`baby-kids`
+      — currently #1 in the UK). All four expire 21 days after being
+      added — **revisit `/admin/trending` periodically and refresh what's
+      actually still hot**, or this quietly goes back to having no trend
+      signal at all once they lapse.
+
 ---
 
 **Suggested order:** 1 → 2 → 4 (deploy with the mock worker adapter and Stripe

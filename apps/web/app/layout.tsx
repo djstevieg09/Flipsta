@@ -9,9 +9,11 @@ import HeaderSearch from "./components/HeaderSearch";
 import SiteNav from "./components/SiteNav";
 import SupportChatWidget from "./components/SupportChatWidget";
 
+// 18 Sept 2026, Steven: "remove AI from the webpage" — dropped from this
+// page-description meta tag too, not just the visible copy.
 export const metadata: Metadata = {
   title: "Flipsta",
-  description: "AI-driven buy/sell exchange",
+  description: "Find it. Flip it. Profit.",
 };
 
 // Section 12.3 — the global header convention: logo left, a centered search

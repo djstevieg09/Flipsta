@@ -44,22 +44,14 @@ export default function SiteNav({
           to see coin pricing before signing up. UI-only for now: there's no
           coin ledger or Stripe product behind it yet. */}
       <a href="/coins" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Flippy Coins</a>
-      {/* 27 Aug 2026, Steven: "i need assistance setting up Awin api to
-          fill my store with goods... this is seperate from our core
-          buisness." No auth gate — same as Shop, purely a browse-and-
-          click-through page, nothing account-specific here. */}
-      <a href="/partner-deals" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Partner Deals</a>
-      {/* 27 Aug 2026, Steven: "i would like to be able to offer my resellers
-          the oppotunity to do live selling via my site. a bit like QVC."
-          No auth gate — same as Shop, anyone can watch a live show, sign-in
-          is only required to actually bid/chat/buy (enforced server-side,
-          see api/live-shows/[id]/items/[itemId]/bid). */}
-      <a href="/live" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Live</a>
-      {/* 27 Aug 2026, Steven: "have a leaderboard showing who is the top
-          seller by profit on the site." Confirmed "Fully public" — no auth
-          gate, visible to a pre-signup visitor too (Section 12.1-style
-          social proof to help sell the reseller opportunity). */}
-      <a href="/leaderboard" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Leaderboard</a>
+      {/* 18 Sept 2026, Steven: added alongside the new marketing homepage —
+          the dedicated explainer page the homepage's "How It Works"
+          section links out to. No auth gate, same as Shop/Flippy Coins.
+          Partner Deals, Live and Leaderboard were removed from this nav
+          the same day ("remove ... from the homescreen") — all three
+          pages/routes still exist and work, they're just no longer linked
+          from the main nav; reachable again here if that changes. */}
+      <a href="/how-it-works" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">How It Works</a>
       {/* 26 Aug 2026, Steven: "Need a button that says Flipsta It!" */}
       {isAuthed && <a href="/flipsta-it" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Flipsta It!</a>}
       {/* 27 Aug 2026, Steven: "Sniper mode needs setting up with its own

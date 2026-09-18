@@ -4,6 +4,13 @@
  * with the Flippy mascot, a five-item feature strip, a "How It Works"
  * section) and asked for the homepage to look like it.
  *
+ * 18 Sept 2026, Steven, same day: "remove AI from the webpage, need it
+ * to say we find the deals etc. we need to remove how we find the
+ * deals." Every "AI" mention below is now "we"/"Flipsta" instead, and
+ * nothing here explains the sourcing/verification mechanism — just that
+ * a deal is real. The fuller mechanism explanation on /how-it-works was
+ * cut the same way, for the same reason.
+ *
  * Replaces the previous version (26 Aug 2026 — live shop items and
  * opportunities pulled client-side from /api/shop-items and
  * /api/opportunities directly onto the homepage) with a static marketing
@@ -28,7 +35,7 @@ export default function HomePage() {
       <section className="relative grid md:grid-cols-2 gap-10 md:gap-6 items-center py-8 md:py-14">
         <div className="space-y-6 text-center md:text-left">
           <span className="inline-block text-xs font-bold tracking-[0.2em] text-brand2">
-            AI DRIVEN BUY / SELL EXCHANGE
+            THE BUY / SELL EXCHANGE
           </span>
           <h1 className="text-4xl md:text-6xl font-extrabold leading-tight">
             Welcome to
@@ -39,8 +46,8 @@ export default function HomePage() {
             Find it. <span className="text-brand2">Flip it.</span> <span className="text-gold">Profit.</span>
           </p>
           <p className="text-textDim max-w-md mx-auto md:mx-0">
-            The ultimate AI-powered marketplace where we find the best deals, you buy, and you sell. Powered by
-            community. Built for profit.
+            The ultimate marketplace where we find the best deals, you buy, and you sell. Powered by community.
+            Built for profit.
           </p>
           <div className="flex flex-wrap gap-3 justify-center md:justify-start">
             <a href="/signup" className="btn btn-primary text-base px-6 py-3">
@@ -109,6 +116,9 @@ export default function HomePage() {
             </div>
           ))}
         </div>
+        <a href="/how-it-works" className="inline-block text-xs font-bold text-brand2 hover:underline">
+          See the full breakdown →
+        </a>
       </section>
 
       {/* New here? — carried over from the previous homepage, re-themed to match. */}
@@ -125,7 +135,7 @@ export default function HomePage() {
 }
 
 const FEATURES: { title: string; body: string; icon: React.ReactNode }[] = [
-  { title: "AI Finds Deals", body: "Our AI scans the internet for the best opportunities.", icon: <BrainIcon /> },
+  { title: "We Find Deals", body: "We bring you the best opportunities, checked and verified.", icon: <BrainIcon /> },
   { title: "You Buy", body: "Grab the deals you want with Flippy Coins.", icon: <CartIcon /> },
   { title: "You Sell", body: "List your items and make a profit.", icon: <TrendIcon /> },
   { title: "Grow Together", body: "A marketplace powered by our community.", icon: <UsersIcon /> },
@@ -133,7 +143,7 @@ const FEATURES: { title: string; body: string; icon: React.ReactNode }[] = [
 ];
 
 const STEPS: { title: string; body: string }[] = [
-  { title: "Find", body: "Our AI spots the best deals across the web." },
+  { title: "Find", body: "We find the best deals for you, every day." },
   { title: "Buy", body: "Use Flippy Coins to purchase opportunities." },
   { title: "Flip", body: "List and sell for a profit on our marketplace." },
   { title: "Repeat", body: "Build your balance and grow your earnings." },

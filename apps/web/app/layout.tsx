@@ -59,10 +59,21 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <div className="flex items-center gap-5 h-15 px-6 py-3">
               {/* 26 Aug 2026, Steven: "change the logo in top left to the
                   attached file" — cropped to icon+wordmark (the tagline
-                  doesn't read at header scale) and saved to /public/logo.png. */}
+                  doesn't read at header scale) and saved to /public/logo.png.
+                  18 Sept 2026, Steven: "put this as the logo in top left"
+                  — a new gold-coin mascot render with "FLIPSTA" and the
+                  cycle-arrow built right into the coin face. Same crop
+                  reasoning as before: kept the cap/face/coin/wordmark and
+                  thumbs, cropped out the legs and the "Find it. Flip it.
+                  Profit." tagline baked into the bottom of the source
+                  image (illegible at header scale, and the tagline's
+                  already handled by metadata.description). Re-saved as
+                  WebP rather than PNG — ~60KB vs. ~300KB+ for a photo-real
+                  render like this, no visible quality loss. Old file kept
+                  at /public/logo-previous.png rather than deleted. */}
               <a href="/" className="flex items-center whitespace-nowrap shrink-0">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/logo.png" alt="Flipsta" className="h-9 w-auto" />
+                <img src="/logo.webp" alt="Flipsta" className="h-9 w-auto" />
               </a>
               <div className="flex-1 flex justify-center">
                 {/* useSearchParams (inside HeaderSearch) requires a Suspense

@@ -1,7 +1,7 @@
 import {
   actionClockSeconds,
-  calculateInstantWinPrice,
-  calculateStartingBid,
+  calculateDealBatchSize,
+  calculateFixedDealPriceCoins,
   classifyUrgencyTier,
   computeShopPricing,
   getMarketplaceCommissionRate,
@@ -292,9 +292,20 @@ export async function discoverOpportunities(adapter: SourceAdapter, targetOpport
       priceVolatility: c.priceVolatility,
     });
 
+    // 18 Sept 2026, Steven: "we are moving away from the bid and instant
+    // win on the site... get rid of bidding and have a fixed price."
+    // clockSeconds is still computed (kept as a cosmetic "Deal Heat" signal
+    // — urgency_tier still drives the flame-icon badge on the card) but no
+    // longer sets a real countdown: action_clock_expires_at stays null, so
+    // the frontend never renders a "closing in..." clock for these. Every
+    // NEW opportunity from here on is 'fixed_price' — existing live
+    // 'auction' rows are untouched and keep working via the old bid/
+    // instant-win routes (see migration 0034's comments).
     const clockSeconds = actionClockSeconds(urgency);
     const nowIso = new Date().toISOString();
-    const expiresIso = new Date(Date.now() + clockSeconds * 1000).toISOString();
+
+    const fixedPriceCoins = calculateFixedDealPriceCoins(marginGBP, confidence);
+    const batchSize = calculateDealBatchSize(c.estimatedStockUnits);
 
     // 26 Aug 2026 real-run bug: this insert's result was never checked, so a
     // failed insert (e.g. the DB missing a column this row tries to write —
@@ -322,13 +333,21 @@ export async function discoverOpportunities(adapter: SourceAdapter, targetOpport
       confidence_score: confidence,
       urgency_tier: urgency,
       action_clock_seconds: clockSeconds,
-      estimated_stock_units: c.estimatedStockUnits,
-      per_customer_cap: c.perCustomerCap,
-      starting_bid_gbp: calculateStartingBid(marginGBP, confidence),
-      instant_win_price_gbp: calculateInstantWinPrice(marginGBP, confidence),
+      estimated_stock_units: batchSize,
+      // One slot per person on a fixed-price deal — "offering to one
+      // person" per slot, not a quantity picker like the old instant-win.
+      per_customer_cap: 1,
+      pricing_mode: "fixed_price",
+      fixed_price_coins: fixedPriceCoins,
+      // Kept populated (same numeric value as fixed_price_coins — 1 coin =
+      // £1) purely so any older code path still reading these NOT NULL
+      // columns doesn't choke on a null; the new UI/logic uses
+      // fixed_price_coins, not these.
+      starting_bid_gbp: fixedPriceCoins,
+      instant_win_price_gbp: fixedPriceCoins,
       status: "live",
       live_at: nowIso,
-      action_clock_expires_at: expiresIso,
+      action_clock_expires_at: null,
       ai_reasoning: reasoning,
     });
     if (insertError) {

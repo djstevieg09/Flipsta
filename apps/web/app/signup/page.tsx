@@ -4,7 +4,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Script from "next/script";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { REFERRAL_REWARD_GBP } from "@flipsta/shared";
+import { FRIEND_INVITE_EFFORT_BONUS_COINS, FRIEND_INVITE_SIGNUP_BONUS_COINS, REFERRAL_REWARD_GBP } from "@flipsta/shared";
 import { SocialAuthButtons } from "@/app/components/SocialAuthButtons";
 
 /**
@@ -48,6 +48,17 @@ import { SocialAuthButtons } from "@/app/components/SocialAuthButtons";
  * `options.data` — so none of these new fields (or the age check) apply
  * to a social signup. Worth a follow-up "complete your profile" prompt
  * for OAuth users later; out of scope for this pass.
+ *
+ * 18 Sept 2026, Steven: "when people sign up and fill in there details we
+ * ask for their friends email and name etc and then give them an extra 5
+ * coins for the effort and then when their friend signs up they both get
+ * 15 coins each." friendName/friendEmail are optional, passed through
+ * exactly like referral_code already was — the actual crediting (both the
+ * immediate +5 and the later +15/+15 when that friend genuinely signs up)
+ * happens in migration 0034's handle_new_user() trigger, this form just
+ * collects the two fields. A separate mechanic from the existing
+ * ref-code/link referral program above (REFERRAL_REWARD_GBP, £5 GBP,
+ * migration 0016) — both can be used at once, no conflict.
  */
 export default function SignupPage() {
   return (
@@ -87,6 +98,8 @@ function SignupForm() {
   const [city, setCity] = useState("");
   const [postcode, setPostcode] = useState("");
   const [country, setCountry] = useState("United Kingdom");
+  const [friendName, setFriendName] = useState("");
+  const [friendEmail, setFriendEmail] = useState("");
   const [agreed, setAgreed] = useState(false);
 
   const [status, setStatus] = useState<"idle" | "sent" | "error">("idle");
@@ -116,6 +129,19 @@ function SignupForm() {
   const businessNameValid = accountType === "personal" || businessName.trim().length > 0;
   const passwordsMatch = password.length > 0 && password === confirmPassword;
   const addressValid = addressLine1.trim() && city.trim() && postcode.trim();
+  // Both fields are optional (no friend to invite is a valid choice), but if
+  // either is filled in, both are required and the email needs to look real
+  // and not just be the signer's own address — same self-referral guard the
+  // trigger itself re-checks server-side.
+  const friendEmailTrimmed = friendEmail.trim();
+  const friendNameTrimmed = friendName.trim();
+  const friendInviteProvided = friendEmailTrimmed.length > 0 || friendNameTrimmed.length > 0;
+  const friendEmailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(friendEmailTrimmed);
+  const friendInviteValid =
+    !friendInviteProvided ||
+    (friendNameTrimmed.length > 0 &&
+      friendEmailLooksValid &&
+      friendEmailTrimmed.toLowerCase() !== email.trim().toLowerCase());
   const canSubmit =
     Boolean(email) &&
     passwordsMatch &&
@@ -123,6 +149,7 @@ function SignupForm() {
     dobValid &&
     businessNameValid &&
     Boolean(addressValid) &&
+    friendInviteValid &&
     agreed &&
     (!TURNSTILE_SITE_KEY || Boolean(captchaToken));
 
@@ -138,6 +165,10 @@ function SignupForm() {
     }
     if (!businessNameValid) {
       setError("Add your business name, or switch to a personal account.");
+      return;
+    }
+    if (!friendInviteValid) {
+      setError("Add your friend's name and a valid email (not your own) to invite them, or leave both blank.");
       return;
     }
 
@@ -157,6 +188,7 @@ function SignupForm() {
           postcode,
           country,
           ...(refCode ? { referral_code: refCode } : {}),
+          ...(friendInviteProvided ? { friend_name: friendNameTrimmed, friend_email: friendEmailTrimmed } : {}),
         },
         ...(captchaToken ? { captchaToken } : {}),
       },
@@ -305,6 +337,29 @@ function SignupForm() {
                 <label className="block text-xs font-bold text-textDim uppercase tracking-wide mb-1">Country</label>
                 <input className="w-full bg-surface2 border border-border rounded-lg px-3 py-2 text-sm" value={country} onChange={(e) => setCountry(e.target.value)} />
               </div>
+
+              {/* 18 Sept 2026, Steven: invite a friend right here at signup —
+                  a separate mechanic from the ?ref= link above, paid in
+                  Flippy Coins rather than GBP. Both fields optional. */}
+              <div className="col-span-2 border-t border-border pt-3 mt-1">
+                <p className="text-xs text-gold font-bold mb-1">
+                  🎁 Invite a friend — get {FRIEND_INVITE_EFFORT_BONUS_COINS} Flippy Coins right away, plus{" "}
+                  {FRIEND_INVITE_SIGNUP_BONUS_COINS} more (for both of you) once they sign up. Optional.
+                </p>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-textDim uppercase tracking-wide mb-1">Friend's name <span className="opacity-60">(optional)</span></label>
+                <input className="w-full bg-surface2 border border-border rounded-lg px-3 py-2 text-sm" value={friendName} onChange={(e) => setFriendName(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-textDim uppercase tracking-wide mb-1">Friend's email <span className="opacity-60">(optional)</span></label>
+                <input type="email" className="w-full bg-surface2 border border-border rounded-lg px-3 py-2 text-sm" value={friendEmail} onChange={(e) => setFriendEmail(e.target.value)} />
+              </div>
+              {friendInviteProvided && !friendInviteValid && (
+                <div className="col-span-2 text-red text-xs">
+                  Add both your friend's name and a valid email that isn't your own — or leave both blank.
+                </div>
+              )}
             </div>
 
             <label className="flex items-start gap-2 text-xs text-textDim">

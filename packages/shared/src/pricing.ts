@@ -5,6 +5,9 @@ import {
   BUYBACK_PROOF_OF_LISTING_DAYS,
   BUYBACK_TARGET_LOSS_RATIO,
   BUYBACK_TIER_DISCOUNT,
+  DEAL_DEFAULT_BATCH_SIZE,
+  FIXED_PRICE_MIN_COINS,
+  FIXED_PRICE_PCT_OF_MARGIN,
   INSTANT_WIN_PCT_OF_MARGIN,
   MARKETPLACE_COMMISSION_RATE,
   STARTING_BID_PCT_OF_MARGIN,
@@ -56,6 +59,36 @@ export function calculateInstantWinPrice(expectedMarginGBP: number, confidenceSc
     INSTANT_WIN_PCT_OF_MARGIN.min +
     (INSTANT_WIN_PCT_OF_MARGIN.max - INSTANT_WIN_PCT_OF_MARGIN.min) * clamped;
   return round2(expectedMarginGBP * pct);
+}
+
+/**
+ * 18 Sept 2026, Steven: "get rid of bidding and have a fixed price... do
+ * the math to work out the price. remenber 1 coin = £1... Dont make it too
+ * cheap." Same shape as calculateInstantWinPrice above (a % of expected
+ * MARGIN, scaled by confidence — buying the right to capture the margin,
+ * not the item), but a richer band (FIXED_PRICE_PCT_OF_MARGIN) and a hard
+ * floor (FIXED_PRICE_MIN_COINS), both deliberately above the old
+ * instant-win pricing, per his "don't make it too cheap... a good few
+ * deals a month" ask. Returns a whole number of coins — 1 coin = £1, and a
+ * fractional coin isn't spendable.
+ */
+export function calculateFixedDealPriceCoins(expectedMarginGBP: number, confidenceScore: number): number {
+  if (expectedMarginGBP <= 0) throw new Error("expectedMarginGBP must be positive");
+  const clamped = clamp01(confidenceScore);
+  const pct =
+    FIXED_PRICE_PCT_OF_MARGIN.min + (FIXED_PRICE_PCT_OF_MARGIN.max - FIXED_PRICE_PCT_OF_MARGIN.min) * clamped;
+  return Math.max(FIXED_PRICE_MIN_COINS, Math.round(expectedMarginGBP * pct));
+}
+
+/**
+ * Steven's own worked example: "if there is a good supply chain work out
+ * the amount of people we can offer this to... say 10." Uses the AI's own
+ * source-stock estimate where it's genuinely thinner than the default
+ * batch size, capped at DEAL_DEFAULT_BATCH_SIZE so an over-enthusiastic
+ * estimate can't flood one deal with slots in its very first batch.
+ */
+export function calculateDealBatchSize(estimatedStockUnits: number): number {
+  return Math.max(1, Math.min(Math.round(estimatedStockUnits), DEAL_DEFAULT_BATCH_SIZE));
 }
 
 /**

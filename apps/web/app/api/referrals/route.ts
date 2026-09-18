@@ -38,9 +38,21 @@ export async function GET() {
 
   const totalEarnedGBP = (credits ?? []).reduce((sum, t) => sum + Number(t.amount_gbp ?? 0), 0);
 
+  // 18 Sept 2026 — the newer, separate "invite a friend at signup" coin
+  // mechanic (migration 0034), shown alongside the existing link/code
+  // program above rather than on its own page.
+  const { data: friendInvites } = await supabase
+    .from("friend_invites")
+    .select("status")
+    .eq("inviter_id", auth.userId);
+  const friendInvitesSent = friendInvites?.length ?? 0;
+  const friendInvitesFulfilled = (friendInvites ?? []).filter((f) => f.status === "fulfilled").length;
+
   return NextResponse.json({
     code: profile.referral_code,
     referredCount: referredCount ?? 0,
     totalEarnedGBP: Math.round(totalEarnedGBP * 100) / 100,
+    friendInvitesSent,
+    friendInvitesFulfilled,
   });
 }

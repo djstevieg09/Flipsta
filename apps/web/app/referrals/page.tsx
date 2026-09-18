@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { REFERRAL_REWARD_GBP } from "@flipsta/shared";
+import { FRIEND_INVITE_EFFORT_BONUS_COINS, FRIEND_INVITE_SIGNUP_BONUS_COINS, REFERRAL_REWARD_GBP } from "@flipsta/shared";
 import PageHero from "@/app/components/PageHero";
 
 /**
@@ -14,6 +14,8 @@ export default function ReferralsPage() {
   const [code, setCode] = useState<string | null>(null);
   const [referredCount, setReferredCount] = useState(0);
   const [totalEarnedGBP, setTotalEarnedGBP] = useState(0);
+  const [friendInvitesSent, setFriendInvitesSent] = useState(0);
+  const [friendInvitesFulfilled, setFriendInvitesFulfilled] = useState(0);
   const [signedIn, setSignedIn] = useState(true);
   const [copied, setCopied] = useState(false);
   const [origin, setOrigin] = useState("");
@@ -29,6 +31,8 @@ export default function ReferralsPage() {
       setCode(d.code ?? null);
       setReferredCount(d.referredCount ?? 0);
       setTotalEarnedGBP(d.totalEarnedGBP ?? 0);
+      setFriendInvitesSent(d.friendInvitesSent ?? 0);
+      setFriendInvitesFulfilled(d.friendInvitesFulfilled ?? 0);
     });
   }, []);
 
@@ -102,6 +106,30 @@ export default function ReferralsPage() {
         Credits land in your <a href="/wallet" className="underline">Wallet</a> as soon as someone signs up with your
         link.
       </p>
+
+      {/* 18 Sept 2026 — the newer "invite a friend at signup" coin mechanic
+          (a friend's name + email typed into the signup form itself,
+          rather than a shared link), shown as its own card since it pays
+          Flippy Coins on a different schedule to the GBP link program
+          above. */}
+      <div className="card space-y-2">
+        <div className="text-xs font-bold text-gold uppercase tracking-wide">Friends invited at signup</div>
+        <p className="text-xs text-textDim">
+          Next time you sign up somewhere new, add a friend's name and email on the form — you get{" "}
+          {FRIEND_INVITE_EFFORT_BONUS_COINS} Flippy Coins right away, and {FRIEND_INVITE_SIGNUP_BONUS_COINS} more
+          (for both of you) the moment they actually join.
+        </p>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <div className="text-[10px] text-textDim uppercase tracking-wide mb-1">Friends invited</div>
+            <div className="text-xl font-extrabold">{friendInvitesSent}</div>
+          </div>
+          <div>
+            <div className="text-[10px] text-textDim uppercase tracking-wide mb-1">Joined so far</div>
+            <div className="text-xl font-extrabold text-green">{friendInvitesFulfilled}</div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

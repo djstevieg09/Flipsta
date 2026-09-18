@@ -323,3 +323,61 @@ export function computeDropshipPriceGBP(sourcePriceGBP: number): number {
  * adjust if a particular product needs it.
  */
 export const DROPSHIP_SHIPPING_GBP = 0;
+
+/**
+ * 18 Sept 2026, Steven: "when people sign up... we ask for their friends
+ * email and name etc and then give them an extra 5 coins for the effort
+ * and then when their friend signs up they both get 15 coins each." A
+ * separate mechanic from REFERRAL_REWARD_GBP's existing link-sharing
+ * program (migration 0016) — this one is captured directly on the signup
+ * form and pays in Flippy Coins. Both numbers are also hardcoded into
+ * migration 0034's handle_new_user() (the actual crediting happens in
+ * SQL, same reasoning as REFERRAL_REWARD_GBP above) — these exports exist
+ * so the signup form and /referrals can display the real numbers without
+ * a copy that could silently drift. Change both together if they ever do.
+ */
+export const FRIEND_INVITE_EFFORT_BONUS_COINS = 5;
+export const FRIEND_INVITE_SIGNUP_BONUS_COINS = 15;
+
+/**
+ * 18 Sept 2026, Steven: "when someone make profit from a sale then it
+ * shoudl ask them to share it to social media, they get a free coin for
+ * sharing... or whatever you think is the right amount." Pitched above the
+ * planned daily-login bonus (1 coin/day, planning/coin-economy-proposal.md
+ * — not yet built) since sharing a completed sale is a one-off, deliberate
+ * action per order rather than a passive daily habit, but well below the
+ * friend-invite amounts above since it costs the sharer nothing and isn't
+ * bringing in a new user. See api/orders/[id]/share-reward/route.ts.
+ */
+export const SOCIAL_SHARE_REWARD_COINS = 2;
+
+/**
+ * 18 Sept 2026, Steven: "we are moving away from the bid and instant win
+ * on the site... get rid of bidding and have a fixed price." Replaces
+ * STARTING_BID_PCT_OF_MARGIN/INSTANT_WIN_PCT_OF_MARGIN for every NEW
+ * opportunity discoverOpportunities.ts creates from this point on
+ * (existing live 'auction' rows keep using the old bid/instant-win path
+ * untouched — see migration 0034). Steven: "Dont make it too cheap. we
+ * want someone on pro to get a good few deals a month" — priced richer
+ * than the old instant-win band (40-55% of margin) specifically so a
+ * handful of these a month meaningfully draws down a Pro subscriber's coin
+ * balance rather than costing next to nothing, per his explicit "top up
+ * once they run out" monetisation intent.
+ */
+export const FIXED_PRICE_PCT_OF_MARGIN = { min: 0.5, max: 0.65 };
+// A hard floor in coins so a low-margin deal never undersells the effort of
+// sourcing+reselling it — same "don't make it too cheap" reasoning as the
+// pct band above, just as a backstop for a low-margin edge case the
+// percentage alone wouldn't catch.
+export const FIXED_PRICE_MIN_COINS = 10;
+
+/**
+ * Steven's own worked example: "say 10 and then if sales are booming then
+ * release to another 10." The size of the FIRST batch offered on a new
+ * fixed-price deal — capped so an over-enthusiastic AI stock estimate
+ * can't flood one deal with slots, same role SHOP_ITEM_MAX_UNITS_LISTED
+ * plays for shop_items — and also the size of every batch
+ * evaluateBatchRelisting.ts opens after that, once real sell-through
+ * clears BATCH_RELIST_SELLTHROUGH_THRESHOLD.
+ */
+export const DEAL_DEFAULT_BATCH_SIZE = 10;

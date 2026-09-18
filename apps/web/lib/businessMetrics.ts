@@ -38,11 +38,19 @@ export async function getBusinessMetrics(supabase: any): Promise<BusinessMetrics
   since.setUTCHours(0, 0, 0, 0);
   const sinceIso = since.toISOString();
 
-  const [{ data: signups }, { data: orders }, { data: shopSales }, { data: wins }, { count: totalResellers }] = await Promise.all([
+  const [{ data: signups }, { data: orders }, { data: shopSales }, { data: wins }, { data: coinPurchases }, { count: totalResellers }] = await Promise.all([
     supabase.from("profiles").select("created_at").gte("created_at", sinceIso),
     supabase.from("orders").select("price_gbp, created_at").gte("created_at", sinceIso),
     supabase.from("shop_items").select("sold_price_gbp, paid_at").not("paid_at", "is", null).gte("paid_at", sinceIso),
     supabase.from("bids").select("amount_gbp, created_at, is_instant_win").gte("created_at", sinceIso),
+    // 18 Sept 2026 — real Stripe-paid Flippy Coin top-ups (migration 0031's
+    // credit_flippy_coins, kind='purchase' only — a 'bonus'/'admin_grant'
+    // coin never had real money behind it, and 'spend' is a debit, not
+    // revenue). This dashboard never counted coin revenue at all before
+    // now — a pre-existing gap, fixed here while adding fixed-price deals
+    // (which spend already-purchased coins, not new revenue at spend time,
+    // so deal-slot purchases are deliberately NOT added here separately).
+    supabase.from("coin_transactions").select("amount, created_at").eq("kind", "purchase").gte("created_at", sinceIso),
     supabase.from("profiles").select("id", { count: "exact", head: true }).in("subscription_tier", ["pro", "elite"]),
   ]);
 
@@ -71,6 +79,11 @@ export async function getBusinessMetrics(supabase: any): Promise<BusinessMetrics
   for (const b of (wins ?? []).filter((w: any) => w.is_instant_win)) {
     const k = dayKey(b.created_at);
     if (revenueByDay.has(k)) revenueByDay.set(k, (revenueByDay.get(k) ?? 0) + Number(b.amount_gbp ?? 0));
+  }
+  // 1 coin = £1, so a coin purchase's amount converts straight across.
+  for (const c of coinPurchases ?? []) {
+    const k = dayKey(c.created_at);
+    if (revenueByDay.has(k)) revenueByDay.set(k, (revenueByDay.get(k) ?? 0) + Number(c.amount ?? 0));
   }
 
   const dailySignups = days.map((d) => ({ date: d, count: signupsByDay.get(d) ?? 0 }));

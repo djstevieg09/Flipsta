@@ -394,6 +394,129 @@ fulfils: "Just you / staff" (Steven's own answer).
       supplier, so don't promise a tighter window without checking the
       specific listing first.
 
+## 19. Friend-invite signup coins, fixed-price deals, and post-sale share reward (18 Sept 2026)
+
+Steven, in one message, asked for three things: (1) "when people sign up
+and fill in there details we ask for their friends email and name etc and
+then give them an extra 5 coins for the effort and then when their friend
+signs up they both get 15 coins each"; (2) "we are moving away from the bid
+and instant win on the site... a finite deal found with limited stock we
+are offering to one person, do the math to work out the price... if there
+is a good supply chain work out the amount of people we can offer this to
+so they all make a good profit. say 10 and then if sales are booming then
+release to another 10... get rid of bidding and have a fixed price. Dont
+make it too cheap. we want someone on pro to get a good few deals a month.
+the idea is they will topup coins once they run out"; (3) "when someone
+make profit from a sale then it shoudl ask them to share it to social
+media, they get a free coin for sharing to social media or whatever you
+think is the right amount." All three shipped together in migrations 0034
+and 0035.
+
+**Friend invites (separate from the existing £5/£5 referral-link program):**
+- [ ] New optional "Friend's name" / "Friend's email" fields on `/signup`.
+      Filling them in credits the new signer +5 coins immediately
+      (`FRIEND_INVITE_EFFORT_BONUS_COINS`) and records a `friend_invites`
+      row. When someone later signs up with that exact email, both the
+      original inviter and the new friend get +15 coins each
+      (`FRIEND_INVITE_SIGNUP_BONUS_COINS`) — all inside `handle_new_user()`
+      (migration 0034), same trigger that's always handled signup bonuses.
+      This is deliberately a second, parallel system to the existing GBP
+      `referral_code`/link program on `/referrals` — that one is unchanged
+      and still pays out in £; this one pays in Flippy Coins and is keyed
+      off an email match rather than a link click. `/referrals` now shows
+      both.
+- [ ] There's no reminder or nudge if the invited friend never signs up —
+      the `friend_invites` row just sits at `status = 'pending'` forever.
+      Consider an email nudge job if this needs pushing harder.
+
+**Fixed-price limited-allocation deals (bidding retired for new deals):**
+- [ ] Every *newly discovered* opportunity now gets `pricing_mode =
+      'fixed_price'` instead of the old auction (`starting_bid_gbp` +
+      `action_clock_expires_at` + `bids`) or instant-win-only flow —
+      changed in `discoverOpportunities.ts`. There's no bidding UI left on
+      a new deal at all: it's a straight "buy your slot" purchase for
+      `fixed_price_coins`, paid entirely in Flippy Coins via the new
+      `buy_deal_slot()` RPC (migration 0034/0035).
+- [ ] **Price math** (`calculateFixedDealPriceCoins`,
+      `packages/shared/src/pricing.ts`): takes the deal's expected margin
+      in £ and the discovery engine's confidence score, and prices the
+      slot at 50–65% of that margin (`FIXED_PRICE_PCT_OF_MARGIN`) — higher
+      confidence prices closer to 65%. Floored at
+      `FIXED_PRICE_MIN_COINS` (10 coins) so nothing is ever "too cheap,"
+      per Steven's instruction. 1 coin = £1 throughout, same peg as
+      everywhere else in the coin economy.
+- [ ] **Batch sizing** (`calculateDealBatchSize`, same file): the first
+      batch offered is `min(estimated stock, DEAL_DEFAULT_BATCH_SIZE)` —
+      10 by default, exactly Steven's own example ("say 10"). `per_customer_cap`
+      is hard-set to 1 slot per person per deal.
+- [ ] **Buying a slot:** `POST /api/opportunities/:id/buy-slot` → the
+      `buy_deal_slot(p_opportunity_id, p_profile_id)` SECURITY DEFINER
+      function. It row-locks the opportunity (`for update`), checks
+      pricing mode/status/capacity/no-duplicate-purchase, debits coins via
+      the existing `credit_flippy_coins` ledger function (kind='spend'),
+      inserts into the new `opportunity_slot_purchases` table, and flips
+      the opportunity to `sold_out` the instant the batch fills. This is
+      the **first time an opportunity purchase has ever actually collected
+      payment** — the old bid/instant-win flow never charged anything at
+      all (a pre-existing gap noted earlier in this file). A successful
+      buy auto-lists the resulting item via the existing
+      `autoListWonOpportunity()` (same fully-automatic behaviour the old
+      instant-win path had) and awards loyalty credit via the existing
+      `awardLoyaltyCredit()`.
+- [ ] **"if sales are booming then release to another 10":**
+      `evaluateBatchRelisting.ts` (previously an unused placeholder,
+      genuinely wired up now) runs on its existing 10-minute worker
+      schedule, looks at real sell-through in `opportunity_slot_purchases`
+      for each live/sold-out fixed-price deal, and — via the pre-existing
+      `shouldOpenNextBatch()` helper — opens another batch of 10 units
+      when the previous batch sold well, capped by the existing
+      `CONCENTRATION_CAPS.perOpportunityAggregateGuaranteedValueGBP`
+      (£10,000 total exposure per opportunity) so this can't grow
+      unbounded. "Always gathering data for the bot to learn" is preserved
+      unchanged — `discoverOpportunities.ts`'s dedup/scoring logic is
+      untouched, only what happens after a deal is found changed.
+- [ ] Auction bidding code (`bids` table, `/api/opportunities/:id/bid`,
+      the bidding UI) is **not deleted** — only new opportunities stop
+      using it. Any already-live auction-mode opportunity from before this
+      change keeps working the old way until it resolves. If you want to
+      fully retire bidding, that's a separate follow-up (kill the bid
+      route, migrate remaining live auctions, drop the UI).
+- [ ] Security note: the first version of `buy_deal_slot()` (migration
+      0034) had a real bug — its "is this really you" check used a plain
+      `<>` against `auth.uid()`, which is NULL for an unauthenticated
+      caller and made the whole check silently no-op for `anon`. Caught
+      via `mcp__Supabase__get_advisors` right after applying 0034, fixed in
+      migration 0035 with a null-safe `IS DISTINCT FROM` check plus an
+      explicit `revoke ... from anon` (Supabase auto-grants `anon` EXECUTE
+      on every new function by default, which a plain `revoke from
+      public` doesn't touch). If you ever add another SECURITY DEFINER
+      function with an identity check like this, use `IS DISTINCT FROM`,
+      not `<>`/`=`, and run the security advisor afterwards.
+
+**Post-sale social-share coin reward:**
+- [ ] "Made profit from a sale" = the moment an order's escrow actually
+      releases (`orders.funds_released_at`, set by
+      `apps/worker/src/jobs/releaseEscrow.ts` — same moment the seller's
+      net payout lands in their wallet). From that point, `/portfolio`'s
+      "My sales" table shows a "Share" action for that order.
+- [ ] `POST /api/orders/:id/share-reward` credits `SOCIAL_SHARE_REWARD_COINS`
+      (2 coins — Steven left the amount to my judgement: "or whatever you
+      think is the right amount"; 2 felt like enough to be worth doing
+      without making sharing itself a meaningful income source) via
+      `credit_flippy_coins`, and sets
+      `orders.profit_share_reward_claimed_at` so it can only be claimed
+      once per order.
+- [ ] There's no verification that the seller actually shared anywhere —
+      same honesty-based pattern as everything else that self-reports an
+      action for a small reward on this platform. If abuse ever shows up,
+      add a share-destination picker or a confirmation step before
+      crediting.
+- [ ] No unit tests were added for `calculateFixedDealPriceCoins` /
+      `calculateDealBatchSize` yet, even though the sibling (now-retired)
+      auction pricing functions have coverage in
+      `packages/shared/src/pricing.test.ts`. Worth adding if this pricing
+      formula gets tuned later.
+
 ---
 
 **Suggested order:** 1 → 2 → 4 (deploy with the mock worker adapter and Stripe

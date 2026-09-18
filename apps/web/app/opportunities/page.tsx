@@ -19,6 +19,15 @@ type Opportunity = {
   action_clock_expires_at: string | null;
   status: string;
   ai_reasoning: string | null;
+  // 18 Sept 2026 — fixed-price limited-allocation deals (migration 0034),
+  // replacing bidding/instant-win for every deal found from here on.
+  // Legacy rows have pricing_mode "auction" (or undefined, for anything
+  // from before this column existed) and keep using bid/instant-win as
+  // before.
+  pricing_mode?: "auction" | "fixed_price";
+  fixed_price_coins?: number | null;
+  slots_taken?: number;
+  already_purchased_slot?: boolean;
 };
 
 /**
@@ -53,7 +62,7 @@ export default function OpportunitiesPage() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
-  const [celebration, setCelebration] = useState<{ priceGBP: number; exiting: boolean } | null>(null);
+  const [celebration, setCelebration] = useState<{ label: string; exiting: boolean } | null>(null);
   // 27 Aug 2026: buyback insurance pricing depends on the buyer's own tier
   // (Pro/Elite get a discount, Section 7) — fetched once here rather than
   // per-card so every card's live premium estimate stays in sync.
@@ -113,15 +122,33 @@ export default function OpportunitiesPage() {
           ? `Won for £${data.priceGBP} — listed on the marketplace automatically.`
           : `Won for £${data.priceGBP}.`) + buybackNote,
       );
-      triggerCelebration(data.priceGBP);
+      triggerCelebration(`£${data.priceGBP.toFixed(2)}`);
     } else {
       setMessage(data.error);
     }
     load();
   }
 
-  function triggerCelebration(priceGBP: number) {
-    setCelebration({ priceGBP, exiting: false });
+  // 18 Sept 2026 — the fixed-price equivalent of instantWin() above: no
+  // quantity picker, no buyback add-on, just "buy your slot".
+  async function buySlot(id: string) {
+    const res = await fetch(`/api/opportunities/${id}/buy-slot`, { method: "POST" });
+    const data = await res.json();
+    if (res.ok) {
+      setMessage(
+        data.autoListed
+          ? `Slot bought for ${data.priceCoins} Flippy Coins — listed on the marketplace automatically.`
+          : `Slot bought for ${data.priceCoins} Flippy Coins.`,
+      );
+      triggerCelebration(`${data.priceCoins} Flippy Coins`);
+    } else {
+      setMessage(data.error);
+    }
+    load();
+  }
+
+  function triggerCelebration(label: string) {
+    setCelebration({ label, exiting: false });
     setTimeout(() => setCelebration((c) => (c ? { ...c, exiting: true } : c)), 1700);
     setTimeout(() => setCelebration(null), 2000);
   }
@@ -152,11 +179,12 @@ export default function OpportunitiesPage() {
             urgencyColorClass={urgencyColor[o.urgency_tier]}
             onBid={() => placeBid(o.id, o.starting_bid_gbp)}
             onInstantWin={(quantity, withBuyback) => instantWin(o.id, quantity, withBuyback)}
+            onBuySlot={() => buySlot(o.id)}
           />
         ))}
       </div>
 
-      {celebration && <InstantWinCelebration priceGBP={celebration.priceGBP} exiting={celebration.exiting} />}
+      {celebration && <InstantWinCelebration label={celebration.label} exiting={celebration.exiting} />}
     </div>
   );
 }
@@ -201,7 +229,8 @@ function OpportunitiesHero() {
             Live <span className="text-gold">Opportunities</span>
           </h1>
           <p className="text-textDim text-sm max-w-md mx-auto md:mx-0">
-            Real opportunities we've found and verified. Sign in as a Standard tier member or above to bid.
+            Real opportunities we've found and verified. Sign in as a Standard tier member or above to grab a slot
+            with your Flippy Coins.
           </p>
         </div>
       </div>
@@ -216,6 +245,7 @@ function OpportunityCard({
   urgencyColorClass,
   onBid,
   onInstantWin,
+  onBuySlot,
 }: {
   o: Opportunity;
   now: number;
@@ -223,7 +253,15 @@ function OpportunityCard({
   urgencyColorClass: string;
   onBid: () => void;
   onInstantWin: (quantity: number, withBuyback: boolean) => void;
+  onBuySlot: () => void;
 }) {
+  // 18 Sept 2026 — fixed-price deals get an entirely different action
+  // column below (no auction, no quantity picker, no buyback add-on) —
+  // legacy 'auction' rows (or anything from before pricing_mode existed)
+  // keep the bid/instant-win UI exactly as it was.
+  if (o.pricing_mode === "fixed_price") {
+    return <FixedPriceDealCard o={o} urgencyColorClass={urgencyColorClass} onBuySlot={onBuySlot} />;
+  }
   const remainingSeconds = o.action_clock_expires_at
     ? Math.max(0, Math.round((new Date(o.action_clock_expires_at).getTime() - now) / 1000))
     : null;
@@ -348,6 +386,89 @@ function OpportunityCard({
   );
 }
 
+/**
+ * 18 Sept 2026 — fixed-price limited-allocation deals (migration 0034):
+ * Steven, verbatim: "a finite deal found with limited stock we are
+ * offering to one person... get rid of bidding and have a fixed price."
+ * No auction, no quantity picker, no buyback add-on — one slot per
+ * person, at the price already fixed on the row, paid in Flippy Coins.
+ * estimated_stock_units is the running total of slots ever released for
+ * this deal (grows when evaluateBatchRelisting.ts opens another batch);
+ * slots_taken is how many are gone so far.
+ */
+function FixedPriceDealCard({
+  o,
+  urgencyColorClass,
+  onBuySlot,
+}: {
+  o: Opportunity;
+  urgencyColorClass: string;
+  onBuySlot: () => void;
+}) {
+  const slotsTaken = o.slots_taken ?? 0;
+  const slotsTotal = o.estimated_stock_units;
+  const slotsLeft = Math.max(0, slotsTotal - slotsTaken);
+  const soldOut = o.status === "sold_out" || slotsLeft <= 0;
+
+  return (
+    <div className="card flex flex-col md:flex-row md:items-center gap-4">
+      <div className="md:w-40 shrink-0 space-y-1">
+        <div className="flex items-center justify-between md:justify-start md:gap-2">
+          <span className={`text-xs font-bold uppercase flex items-center gap-1 ${urgencyColorClass}`}>
+            {o.urgency_tier === "hot" && <span className="flame-icon">🔥</span>}
+            {o.urgency_tier}
+          </span>
+          <span className="text-xs text-textDim">{Math.round(o.confidence_score * 100)}%</span>
+        </div>
+        <div className="text-sm text-textDim">{o.source_tier}</div>
+        <div className={`text-xs font-bold ${soldOut ? "text-red" : "text-gold"}`}>
+          {soldOut ? "Sold out" : `${slotsLeft} of ${slotsTotal} slots left`}
+        </div>
+      </div>
+
+      <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-3 md:border-x border-border md:px-4 py-2 md:py-0">
+        <div>
+          <div className="text-[10px] text-textDim uppercase tracking-wide">Outlay</div>
+          <div className="font-bold">{estimatedOutlay(o) !== null ? `£${estimatedOutlay(o)!.toFixed(2)}` : "—"}</div>
+          <div className="text-[10px] text-textDim">{o.fixed_price_coins} Flippy Coins to buy in</div>
+        </div>
+        <div>
+          <div className="text-[10px] text-textDim uppercase tracking-wide">Returns</div>
+          <div className="font-bold text-green">£{o.expected_margin_gbp.toFixed(2)}</div>
+          <div className="text-[10px] text-textDim">
+            resells ~{typeof o.estimated_resale_price_gbp === "number" ? `£${o.estimated_resale_price_gbp.toFixed(2)}` : "—"}
+          </div>
+        </div>
+        <div>
+          <div className="text-[10px] text-textDim uppercase tracking-wide">Slots</div>
+          <div className="font-bold">
+            {slotsTaken}/{slotsTotal}
+          </div>
+          <div className="text-[10px] text-textDim">taken</div>
+        </div>
+        {o.ai_reasoning ? (
+          <div className="col-span-2 md:col-span-1">
+            <div className="text-[10px] text-textDim uppercase tracking-wide">Why it's here</div>
+            <div className="text-xs text-textDim italic">{o.ai_reasoning}</div>
+          </div>
+        ) : (
+          <div />
+        )}
+      </div>
+
+      <div className="md:w-64 shrink-0 space-y-2">
+        {o.already_purchased_slot ? (
+          <div className="btn btn-ghost flex-1 w-full text-center cursor-default">✓ You have a slot</div>
+        ) : (
+          <button className="btn btn-primary w-full disabled:opacity-50" disabled={soldOut} onClick={onBuySlot}>
+            {soldOut ? "Sold out" : `Buy your slot — ${o.fixed_price_coins} coins`}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /** Steven's ask, 26 Aug 2026: "also show total est returns" — the sum of
  * every live opportunity's expected profit, so there's one headline number
  * for "what's the whole feed worth right now" without adding each card up
@@ -455,7 +576,7 @@ function ActivityTicker() {
 
 const CONFETTI = ["🎉", "✨", "🔥", "💷", "🎊"];
 
-function InstantWinCelebration({ priceGBP, exiting }: { priceGBP: number; exiting: boolean }) {
+function InstantWinCelebration({ label, exiting }: { label: string; exiting: boolean }) {
   const pieces = useMemo(
     () =>
       Array.from({ length: 14 }, (_, i) => ({
@@ -481,7 +602,7 @@ function InstantWinCelebration({ priceGBP, exiting }: { priceGBP: number; exitin
         <div className="text-3xl mb-1">🎉</div>
         <div className="text-lg font-bold">You won it!</div>
         <div className="text-textDim text-sm mt-1">
-          Instant win locked in at <span className="text-text font-bold">£{priceGBP.toFixed(2)}</span>
+          Locked in at <span className="text-text font-bold">{label}</span>
         </div>
         <div className="text-xs text-textDim mt-2">
           Check <a href="/portfolio" className="underline">your Portfolio</a> for the retailer, price and link.

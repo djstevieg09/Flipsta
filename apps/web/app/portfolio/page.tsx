@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import { SOCIAL_SHARE_REWARD_COINS } from "@flipsta/shared";
 import BecomeResellerBanner from "@/app/components/BecomeResellerBanner";
 import PageHero from "@/app/components/PageHero";
 import ReviewForm from "@/app/components/ReviewForm";
@@ -28,7 +29,16 @@ type Listing = {
   products: { title: string; condition: string } | null;
   listing_channel_posts: { channel: string; status: string; external_url: string | null }[];
 };
-type Order = { id: string; price_gbp: number; status: string; created_at: string; listings: { products: { title: string } | null } | null };
+type Order = {
+  id: string;
+  price_gbp: number;
+  commission_gbp?: number;
+  status: string;
+  created_at: string;
+  funds_released_at?: string | null;
+  profit_share_reward_claimed_at?: string | null;
+  listings: { products: { title: string } | null } | null;
+};
 type BuybackPolicy = {
   id: string;
   opportunityId: string;
@@ -175,6 +185,27 @@ export default function PortfolioPage() {
     if (!res.ok) return data.error ?? "Couldn't submit that review.";
     setMySellerReviewedOrders((s) => new Set(s).add(orderId));
     return null;
+  }
+
+  // 18 Sept 2026, Steven: "when someone make profit from a sale then it
+  // shoudl ask them to share it to social media, they get a free coin for
+  // sharing." Just marks the order's reward claimed and re-fetches — the
+  // actual coin credit happens server-side (api/orders/[id]/share-reward).
+  const [shareMessage, setShareMessage] = useState<string | null>(null);
+  const [sharing, setSharing] = useState<Record<string, boolean>>({});
+  async function claimShareReward(orderId: string) {
+    setSharing((s) => ({ ...s, [orderId]: true }));
+    const res = await fetch(`/api/orders/${orderId}/share-reward`, { method: "POST" });
+    const data = await res.json();
+    setSharing((s) => ({ ...s, [orderId]: false }));
+    if (!res.ok) {
+      setShareMessage(data.error);
+      return;
+    }
+    setShareMessage(`+${data.coinsAwarded} Flippy Coins — thanks for sharing!`);
+    setOrdersAsSeller((orders) =>
+      orders.map((o) => (o.id === orderId ? { ...o, profit_share_reward_claimed_at: new Date().toISOString() } : o)),
+    );
   }
 
   // 26 Aug 2026, Steven: "number one the money does not get released until
@@ -479,7 +510,23 @@ export default function PortfolioPage() {
             </span>
           )}
         </div>
-        <OrdersTable orders={ordersAsSeller} />
+        {shareMessage && <p className="text-xs text-brand2">{shareMessage}</p>}
+        <OrdersTable
+          orders={ordersAsSeller}
+          renderShareReward={(o) => {
+            if (!o.funds_released_at) return null;
+            if (o.profit_share_reward_claimed_at) return <span className="text-[10px] text-green">✓ Shared</span>;
+            return (
+              <button
+                onClick={() => claimShareReward(o.id)}
+                disabled={sharing[o.id]}
+                className="text-[10px] font-bold text-brand2 disabled:opacity-50"
+              >
+                📣 Share &amp; earn {SOCIAL_SHARE_REWARD_COINS} coins
+              </button>
+            );
+          }}
+        />
       </section>
     </div>
   );
@@ -574,7 +621,17 @@ function BuybackStatus({
   );
 }
 
-function OrdersTable({ orders, renderReview }: { orders: Order[]; renderReview?: (order: Order) => ReactNode }) {
+function OrdersTable({
+  orders,
+  renderReview,
+  renderShareReward,
+}: {
+  orders: Order[];
+  renderReview?: (order: Order) => ReactNode;
+  /** 18 Sept 2026 — the post-profit social-share coin prompt, seller side only. */
+  renderShareReward?: (order: Order) => ReactNode;
+}) {
+  const columnCount = 4 + (renderReview ? 1 : 0) + (renderShareReward ? 1 : 0);
   return (
     <div className="card p-0 overflow-x-auto">
       <table className="w-full text-sm">
@@ -585,6 +642,7 @@ function OrdersTable({ orders, renderReview }: { orders: Order[]; renderReview?:
             <th className="p-3">Status</th>
             <th className="p-3">Date</th>
             {renderReview && <th className="p-3">Review</th>}
+            {renderShareReward && <th className="p-3">Share</th>}
           </tr>
         </thead>
         <tbody>
@@ -595,11 +653,12 @@ function OrdersTable({ orders, renderReview }: { orders: Order[]; renderReview?:
               <td className="p-3 capitalize">{o.status.replace(/_/g, " ")}</td>
               <td className="p-3 text-textDim">{new Date(o.created_at).toLocaleDateString()}</td>
               {renderReview && <td className="p-3 min-w-[140px]">{renderReview(o)}</td>}
+              {renderShareReward && <td className="p-3 min-w-[160px]">{renderShareReward(o)}</td>}
             </tr>
           ))}
           {orders.length === 0 && (
             <tr>
-              <td colSpan={renderReview ? 5 : 4} className="p-6 text-center text-textDim">
+              <td colSpan={columnCount} className="p-6 text-center text-textDim">
                 None yet.
               </td>
             </tr>

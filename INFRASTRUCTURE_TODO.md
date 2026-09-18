@@ -324,14 +324,16 @@ step only you can do.
       this reuses `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET` and the
       existing `checkout.session.completed` webhook subscription from
       Section 3.
-- [ ] **Edit the placeholder catalogue** in
-      `packages/shared/src/constants.ts` (`MERCH_ITEMS`) before going
-      live — the item names, prices, sizes and emoji icons in there are
-      placeholders, not real Flipsta products, since there was no
-      existing merch list or pricing anywhere in this codebase. There
-      are also no real product photos (no image-generation tool is
-      available to build them), so each item shows an icon rather than
-      a photo — swap in real photos if you want them.
+- [ ] **Confirm real pricing** in `packages/shared/src/constants.ts`
+      (`MERCH_ITEMS`) before going live — the five items now use your own
+      real product photos (`apps/web/public/merch/*.jpg`: mug, tote bag,
+      black hoodie, black cap, white t-shirt), but the `priceGBP` values
+      are still the original placeholders carried over from before the
+      photos arrived, since no real pricing has come through yet.
+- [ ] Only these five items are listed — no black t-shirt or gold cap
+      (photographed cap is black/gold-trim, not solid gold) since there's
+      no photo for those. Add more items to `MERCH_ITEMS` with their own
+      `imageUrl` under `public/merch/` if you want a bigger range.
 - [ ] Shipping is UK-only (`shipping_address_collection: { allowed_countries: ["GB"] }`
       in `lib/stripe.ts`'s `createMerchCheckoutSession`) at a flat
       `MERCH_SHIPPING_GBP` per order — widen the countries list or add

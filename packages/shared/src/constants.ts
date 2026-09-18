@@ -265,29 +265,29 @@ export function isValidCoinBundle(id: string): id is CoinBundleId {
  * mapping lives server-side and is looked up by id, never trusted from
  * the client.
  *
- * PLACEHOLDER CATALOGUE: unlike the coin bundle prices (which were
- * already Steven's own numbers, just not wired up yet), there was no
- * existing merch pricing or product list anywhere in this codebase — the
- * names/prices/sizes below are a starting point Steven should edit to
- * match what he's actually selling, not a business decision made for
- * him. There's also no product photography anywhere in this session (no
- * image-generation tool available either), so the shop shows a simple
- * icon per item rather than a fabricated photo — swap in real photos via
- * `imageUrl` once they exist.
+ * 18 Sept 2026, Steven, same day: sent through real product photography
+ * for five items (mug, tote bag, black hoodie, black cap, white t-shirt)
+ * — see apps/web/public/merch/*.jpg. This replaces the emoji-icon
+ * placeholders from earlier the same day; the previous "tshirt-black" and
+ * "cap-gold" entries are dropped since there's no photo for a black
+ * t-shirt or a gold cap (the real cap photographed is black with gold
+ * trim) — add them back with their own `imageUrl` if Steven wants them
+ * sold too. PRICES ARE STILL PLACEHOLDER — no real pricing came with the
+ * photos, so these are carried over unchanged from the emoji-only
+ * catalogue and are still Steven's to set.
  */
 export type MerchCategory = "apparel" | "headwear" | "other";
-export type MerchItemId = "tshirt-black" | "tshirt-white" | "hoodie-black" | "cap-gold" | "tote-bag" | "mug";
+export type MerchItemId = "tshirt-white" | "hoodie-black" | "cap-black" | "tote-bag" | "mug";
 
 export const MERCH_ITEMS: Record<
   MerchItemId,
-  { name: string; category: MerchCategory; priceGBP: number; sizes?: string[]; emoji: string; imageUrl?: string }
+  { name: string; category: MerchCategory; priceGBP: number; sizes?: string[]; imageUrl: string }
 > = {
-  "tshirt-black": { name: "Flipsta T-Shirt — Black", category: "apparel", priceGBP: 19.99, sizes: ["S", "M", "L", "XL", "XXL"], emoji: "👕" },
-  "tshirt-white": { name: "Flipsta T-Shirt — White", category: "apparel", priceGBP: 19.99, sizes: ["S", "M", "L", "XL", "XXL"], emoji: "👕" },
-  "hoodie-black": { name: "Flipsta Hoodie — Black", category: "apparel", priceGBP: 34.99, sizes: ["S", "M", "L", "XL", "XXL"], emoji: "🧥" },
-  "cap-gold": { name: "Flipsta Cap — Gold Logo", category: "headwear", priceGBP: 16.99, emoji: "🧢" },
-  "tote-bag": { name: "Flipsta Tote Bag", category: "other", priceGBP: 9.99, emoji: "👜" },
-  mug: { name: "Flipsta Mug", category: "other", priceGBP: 11.99, emoji: "☕" },
+  "tshirt-white": { name: "Flipsta T-Shirt — White", category: "apparel", priceGBP: 19.99, sizes: ["S", "M", "L", "XL", "XXL"], imageUrl: "/merch/tshirt-white.jpg" },
+  "hoodie-black": { name: "Flipsta Hoodie — Black", category: "apparel", priceGBP: 34.99, sizes: ["S", "M", "L", "XL", "XXL"], imageUrl: "/merch/hoodie-black.jpg" },
+  "cap-black": { name: "Flipsta Cap — Black", category: "headwear", priceGBP: 16.99, imageUrl: "/merch/cap-black.jpg" },
+  "tote-bag": { name: "Flipsta Tote Bag", category: "other", priceGBP: 9.99, imageUrl: "/merch/tote-bag.jpg" },
+  mug: { name: "Flipsta Mug", category: "other", priceGBP: 11.99, imageUrl: "/merch/mug.jpg" },
 };
 
 export function isValidMerchItem(id: string): id is MerchItemId {

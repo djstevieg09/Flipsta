@@ -9,11 +9,10 @@
  * (migration 0032) once the webhook confirms payment, visible to Steven
  * at /admin/merch-orders.
  *
- * The catalogue (packages/shared/src/constants.ts's MERCH_ITEMS) is a
- * placeholder Steven should edit — there was no existing merch pricing
- * or product list anywhere in this codebase, and no real product photos
- * exist (no image-generation tool is available in this session either),
- * so each item shows an icon rather than a fabricated photo.
+ * 18 Sept 2026, Steven, same day: sent through real product photos, so
+ * each card now shows the actual item (public/merch/*.jpg) instead of the
+ * earlier emoji placeholder. Prices in MERCH_ITEMS are still placeholder
+ * — no real pricing came with the photos.
  */
 import { useEffect, useState } from "react";
 import PageHero from "@/app/components/PageHero";
@@ -96,8 +95,9 @@ export default function MerchPage() {
           const item = MERCH_ITEMS[id];
           return (
             <div key={id} className="card flex flex-col gap-3">
-              <div className="w-full h-32 rounded-lg bg-surface2 border border-border flex items-center justify-center text-5xl" aria-hidden>
-                {item.emoji}
+              <div className="w-full aspect-square rounded-lg bg-surface2 border border-border overflow-hidden">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
               </div>
               <div>
                 <div className="font-bold text-sm">{item.name}</div>

@@ -64,19 +64,26 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   doesn't read at header scale) and saved to /public/logo.png.
                   18 Sept 2026, Steven: "put this as the logo in top left"
                   — a new gold-coin mascot render with "FLIPSTA" and the
-                  cycle-arrow built right into the coin face. Same crop
-                  reasoning as before: kept the cap/face/coin/wordmark and
-                  thumbs, cropped out the legs and the "Find it. Flip it.
-                  Profit." tagline baked into the bottom of the source
-                  image (illegible at header scale, and the tagline's
-                  already handled by metadata.description). Re-saved as
+                  cycle-arrow built right into the coin face. Re-saved as
                   WebP rather than PNG — ~60KB vs. ~300KB+ for a photo-real
-                  render like this, no visible quality loss. The old
-                  /public/logo.png is unreferenced now but still on disk —
-                  this session's device access can write files but not
-                  delete them, so removing it needs either Steven deleting
-                  it himself or a future session with shell access to his
-                  clone. */}
+                  render like this, no visible quality loss.
+                  18 Sept 2026, Steven, later the same day: "this is the new
+                  mascot, can you replace all others to this please" — a
+                  cleaner render of the same cap/glasses/thumbs-up pose,
+                  replacing the one above. Same crop reasoning both times:
+                  kept the cap/face/coin/wordmark and thumbs, cropped out
+                  the legs and the "Find it. Flip it. Profit." tagline
+                  baked into the bottom of the source image (illegible at
+                  header scale, and the tagline's already handled by
+                  metadata.description). Confirmed via AskUserQuestion that
+                  this swap does NOT extend to the support-chat widget's
+                  avatar (SupportChatWidget.tsx) — that one deliberately
+                  keeps its own headset render, since it visually signals
+                  "this is support." The old /public/logo.png is
+                  unreferenced now but still on disk — this session's
+                  device access can write files but not delete them, so
+                  removing it needs either Steven deleting it himself or a
+                  future session with shell access to his clone. */}
               <a href="/" className="flex items-center whitespace-nowrap shrink-0">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/logo.webp" alt="Flipsta" className="h-9 w-auto" />

@@ -6,7 +6,7 @@ import { useBasket } from "../BasketProvider";
 import CategorySidebar from "../components/CategorySidebar";
 import PageHero from "../components/PageHero";
 import ShopperSwitch from "../components/ShopperSwitch";
-import { SHOP_LOW_STOCK_THRESHOLD_UNITS } from "@flipsta/shared";
+import { MERCH_ITEMS, MERCH_SHIPPING_GBP, MerchItemId, SHOP_LOW_STOCK_THRESHOLD_UNITS } from "@flipsta/shared";
 
 type ShopItem = {
   id: string;
@@ -110,6 +110,42 @@ function ShopPageInner() {
   const [recommended, setRecommended] = useState<(ShopItem & { matchReasons?: string[] })[]>([]);
 
   const basket = useBasket();
+
+  // 18 Sept 2026, Steven: "add merch to the shop." Merch is a fixed
+  // catalogue with its own Stripe Checkout flow (a UK shipping address
+  // collected by Stripe itself, not the basket's "replay existing
+  // per-item purchase calls" model — see BasketProvider.tsx's comment),
+  // so it isn't wired into the basket like shop_items/products above.
+  // Instead this reuses the same buy() call the standalone /merch page
+  // makes, just rendered as one more section here.
+  const MERCH_ITEM_IDS = Object.keys(MERCH_ITEMS) as MerchItemId[];
+  const [merchSizes, setMerchSizes] = useState<Record<string, string>>({});
+  const [merchBusy, setMerchBusy] = useState<MerchItemId | null>(null);
+  const [merchError, setMerchError] = useState<string | null>(null);
+
+  async function buyMerch(id: MerchItemId) {
+    const item = MERCH_ITEMS[id];
+    const size = item.sizes ? merchSizes[id] ?? item.sizes[0] : undefined;
+    setMerchError(null);
+    setMerchBusy(id);
+    try {
+      const res = await fetch("/api/merch/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId: id, size, quantity: 1 }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMerchError(data.error ?? "Couldn't start checkout right now.");
+        setMerchBusy(null);
+        return;
+      }
+      window.location.href = data.url;
+    } catch {
+      setMerchError("Couldn't start checkout right now.");
+      setMerchBusy(null);
+    }
+  }
 
   async function loadCatalogue(categorySlug: string | null, activeSizes: string[]) {
     setFlipstaLoading(true);
@@ -481,6 +517,57 @@ function ShopPageInner() {
           {!flipstaLoading && filteredFlipstaItems.length === 0 && (
             <p className="text-textDim text-sm col-span-full">No Flipsta Sourced deals match right now — check back soon.</p>
           )}
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <div className="flex items-baseline justify-between gap-3 flex-wrap">
+          <div>
+            <h2 className="font-bold text-lg">Flipsta Merch</h2>
+            <p className="text-textDim text-sm">
+              T-shirts, caps and more from the Flipsta shop. UK shipping is a flat £{MERCH_SHIPPING_GBP.toFixed(2)} per
+              order.
+            </p>
+          </div>
+          <a href="/merch" className="text-xs font-bold text-brand2 whitespace-nowrap">
+            See all merch →
+          </a>
+        </div>
+        {merchError && <div className="card text-sm text-red">{merchError}</div>}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {MERCH_ITEM_IDS.map((id) => {
+            const item = MERCH_ITEMS[id];
+            return (
+              <div key={id} className="card space-y-2">
+                <div className="w-full aspect-square rounded-lg bg-surface2 border border-border overflow-hidden">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+                </div>
+                <div className="font-bold text-sm">{item.name}</div>
+                <div className="text-lg font-extrabold">£{item.priceGBP.toFixed(2)}</div>
+                {item.sizes && (
+                  <select
+                    value={merchSizes[id] ?? item.sizes[0]}
+                    onChange={(e) => setMerchSizes((s) => ({ ...s, [id]: e.target.value }))}
+                    className="w-full bg-surface2 border border-border rounded-lg px-2 py-1.5 text-sm"
+                  >
+                    {item.sizes.map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                )}
+                <button
+                  type="button"
+                  disabled={merchBusy !== null}
+                  onClick={() => buyMerch(id)}
+                  className="w-full rounded-lg py-2 text-sm font-bold text-white disabled:opacity-50"
+                  style={{ background: "linear-gradient(135deg,#f2b545,#ffd77a)" }}
+                >
+                  {merchBusy === id ? "Redirecting…" : "Buy Now"}
+                </button>
+              </div>
+            );
+          })}
         </div>
       </section>
 

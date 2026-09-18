@@ -21,6 +21,13 @@ const STORAGE_KEY = "flipsta_chat_conversation_id";
  * starting a new one and losing the thread — the actual message history
  * itself still lives server-side in chat_messages, this is purely "which
  * conversation am I continuing."
+ *
+ * 18 Sept 2026, Steven: "the help bot in the bottom right hand side of the
+ * screen needs to be this" — sent through a render of the Flippy mascot in
+ * a headset ("Flipsta Customer Support"). Cropped to just the face/cap/
+ * glasses/mic (public/support-mascot.jpg, same reasoning as the favicon
+ * crop: the full body + wordmark turns to mush at this size) and used for
+ * both the launcher button and the panel header avatar.
  */
 export default function SupportChatWidget({ isAuthed }: { isAuthed: boolean }) {
   const pathname = usePathname();
@@ -87,7 +94,11 @@ export default function SupportChatWidget({ isAuthed }: { isAuthed: boolean }) {
       {open && (
         <div className="mb-3 w-80 sm:w-96 h-[28rem] card p-0 flex flex-col shadow-2xl">
           <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-            <span className="font-bold text-sm">Flipsta support</span>
+            <span className="flex items-center gap-2 font-bold text-sm">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/support-mascot.jpg" alt="" className="w-7 h-7 rounded-full object-cover" />
+              Flipsta support
+            </span>
             <button onClick={() => setOpen(false)} className="text-textDim hover:text-text text-lg leading-none">
               ×
             </button>
@@ -132,10 +143,15 @@ export default function SupportChatWidget({ isAuthed }: { isAuthed: boolean }) {
       )}
       <button
         onClick={() => setOpen((v) => !v)}
-        className="btn btn-primary rounded-full w-14 h-14 shadow-2xl text-xl"
+        className="rounded-full w-14 h-14 shadow-2xl overflow-hidden border-2 border-gold flex items-center justify-center bg-surface2 text-xl"
         aria-label="Support chat"
       >
-        {open ? "×" : "💬"}
+        {open ? (
+          "×"
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src="/support-mascot.jpg" alt="Flipsta support" className="w-full h-full object-cover" />
+        )}
       </button>
     </div>
   );

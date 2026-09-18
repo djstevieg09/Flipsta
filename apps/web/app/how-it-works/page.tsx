@@ -12,6 +12,13 @@
  * resale evidence on eBay/Vinted/Depop) — it now just says deals are
  * real and verified, not how that happens. Same reasoning removed the
  * FAQ that asked "how does the AI decide" outright.
+ *
+ * 18 Sept 2026, Steven, later the same day: "they sell the item first
+ * before buying the items from our partners or sourced deals so no
+ * inventory" — the Buy/Flip steps had the order backwards. Reworked to
+ * Find/Sell/Source/Repeat: you secure the sale first, sourcing only
+ * happens afterwards, and no stock is ever held. Matches the same fix
+ * on the homepage (see app/page.tsx).
  */
 export default function HowItWorksPage() {
   return (
@@ -82,14 +89,14 @@ const STEPS: { title: string; body: string; details?: string[] }[] = [
     ],
   },
   {
-    title: "Buy",
+    title: "Sell",
     body:
-      "Use Flippy Coins to unlock the opportunities you want a shot at, then bid or use Instant Win to lock one in outright. Prefer to skip reselling entirely? Everything in the Shop is priced to buy and keep at a genuine discount, no bidding required.",
+      "Use Flippy Coins to secure the sale first — bid or use Instant Win to lock one in outright, before anything is bought from the partner or sourced deal behind it. No stock, no risk. Prefer to skip reselling entirely? Everything in the Shop is priced to buy and keep at a genuine discount, no bidding required.",
   },
   {
-    title: "Flip",
+    title: "Source",
     body:
-      "Once you've won an item, list it for resale in one click — Flipsta can cross-post it straight out to eBay, Depop, Etsy, Whatnot and StockX at once if you've connected those accounts. Fulfil it yourself, or hand shipping off to Flipsta's fulfilment network.",
+      "Only once it's sold does sourcing happen — the item comes straight from the partner or sourced deal, no inventory ever sitting around. List the sale in one click, with cross-posting straight out to eBay, Depop, Etsy, Whatnot and StockX if you've connected those accounts, and fulfil it yourself or hand shipping off to Flipsta's fulfilment network.",
   },
   {
     title: "Repeat",
@@ -105,10 +112,10 @@ const FAQS: { q: string; a: string }[] = [
   },
   {
     q: "Do I need to hold stock myself?",
-    a: "No. You can fulfil and ship a win yourself, or use Flipsta's fulfilment network to handle it for you.",
+    a: "No — you sell first, so there's never any stock to hold. Once it's sold, fulfil and ship it yourself, or use Flipsta's fulfilment network to handle it for you.",
   },
   {
     q: "What's the difference between the Shop and Opportunities?",
-    a: "Shop items are already secured by Flipsta and priced to buy and keep. Opportunities are for reselling — you win one, then flip it for a profit.",
+    a: "Shop items are already secured by Flipsta and priced to buy and keep. Opportunities are for reselling — you secure the sale first, then it's sourced from the deal behind it, no inventory involved.",
   },
 ];

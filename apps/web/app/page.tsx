@@ -27,6 +27,13 @@
  * with two small real card-style callouts (a shop deal, a live
  * opportunity) so the hero references the actual product rather than a
  * static image of a UI that will drift out of date.
+ *
+ * 18 Sept 2026, Steven, later the same day: "they sell the item first
+ * before buying the items from our partners or sourced deals so no
+ * inventory" — the hero copy had the order backwards (implied buy then
+ * sell, i.e. holding stock). Corrected here and in the feature strip /
+ * steps below to sell first, then source from the partner/deal — no
+ * inventory sitting around either way.
  */
 export default function HomePage() {
   return (
@@ -46,8 +53,8 @@ export default function HomePage() {
             Find it. <span className="text-brand2">Flip it.</span> <span className="text-gold">Profit.</span>
           </p>
           <p className="text-textDim max-w-md mx-auto md:mx-0">
-            The ultimate marketplace where we find the best deals, you buy, and you sell. Powered by community.
-            Built for profit.
+            The ultimate marketplace where you sell first, then source it from our partner deals — no inventory,
+            no risk. Powered by community. Built for profit.
           </p>
           <div className="flex flex-wrap gap-3 justify-center md:justify-start">
             <a href="/signup" className="btn btn-primary text-base px-6 py-3">
@@ -136,16 +143,16 @@ export default function HomePage() {
 
 const FEATURES: { title: string; body: string; icon: React.ReactNode }[] = [
   { title: "We Find Deals", body: "We bring you the best opportunities, checked and verified.", icon: <BrainIcon /> },
-  { title: "You Buy", body: "Grab the deals you want with Flippy Coins.", icon: <CartIcon /> },
-  { title: "You Sell", body: "List your items and make a profit.", icon: <TrendIcon /> },
+  { title: "You Sell First", body: "Secure the sale with Flippy Coins — before anything's bought.", icon: <CartIcon /> },
+  { title: "We Source It", body: "No inventory — we buy from the deal only once it's sold.", icon: <TrendIcon /> },
   { title: "Grow Together", body: "A marketplace powered by our community.", icon: <UsersIcon /> },
   { title: "Safe & Secure", body: "Built with your security in mind.", icon: <ShieldIcon /> },
 ];
 
 const STEPS: { title: string; body: string }[] = [
   { title: "Find", body: "We find the best deals for you, every day." },
-  { title: "Buy", body: "Use Flippy Coins to purchase opportunities." },
-  { title: "Flip", body: "List and sell for a profit on our marketplace." },
+  { title: "Sell", body: "Use Flippy Coins to secure the sale first — no stock, no risk." },
+  { title: "Source", body: "Only once it's sold do we source it from the deal." },
   { title: "Repeat", body: "Build your balance and grow your earnings." },
 ];
 

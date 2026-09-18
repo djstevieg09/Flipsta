@@ -59,6 +59,33 @@ export async function POST(req: NextRequest) {
             p_note: `Bundle: ${session.metadata.bundle_id}`,
           });
         }
+      } else if (session.payment_status === "paid" && session.metadata?.kind === "merch_purchase") {
+        // 18 Sept 2026, Steven: "need to add a merch tab... with tshirts,
+        // caps and other items that people can buy." Unlike coins, this
+        // is a physical order, so the row itself (not just a balance) is
+        // the thing Steven needs — see merch_orders, migration 0032.
+        // Plain insert (not an RPC): merch_orders has no client-writable
+        // RLS gap to guard against the way profiles.flippy_coin_balance
+        // did, and stripe_checkout_session_id's unique constraint still
+        // makes this safe against a redelivered webhook event.
+        const m = session.metadata;
+        await supabase
+          .from("merch_orders")
+          .upsert(
+            {
+              profile_id: m.profile_id,
+              item_id: m.item_id,
+              item_name: m.item_name,
+              size: m.size || null,
+              quantity: Number(m.quantity) || 1,
+              price_gbp: Number(m.price_gbp) || 0,
+              shipping_gbp: Number(m.shipping_gbp) || 0,
+              shipping_name: session.shipping_details?.name ?? session.customer_details?.name ?? null,
+              shipping_address: session.shipping_details?.address ?? null,
+              stripe_checkout_session_id: session.id,
+            },
+            { onConflict: "stripe_checkout_session_id", ignoreDuplicates: true },
+          );
       }
       break;
     }

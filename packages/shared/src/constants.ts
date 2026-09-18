@@ -257,3 +257,42 @@ export const COIN_BUNDLES: Record<CoinBundleId, { name: string; coins: number; p
 export function isValidCoinBundle(id: string): id is CoinBundleId {
   return id in COIN_BUNDLES;
 }
+
+/**
+ * 18 Sept 2026, Steven: "need to add a merch tab on the main landing page
+ * with tshirts, caps and other items that people can buy." Real money
+ * here too, so — same reasoning as COIN_BUNDLES above — the item→price
+ * mapping lives server-side and is looked up by id, never trusted from
+ * the client.
+ *
+ * PLACEHOLDER CATALOGUE: unlike the coin bundle prices (which were
+ * already Steven's own numbers, just not wired up yet), there was no
+ * existing merch pricing or product list anywhere in this codebase — the
+ * names/prices/sizes below are a starting point Steven should edit to
+ * match what he's actually selling, not a business decision made for
+ * him. There's also no product photography anywhere in this session (no
+ * image-generation tool available either), so the shop shows a simple
+ * icon per item rather than a fabricated photo — swap in real photos via
+ * `imageUrl` once they exist.
+ */
+export type MerchCategory = "apparel" | "headwear" | "other";
+export type MerchItemId = "tshirt-black" | "tshirt-white" | "hoodie-black" | "cap-gold" | "tote-bag" | "mug";
+
+export const MERCH_ITEMS: Record<
+  MerchItemId,
+  { name: string; category: MerchCategory; priceGBP: number; sizes?: string[]; emoji: string; imageUrl?: string }
+> = {
+  "tshirt-black": { name: "Flipsta T-Shirt — Black", category: "apparel", priceGBP: 19.99, sizes: ["S", "M", "L", "XL", "XXL"], emoji: "👕" },
+  "tshirt-white": { name: "Flipsta T-Shirt — White", category: "apparel", priceGBP: 19.99, sizes: ["S", "M", "L", "XL", "XXL"], emoji: "👕" },
+  "hoodie-black": { name: "Flipsta Hoodie — Black", category: "apparel", priceGBP: 34.99, sizes: ["S", "M", "L", "XL", "XXL"], emoji: "🧥" },
+  "cap-gold": { name: "Flipsta Cap — Gold Logo", category: "headwear", priceGBP: 16.99, emoji: "🧢" },
+  "tote-bag": { name: "Flipsta Tote Bag", category: "other", priceGBP: 9.99, emoji: "👜" },
+  mug: { name: "Flipsta Mug", category: "other", priceGBP: 11.99, emoji: "☕" },
+};
+
+export function isValidMerchItem(id: string): id is MerchItemId {
+  return id in MERCH_ITEMS;
+}
+
+/** Flat, single placeholder UK shipping rate — also Steven's to adjust. */
+export const MERCH_SHIPPING_GBP = 3.99;

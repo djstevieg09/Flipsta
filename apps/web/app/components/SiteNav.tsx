@@ -44,6 +44,11 @@ export default function SiteNav({
           to see coin pricing before signing up. UI-only for now: there's no
           coin ledger or Stripe product behind it yet. */}
       <a href="/coins" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Flippy Coins</a>
+      {/* 18 Sept 2026, Steven: "need to add a merch tab on the main landing
+          page with tshirts, caps and other items that people can buy." No
+          auth gate for browsing, same as Shop/Flippy Coins — buying still
+          requires sign-in (see app/merch/page.tsx). */}
+      <a href="/merch" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Merch</a>
       {/* 18 Sept 2026, Steven: added alongside the new marketing homepage —
           the dedicated explainer page the homepage's "How It Works"
           section links out to. No auth gate, same as Shop/Flippy Coins.

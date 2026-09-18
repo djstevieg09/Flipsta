@@ -122,23 +122,6 @@ export async function createBillingPortalSession(params: { stripeCustomerId: str
 }
 
 /**
- * 26 Aug 2026, Steven: "Need an accounts page so people can setup their
- * payment methods." Until now a stripe_customer_id only ever got created
- * as a side effect of subscribing to a paid tier (createTierCheckoutSession
- * above) — so createBillingPortalSession's "No billing account on file yet"
- * error (see POST /api/billing/portal) blocked a free-tier buyer from ever
- * saving a card at all, even though they can already buy shop items and
- * marketplace listings without subscribing to anything.
- *
- * This creates a bare Stripe Customer (no subscription attached) the first
- * time someone visits their account page, so EVERY signed-in user — not
- * just paid subscribers — has somewhere for the Billing Portal to manage a
- * saved payment method. Never touches card details directly: the portal is
- * Stripe's own hosted page, so no card number ever reaches Flipsta's
- * server or database (the same PCI-safe boundary createEscrowPaymentIntent
- * and Checkout already rely on).
- */
-/**
  * 18 Sept 2026, Steven: "get the flippy coins shop all working." A one-off
  * payment (not a subscription) for a Flippy Coin bundle — priceGBP/coins
  * come from COIN_BUNDLES (packages/shared/src/constants.ts) by bundle id,
@@ -187,6 +170,92 @@ export async function createCoinCheckoutSession(params: {
   });
 }
 
+/**
+ * 18 Sept 2026, Steven: "need to add a merch tab... with tshirts, caps and
+ * other items that people can buy." Another one-off "payment"-mode
+ * Checkout Session, same shape as createCoinCheckoutSession above, plus
+ * `shipping_address_collection` and a flat `shipping_options` rate since
+ * this is a physical item Stripe needs a delivery address for — Flipsta
+ * doesn't have its own address form to build/validate, so Stripe's own
+ * hosted one collects it. The address Stripe collects comes back on the
+ * completed session (`shipping_details`) for the webhook to save onto
+ * merch_orders (migration 0032). metadata.kind = "merch_purchase"
+ * distinguishes this from a coin purchase in the same webhook handler.
+ */
+export async function createMerchCheckoutSession(params: {
+  itemId: string;
+  itemName: string;
+  size?: string;
+  quantity: number;
+  priceGBP: number;
+  shippingGBP: number;
+  profileId: string;
+  email: string;
+  existingStripeCustomerId?: string | null;
+  successUrl: string;
+  cancelUrl: string;
+}) {
+  if (!isStripeConfigured()) {
+    throw new Error("Buying merch isn't set up yet — set STRIPE_SECRET_KEY on Render (see INFRASTRUCTURE_TODO.md).");
+  }
+
+  return stripe.checkout.sessions.create({
+    mode: "payment",
+    line_items: [
+      {
+        price_data: {
+          currency: "gbp",
+          product_data: { name: params.size ? `${params.itemName} (${params.size})` : params.itemName },
+          unit_amount: Math.round(params.priceGBP * 100),
+        },
+        quantity: params.quantity,
+      },
+    ],
+    shipping_address_collection: { allowed_countries: ["GB"] },
+    shipping_options: [
+      {
+        shipping_rate_data: {
+          type: "fixed_amount",
+          fixed_amount: { amount: Math.round(params.shippingGBP * 100), currency: "gbp" },
+          display_name: "UK Standard Shipping",
+        },
+      },
+    ],
+    customer: params.existingStripeCustomerId ?? undefined,
+    customer_email: params.existingStripeCustomerId ? undefined : params.email,
+    client_reference_id: params.profileId,
+    metadata: {
+      kind: "merch_purchase",
+      profile_id: params.profileId,
+      item_id: params.itemId,
+      item_name: params.itemName,
+      size: params.size ?? "",
+      quantity: String(params.quantity),
+      price_gbp: String(params.priceGBP),
+      shipping_gbp: String(params.shippingGBP),
+    },
+    success_url: params.successUrl,
+    cancel_url: params.cancelUrl,
+  });
+}
+
+/**
+ * 26 Aug 2026, Steven: "Need an accounts page so people can setup their
+ * payment methods." Until now a stripe_customer_id only ever got created
+ * as a side effect of subscribing to a paid tier (createTierCheckoutSession
+ * above) — so createBillingPortalSession's "No billing account on file yet"
+ * error (see POST /api/billing/portal) blocked a free-tier buyer from ever
+ * saving a card at all, even though they can already buy shop items and
+ * marketplace listings without subscribing to anything.
+ *
+ * This creates a bare Stripe Customer (no subscription attached) the first
+ * time someone visits their account page, so EVERY signed-in user — not
+ * just paid subscribers — has somewhere for the Billing Portal to manage a
+ * saved payment method. Never touches card details directly: the portal is
+ * Stripe's own hosted page, so no card number ever reaches Flipsta's
+ * server or database (the same PCI-safe boundary createEscrowPaymentIntent
+ * and Checkout already rely on).
+ */
 export async function getOrCreateStripeCustomer(params: {
   existingStripeCustomerId?: string | null;
   email: string;

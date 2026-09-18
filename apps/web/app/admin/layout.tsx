@@ -59,6 +59,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             fill my store with goods... this is seperate from our core
             buisness." */}
         <a href="/admin/partner-deals" className="px-3 py-2 rounded-lg hover:bg-surface2">Partner Deals</a>
+        {/* 18 Sept 2026, Steven: "i need to be able to add flippy coins to
+            peoples flip wallet... add a tab wallet admin." */}
+        <a href="/admin/wallet-admin" className="px-3 py-2 rounded-lg hover:bg-surface2">Wallet Admin</a>
+        {/* 18 Sept 2026, Steven: "need to add a merch tab... with tshirts,
+            caps and other items that people can buy." Where a paid order
+            actually gets fulfilled from. */}
+        <a href="/admin/merch-orders" className="px-3 py-2 rounded-lg hover:bg-surface2">Merch Orders</a>
       </nav>
       <SundayDealsReminder />
       {children}

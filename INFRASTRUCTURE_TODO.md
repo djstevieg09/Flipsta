@@ -313,6 +313,34 @@ step only you can do.
       `planning/coin-economy-proposal.md` — not built as part of this;
       the shop only sells coins and holds a balance for now.
 
+## 17. Merch shop (t-shirts, caps, and other items)
+
+- [ ] Run `supabase/migrations/0032_merch_orders.sql` — adds
+      `merch_orders`, the table `/merch` checkout and the Stripe webhook
+      write real paid orders into, and that `/admin/merch-orders` reads
+      from. Without this, a merch purchase will still take payment via
+      Stripe but the order will have nowhere to land.
+- [ ] Nothing new to add in Stripe or on Render — same as Section 16,
+      this reuses `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET` and the
+      existing `checkout.session.completed` webhook subscription from
+      Section 3.
+- [ ] **Edit the placeholder catalogue** in
+      `packages/shared/src/constants.ts` (`MERCH_ITEMS`) before going
+      live — the item names, prices, sizes and emoji icons in there are
+      placeholders, not real Flipsta products, since there was no
+      existing merch list or pricing anywhere in this codebase. There
+      are also no real product photos (no image-generation tool is
+      available to build them), so each item shows an icon rather than
+      a photo — swap in real photos if you want them.
+- [ ] Shipping is UK-only (`shipping_address_collection: { allowed_countries: ["GB"] }`
+      in `lib/stripe.ts`'s `createMerchCheckoutSession`) at a flat
+      `MERCH_SHIPPING_GBP` per order — widen the countries list or add
+      per-item shipping rates if you sell outside the UK.
+- [ ] Fulfil orders from `/admin/merch-orders` — mark an order "shipped"
+      once it's packed and posted. There's no shipping-label integration
+      or automatic customer notification on shipment yet; both are still
+      manual.
+
 ---
 
 **Suggested order:** 1 → 2 → 4 (deploy with the mock worker adapter and Stripe

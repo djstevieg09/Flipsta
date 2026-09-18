@@ -7,7 +7,7 @@ alter table listings add column auto_cross_post boolean not null default false;
 create table listing_channel_posts (
   id uuid primary key default gen_random_uuid(),
   listing_id uuid not null references listings(id) on delete cascade,
-  channel text not null, -- 'ebay' | 'amazon' | 'vinted' | 'facebook_marketplace' | 'depop'
+  channel text not null, -- 'ebay' | 'depop' | 'etsy' | 'whatnot' | 'stockx' (channel key set is app-enforced, not a DB constraint — see packages/shared/src/salesChannels.ts, updated 2026 from the original ebay/amazon/vinted/facebook_marketplace/depop set)
   status text not null default 'pending' check (status in ('pending', 'posted', 'failed')),
   external_url text,
   error text,

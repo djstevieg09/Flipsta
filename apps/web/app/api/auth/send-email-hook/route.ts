@@ -78,11 +78,32 @@ export async function POST(req: NextRequest) {
   const { user, email_data } = verified;
   const displayName = typeof user.user_metadata?.display_name === "string" ? (user.user_metadata!.display_name as string) : "there";
 
-  // The real Supabase verification link — clicking it hits Supabase's own
-  // Auth API (email_data.site_url is that API's base URL, confusingly not
-  // the app's site URL), which validates the token then redirects the
-  // browser on to email_data.redirect_to.
-  const confirmUrl = `${email_data.site_url}/auth/v1/verify?token=${encodeURIComponent(email_data.token_hash)}&type=${encodeURIComponent(email_data.email_action_type)}&redirect_to=${encodeURIComponent(email_data.redirect_to)}`;
+  // 19 Sept 2026 fix — this USED to link straight at
+  // `${email_data.site_url}/auth/v1/verify`, on the mistaken assumption
+  // that site_url was Supabase's own API base URL. It's actually the app's
+  // own configured Site URL (flipsta.co.uk), so that link pointed at our
+  // domain's non-existent /auth/v1/verify path and silently never verified
+  // anything ("no spi found" — see app/auth/confirm/route.ts for the full
+  // writeup). Now points at our own /auth/confirm route instead, which
+  // verifies token_hash server-side — more robust than Supabase's raw
+  // verify endpoint too, since it doesn't depend on the PKCE code_verifier
+  // from whichever browser/device started the flow.
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || email_data.site_url;
+  let nextPath: string;
+  if (email_data.email_action_type === "signup") {
+    // signUp() sets no emailRedirectTo, so email_data.redirect_to is just
+    // Supabase's default Site URL root — send freshly-confirmed signups
+    // somewhere more useful instead.
+    nextPath = "/opportunities";
+  } else {
+    try {
+      const redirectUrl = new URL(email_data.redirect_to);
+      nextPath = redirectUrl.pathname + redirectUrl.search;
+    } catch {
+      nextPath = "/";
+    }
+  }
+  const confirmUrl = `${siteUrl}/auth/confirm?token_hash=${encodeURIComponent(email_data.token_hash)}&type=${encodeURIComponent(email_data.email_action_type)}&next=${encodeURIComponent(nextPath)}`;
 
   try {
     switch (email_data.email_action_type) {

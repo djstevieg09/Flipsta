@@ -665,6 +665,25 @@ taking your time on this.
       is left in place as a fallback and won't normally fire once this is
       on, since the hook marks the same `welcome_email_sent_at` column
       itself, moments after signup.
+- [x] **19 Sept 2026 fix — "clicked verify email an d says no spi found":**
+      the very first live test (a real signup, alexgibbs315@outlook.com)
+      hit exactly this. Cause: the confirm link was built as
+      `${email_data.site_url}/auth/v1/verify?...`, wrongly assuming
+      `site_url` was Supabase's own API URL — it's actually the app's own
+      Site URL (flipsta.co.uk), so the link 404'd on our own domain and
+      never reached Supabase at all; `email_confirmed_at` stayed null.
+      Fixed by adding `apps/web/app/auth/confirm/route.ts`, which verifies
+      the token server-side (`verifyOtp`) instead of redirecting to
+      Supabase's raw verify endpoint — also more robust than the old link
+      would even have been once URL-corrected, since it doesn't need the
+      PKCE code_verifier from whichever browser/device started the signup
+      (broken by design for a link opened from an email app on another
+      device — see the route's own comment for the full writeup). No new
+      dashboard/Render steps needed for this fix; same hook, same secret.
+      Re-test after this deploys — see the "Test before relying on it" step
+      above. The `alexgibbs315@outlook.com` account is still sitting
+      unconfirmed from the earlier attempt; a fresh signup or a resend will
+      pick up the fix.
 
 ---
 

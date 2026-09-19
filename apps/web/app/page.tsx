@@ -142,7 +142,7 @@ export default function HomePage() {
       </section>
 
       {/* New here? — carried over from the previous homepage, re-themed to match. */}
-      <section className="card text-center space-y-3 py-8">
+      <section className="card text-center space-y-5 py-8">
         <h2 className="font-bold text-lg">New here?</h2>
         <p className="text-textDim text-sm max-w-md mx-auto">
           Sign up free to save items to your Wishlist, set your sizes so we only show you what fits, and unlock

@@ -79,7 +79,7 @@ export default function HowItWorksPage() {
         </div>
       </section>
 
-      <section className="card text-center space-y-3 py-8">
+      <section className="card text-center space-y-5 py-8">
         <h2 className="font-bold text-lg">Ready to find your first flip?</h2>
         <p className="text-textDim text-sm max-w-md mx-auto">
           Sign up free and start browsing real opportunities today.

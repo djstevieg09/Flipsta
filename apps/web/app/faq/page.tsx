@@ -47,7 +47,7 @@ export default function FaqPage() {
         ))}
       </section>
 
-      <section className="card text-center space-y-3 py-8">
+      <section className="card text-center space-y-5 py-8">
         <h2 className="font-bold text-lg">Still have a question?</h2>
         <p className="text-textDim text-sm max-w-md mx-auto">
           Our support chat is in the corner of every page, or take a look at the full breakdown of how it all works.

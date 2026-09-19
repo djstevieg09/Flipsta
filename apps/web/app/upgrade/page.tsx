@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MARKETPLACE_COMMISSION_RATE, BUYBACK_TIER_DISCOUNT, SubscriptionTier } from "@flipsta/shared";
-import { TIER_ENTITLEMENTS } from "@/lib/tierGuard";
+import { MARKETPLACE_COMMISSION_RATE, SubscriptionTier } from "@flipsta/shared";
 
 /**
  * Section 7 — self-serve subscription tier upgrades. Previously the only
@@ -17,15 +16,41 @@ import { TIER_ENTITLEMENTS } from "@/lib/tierGuard";
  * linked from /dashboard's "Upgrade plan" button, but didn't lay out perks
  * clearly and left Free out of the comparison entirely. Rebuilt as a real
  * 4-column comparison (including Free, so upgrading actually feels like an
- * upgrade) with a real perk checklist per tier — commission % and buyback
- * discount pulled straight from packages/shared/src/constants.ts and
- * lib/tierGuard.ts's TIER_ENTITLEMENTS rather than retyped, so this can
- * never silently drift from what the rest of the app actually enforces.
+ * upgrade) with a real perk checklist per tier — commission % pulled
+ * straight from packages/shared/src/constants.ts rather than retyped, so
+ * this can never silently drift from what the rest of the app enforces.
  *
- * Prices shown here are the business doc's Section 7 figures for display
- * only — the amount actually charged comes from whatever Price is attached
- * to each tier's Stripe Price ID (see INFRASTRUCTURE_TODO.md), since the
- * final number is a business decision made in Stripe, not hardcoded here.
+ * 19 Sept 2026, Steven: "free is now bronze... standard change to silver at
+ * £15 a month, for this you get 20 flippy coins. Pro change to gold and
+ * charge £45 a month, this gives them 77 coins... Elite change to Platinum
+ * and charge £90 and give them 200 coins." These are real, firm prices now
+ * (not the old "~£X" business-doc estimates) — Bronze/Silver/Gold/Platinum
+ * are DISPLAY names only, same trick already used for Platinum/Elite: the
+ * underlying SubscriptionTier values stay free/standard/pro/elite (DB
+ * constraints, TIER_ENTITLEMENTS, commission rates etc. all keyed on those),
+ * so this is a presentation-only rename, not a schema change.
+ *
+ * "does this coin math work out?" — checked: £15/20=75p, £45/77≈58.44p
+ * (rounds to the same 58p/coin already shown on /coins' subscriber-rate
+ * panel), £90/200=45p. Each tier's per-coin rate is lower than the one
+ * below it (75p → 58.4p → 45p), so the "pay more, get a better rate"
+ * ladder holds — Gold's 77 is ~0.6 coins short of the exact 77.59 that
+ * £45 at a flat 58p/coin would buy, a rounding gap worth under half a
+ * penny per coin, not a real inconsistency.
+ *
+ * Buyback insurance is gone from every tier's perks — Steven, same
+ * message: "There is no buyback insurance anymore so remove this" (it
+ * was already marked removed from the business doc back on 16 Sept, this
+ * is that catching up here). Demo/practice mode is dropped from Bronze
+ * too ("there is no demo mode or practice mode so remove that") — Bronze
+ * can still bid, just by spending Flippy Coins per opportunity rather
+ * than a subscription unlocking it outright (see TIER_ENTITLEMENTS.free).
+ *
+ * The monthly Flippy Coin ALLOWANCE these prices reference (20/77/200
+ * coins credited automatically each billing month) doesn't have a
+ * crediting mechanism built yet — flagged to Steven separately; the
+ * perks list below states the promise, same as every other perk here
+ * that's a genuine commitment rather than UI-only copy.
  */
 const TIER_RANK: Record<SubscriptionTier, number> = { free: 0, standard: 1, pro: 2, elite: 3 };
 
@@ -38,57 +63,58 @@ const TIERS: {
 }[] = [
   {
     id: "free",
-    name: "Free",
+    name: "Bronze",
     price: "£0",
     tagline: "Browse and learn how the market's moving.",
     perks: [
       "Public Flip Index & AI accuracy score",
       "Redacted teasers — see every opportunity's category, margin band and confidence score",
-      "Demo/practice mode with fake credits",
       "Buy/Hold/Avoid rating shown on teasers",
+      "Bid on opportunities by spending Flippy Coins — no monthly allowance included",
     ],
   },
   {
     id: "standard",
-    name: "Standard",
-    price: "~£15/mo",
+    name: "Silver",
+    price: "£15/mo",
     tagline: "Full access to bid, buy, and sell.",
     perks: [
+      "20 Flippy Coins every month",
       "Full bidding on the live opportunity feed",
       "One sector follow",
       `Basic portfolio dashboard — profit/loss, win rate, streak`,
       `Sell on the internal marketplace at ${Math.round(MARKETPLACE_COMMISSION_RATE.standard * 100)}% commission`,
-      "Buyback insurance available on any purchase",
     ],
   },
   {
     id: "pro",
-    name: "Pro",
-    price: "~£35–45/mo",
+    name: "Gold",
+    price: "£45/mo",
     tagline: "For active resellers who want the edge.",
     perks: [
-      "Everything in Standard, plus:",
-      `Early access — a ${Math.round(TIER_ENTITLEMENTS.pro.earlyAccessSeconds / 60)}-minute head start on new opportunities`,
+      "Everything in Silver, plus:",
+      "77 Flippy Coins every month",
+      "15-minute early access on new opportunities — Bronze & Silver see them greyed out with a countdown until then (with an upgrade option to unlock right away)",
       "Unlimited sector follows",
       "AI \"why\" explainability on every opportunity",
       "Sniper mode — automatic bidding within your own rules",
       "One-click multi-platform listing (eBay/Depop/Etsy/Whatnot/StockX)",
       `Sell on the internal marketplace at ${Math.round(MARKETPLACE_COMMISSION_RATE.pro * 100)}% commission`,
-      `${Math.round(BUYBACK_TIER_DISCOUNT.pro * 100)}% off buyback insurance`,
       "Eligible to fulfil Flipsta Sourced Deals orders and earn the reward",
     ],
   },
   {
     id: "elite",
-    name: "Elite",
-    price: "~£85–120/mo",
+    name: "Platinum",
+    price: "£90/mo",
     tagline: "Full syndicate power and priority everything.",
     perks: [
-      "Everything in Pro, plus:",
+      "Everything in Gold, plus:",
+      "200 Flippy Coins every month",
+      "Another 15-minute early access ahead of Gold — first to see every new opportunity",
       "Syndicate leadership — pool capital with other users on bigger opportunities",
       "Highest sniper budget limits, with priority processing",
       `Sell on the internal marketplace at ${Math.round(MARKETPLACE_COMMISSION_RATE.elite * 100)}% commission`,
-      `${Math.round(BUYBACK_TIER_DISCOUNT.elite * 100)}% off buyback insurance, plus priority claims handling`,
       "Priority human support & dedicated account analytics",
     ],
   },

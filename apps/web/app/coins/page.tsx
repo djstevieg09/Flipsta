@@ -26,9 +26,13 @@
 import { useEffect, useState } from "react";
 import { COIN_BUNDLES, CoinBundleId } from "@flipsta/shared";
 
+// 19 Sept 2026, Steven: tier renames (Standard→Silver, Pro→Gold, Elite→
+// Platinum — see app/upgrade/page.tsx for the full rationale). Kept in
+// sync here so the two pricing surfaces never show different names for
+// the same tier.
 const TIER_RATES = [
-  { name: "Standard", price: "£0.75", saving: "25% saving", highlight: false },
-  { name: "Pro", price: "£0.58", saving: "42% saving", highlight: false, accentBlue: true },
+  { name: "Silver", price: "£0.75", saving: "25% saving", highlight: false },
+  { name: "Gold", price: "£0.58", saving: "42% saving", highlight: false, accentBlue: true },
   { name: "Platinum", price: "£0.45", saving: "55% saving", highlight: true },
 ];
 

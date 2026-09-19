@@ -18,9 +18,14 @@ const MAX_HISTORY_MESSAGES = 20;
  * turn, so it needs to stay cheap and genuinely relevant, not exhaustive.
  */
 async function buildAccountContext(supabase: ReturnType<typeof createSupabaseServiceClient>, profileId: string): Promise<string> {
-  const [{ data: profile }, { data: orders }, { data: shopItems }, { data: wonOpps }, { data: wallet }, { data: tickets }] =
+  const [{ data: profile }, { data: orders }, { data: shopItems }, { data: wonOpps }, { data: slotPurchases }, { data: wallet }, { data: tickets }] =
     await Promise.all([
-      supabase.from("profiles").select("display_name, subscription_tier").eq("id", profileId).maybeSingle(),
+      // 19 Sept 2026 — flippy_coin_balance added. It's stored directly on
+      // profiles (migration 0031) rather than summed from coin_transactions,
+      // same reasoning the wallet balance below sums instead — coins are
+      // used constantly (every deal-slot purchase) so a stored running
+      // total is what the rest of the app already trusts as truth.
+      supabase.from("profiles").select("display_name, subscription_tier, flippy_coin_balance").eq("id", profileId).maybeSingle(),
       supabase
         .from("orders")
         .select("id, price_gbp, status, created_at")
@@ -33,11 +38,25 @@ async function buildAccountContext(supabase: ReturnType<typeof createSupabaseSer
         .eq("buyer_id", profileId)
         .order("paid_at", { ascending: false })
         .limit(5),
+      // Legacy single-winner auction path (pre-18-Sept opportunities only —
+      // won_by is never set for a fixed_price deal, see opportunity_slot_
+      // purchases below instead).
       supabase
         .from("opportunities")
         .select("product_name, instant_win_price_gbp, status, created_at")
         .eq("won_by", profileId)
         .order("created_at", { ascending: false })
+        .limit(5),
+      // 19 Sept 2026 — this was missing entirely. Fixed-price deals
+      // (migration 0034/0035, the mechanic almost every current opportunity
+      // actually uses) record a buyer in opportunity_slot_purchases, not
+      // opportunities.won_by — without this join the bot had zero awareness
+      // of a shopper's actual recent deal-slot purchases.
+      supabase
+        .from("opportunity_slot_purchases")
+        .select("price_coins, purchased_at, opportunities(product_name, status)")
+        .eq("profile_id", profileId)
+        .order("purchased_at", { ascending: false })
         .limit(5),
       supabase.from("wallet_transactions").select("amount_gbp").eq("profile_id", profileId),
       supabase
@@ -52,6 +71,7 @@ async function buildAccountContext(supabase: ReturnType<typeof createSupabaseSer
 
   const lines: string[] = [];
   lines.push(`Name: ${profile?.display_name ?? "unknown"}. Subscription tier: ${profile?.subscription_tier ?? "free"}.`);
+  lines.push(`Flippy Coin balance: ${profile?.flippy_coin_balance ?? 0} coins.`);
   lines.push(`Wallet balance: £${balanceGBP.toFixed(2)}.`);
 
   if (orders && orders.length > 0) {
@@ -64,9 +84,16 @@ async function buildAccountContext(supabase: ReturnType<typeof createSupabaseSer
       `Recent Flipsta Sourced Deals purchases: ${shopItems.map((s: any) => `${s.product_name} — £${Number(s.sold_price_gbp ?? 0).toFixed(2)} (${s.status})`).join("; ")}.`,
     );
   }
+  if (slotPurchases && slotPurchases.length > 0) {
+    lines.push(
+      `Recent fixed-price deal slots bought: ${slotPurchases
+        .map((s: any) => `${s.opportunities?.product_name ?? "an opportunity"} — ${s.price_coins} coins (${s.opportunities?.status ?? "unknown"}, ${new Date(s.purchased_at).toLocaleDateString("en-GB")})`)
+        .join("; ")}.`,
+    );
+  }
   if (wonOpps && wonOpps.length > 0) {
     lines.push(
-      `Recently won opportunities: ${wonOpps.map((o: any) => `${o.product_name ?? "item"} — £${Number(o.instant_win_price_gbp).toFixed(2)} (${o.status})`).join("; ")}.`,
+      `Recently won opportunities (legacy auction format): ${wonOpps.map((o: any) => `${o.product_name ?? "item"} — £${Number(o.instant_win_price_gbp).toFixed(2)} (${o.status})`).join("; ")}.`,
     );
   }
   if (tickets && tickets.length > 0) {

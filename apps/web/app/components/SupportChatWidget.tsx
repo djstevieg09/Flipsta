@@ -28,6 +28,13 @@ const STORAGE_KEY = "flipsta_chat_conversation_id";
  * glasses/mic (public/support-mascot.jpg, same reasoning as the favicon
  * crop: the full body + wordmark turns to mush at this size) and used for
  * both the launcher button and the panel header avatar.
+ *
+ * 19 Sept 2026, Steven: "needs to be flippy answering, he must be jolly and
+ * helpful." Rebranded the visible header/labels from the generic "Flipsta
+ * support" to "Flippy" by name (matches the SYSTEM_PROMPT in
+ * lib/supportChat.ts, which already answers in-character as Flippy) and
+ * fixed the empty-state placeholder, which still referenced "the auctions"
+ * — stale since the 18 Sept pivot to fixed-price deal slots.
  */
 export default function SupportChatWidget({ isAuthed }: { isAuthed: boolean }) {
   const pathname = usePathname();
@@ -97,7 +104,7 @@ export default function SupportChatWidget({ isAuthed }: { isAuthed: boolean }) {
             <span className="flex items-center gap-2 font-bold text-sm">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/support-mascot.jpg" alt="" className="w-7 h-7 rounded-full object-cover" />
-              Flipsta support
+              Flippy
             </span>
             <button onClick={() => setOpen(false)} className="text-textDim hover:text-text text-lg leading-none">
               ×
@@ -107,8 +114,8 @@ export default function SupportChatWidget({ isAuthed }: { isAuthed: boolean }) {
             {messages.length === 0 && (
               <p className="text-xs text-textDim">
                 {isAuthed
-                  ? "Ask me anything — how the auctions work, an order, your wallet, whatever you need."
-                  : "Ask me anything about how Flipsta works. Sign in first if you need help with your own orders or wallet."}
+                  ? "Ask me anything — a deal slot, your Flippy Coin balance, an order, your wallet, whatever you need."
+                  : "Ask me anything about how Flipsta works. Sign in first if you need help with your own orders, coins or wallet."}
               </p>
             )}
             {messages.map((m, i) => (
@@ -144,13 +151,13 @@ export default function SupportChatWidget({ isAuthed }: { isAuthed: boolean }) {
       <button
         onClick={() => setOpen((v) => !v)}
         className="rounded-full w-14 h-14 shadow-2xl overflow-hidden border-2 border-gold flex items-center justify-center bg-surface2 text-xl"
-        aria-label="Support chat"
+        aria-label="Chat with Flippy"
       >
         {open ? (
           "×"
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src="/support-mascot.jpg" alt="Flipsta support" className="w-full h-full object-cover" />
+          <img src="/support-mascot.jpg" alt="Flippy" className="w-full h-full object-cover" />
         )}
       </button>
     </div>

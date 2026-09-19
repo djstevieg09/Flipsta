@@ -171,7 +171,13 @@ export default function UpgradePage() {
   return (
     <div className="max-w-6xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Upgrade your plan</h1>
+        {/* 19 Sept 2026, Steven: "we also need the pricing on the first
+            landing page, its own tab so people can see what it costs" — now
+            linked from the main nav as "Pricing" (SiteNav.tsx), reachable
+            signed-out, so the heading needs to read as a plain pricing page
+            first and an upgrade page second (it's still exactly that for a
+            signed-in user — same content, same buttons). */}
+        <h1 className="text-2xl font-bold">Plans &amp; Pricing</h1>
         <p className="text-textDim text-sm">Payment and subscription management are handled securely by Stripe.</p>
       </div>
 

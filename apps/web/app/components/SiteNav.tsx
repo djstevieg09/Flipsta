@@ -57,6 +57,15 @@ export default function SiteNav({
           pages/routes still exist and work, they're just no longer linked
           from the main nav; reachable again here if that changes. */}
       <a href="/how-it-works" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">How It Works</a>
+      {/* 19 Sept 2026, Steven: "we also need the pricing on the first
+          landing page, its own tab so people can see what it costs." Points
+          at the existing tier-comparison page (app/upgrade/page.tsx) rather
+          than a new duplicate one — it already has the real per-tier perks
+          and prices pulled from packages/shared/src/constants.ts, and
+          already works fine signed-out (no "current plan" badge shows, the
+          buttons just need a sign-in first). No auth gate, same as
+          Shop/Flippy Coins/Merch/How It Works. */}
+      <a href="/upgrade" className="px-3 py-2.5 rounded-lg hover:bg-surface2 whitespace-nowrap">Pricing</a>
       {/* 18 Sept 2026, Steven: "need a FAQ section... add this to the tabs" —
           full 10-question FAQ lives at its own /faq page (app/faq/page.tsx).
           18 Sept 2026, same day, later: "instead of an account tab,

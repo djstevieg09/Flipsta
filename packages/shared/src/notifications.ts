@@ -174,6 +174,152 @@ export function renderWelcomeEmailHtml(displayName: string): string {
 }
 
 /**
+ * 19 Sept 2026, Steven: "the confirm email address on signing up is being
+ * sent from supabase and very confusing... can you make it so the welcome
+ * email we have has the link to confirm email address on it." Previously
+ * two separate emails landed in a new signup's inbox within moments of each
+ * other: Supabase Auth's own generic "Confirm your signup" (unbranded, from
+ * a supabase.co-looking sender) and this file's branded welcome email a few
+ * minutes later with no confirm link at all. Fixed properly rather than
+ * patched: apps/web/app/api/auth/send-email-hook/route.ts is now wired up
+ * as Supabase's "Send Email" Auth Hook (see INFRASTRUCTURE_TODO.md #22 for
+ * the one-time dashboard step Steven still needs to do) — once that's on,
+ * Supabase stops sending its own signup email entirely and calls our route
+ * instead, which sends *this* — the same welcome design, with a genuine
+ * "Confirm my email" button wired to the real Supabase verification link
+ * (built from the token_hash/redirect_to the hook receives). One email,
+ * fully on-brand, does both jobs.
+ */
+function renderWelcomeConfirmEmailHtml(displayName: string, confirmUrl: string): string {
+  const firstName = (displayName || "there").trim().split(/\s+/)[0] || "there";
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Confirm your email — Flipsta</title>
+<style>
+body{margin:0;background:#0b0b0b;font-family:Arial,sans-serif;color:#fff;}
+.container{max-width:700px;margin:auto;background:#111;}
+.hero{background:linear-gradient(135deg,#111,#1a1a1a);padding:40px;text-align:center;}
+.logo{font-size:48px;font-weight:bold;color:#f5b400;}
+.tag{font-size:22px;color:#fff;margin-top:10px;}
+.mascot{width:280px;border-radius:20px;margin:20px auto;display:block;}
+.content{padding:35px;background:#fff;color:#222;}
+.gold{color:#f5b400;font-weight:bold;}
+.card{background:#f7f7f7;border-left:5px solid #f5b400;padding:15px;border-radius:8px;margin:15px 0;}
+.confirm-card{background:#fff8e6;border:2px solid #f5b400;padding:20px;border-radius:10px;margin:15px 0;text-align:center;}
+table{width:100%;border-collapse:collapse;margin-top:15px;}
+th{background:#111;color:#f5b400;padding:12px;}
+td{padding:12px;border:1px solid #ddd;text-align:center;}
+.btn{display:inline-block;background:#f5b400;color:#111;padding:14px 28px;
+font-weight:bold;text-decoration:none;border-radius:10px;margin-top:20px;}
+.footer{background:#111;padding:25px;text-align:center;color:#aaa;}
+.note{font-size:11px;color:#888;margin-top:8px;}
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="hero">
+<div class="logo">FLIPSTA</div>
+<div class="tag">Find It. Flip It. Profit.</div>
+<img class="mascot" src="https://flipsta.co.uk/email/flippy-welcome-mascot.jpg" width="280" alt="Flippy the Flipsta mascot">
+</div>
+
+<div class="content">
+<h2>Welcome to Flipsta, ${firstName} 👋</h2>
+
+<p>You've joined a marketplace built to help you discover opportunities, buy smarter and maximise profit.</p>
+
+<div class="confirm-card">
+<strong>One last step — confirm your email</strong><br>
+Click below to activate your account. This is the only confirmation email you'll get from us.
+<center><a class="btn" href="${confirmUrl}">CONFIRM MY EMAIL</a></center>
+</div>
+
+<div class="card">
+<strong>Meet Flippy 🪙</strong><br>
+Your official Flipsta guide. Look out for tips, promotions, competitions and exclusive member opportunities.
+</div>
+
+<h3>🪙 Flippy Coin Pricing</h3>
+<table>
+<tr><th>Membership</th><th>Price Per Coin</th></tr>
+<tr><td>Standard</td><td>£0.75</td></tr>
+<tr><td>Pro</td><td>£0.58</td></tr>
+<tr><td>Platinum</td><td>£0.45</td></tr>
+<tr><td>Non-Member</td><td>£1.00</td></tr>
+</table>
+<div class="note">Subscriber pricing is coming soon — for now every purchase is charged the Non-Member rate shown above.</div>
+
+<h3>🚀 Getting Started</h3>
+<ol>
+<li>Confirm your email (above)</li>
+<li>Complete your profile</li>
+<li>Explore opportunities</li>
+<li>Start flipping</li>
+</ol>
+
+<div class="card">
+<strong>Message from Flippy:</strong><br>
+"The best opportunities don't stay around forever. Get in early, move fast and start flipping."
+</div>
+
+</div>
+
+<div class="footer">
+<strong>FLIPSTA</strong><br>
+Find It. Flip It. Profit.
+<div class="note">If you didn't sign up for Flipsta, you can safely ignore this email.</div>
+</div>
+
+</div>
+</body>
+</html>`;
+}
+
+/**
+ * Shared minimal template for the other Supabase auth actions the Send
+ * Email Hook can be asked to cover (password reset, magic link, email
+ * change, invite) — same hero/brand chrome as the welcome email, but no
+ * need for four near-identical bespoke templates when the only real
+ * difference is a heading, a sentence, and a button.
+ */
+function renderSimpleAuthActionEmailHtml(heading: string, message: string, ctaLabel: string, ctaUrl: string): string {
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>${heading} — Flipsta</title>
+<style>
+body{margin:0;background:#0b0b0b;font-family:Arial,sans-serif;color:#fff;}
+.container{max-width:600px;margin:auto;background:#111;}
+.hero{background:linear-gradient(135deg,#111,#1a1a1a);padding:32px;text-align:center;}
+.logo{font-size:38px;font-weight:bold;color:#f5b400;}
+.content{padding:32px;background:#fff;color:#222;text-align:center;}
+.btn{display:inline-block;background:#f5b400;color:#111;padding:14px 28px;
+font-weight:bold;text-decoration:none;border-radius:10px;margin-top:20px;}
+.footer{background:#111;padding:20px;text-align:center;color:#aaa;font-size:12px;}
+</style>
+</head>
+<body>
+<div class="container">
+<div class="hero"><div class="logo">FLIPSTA</div></div>
+<div class="content">
+<h2>${heading}</h2>
+<p>${message}</p>
+<a class="btn" href="${ctaUrl}">${ctaLabel}</a>
+</div>
+<div class="footer">
+FLIPSTA — Find It. Flip It. Profit.<br>
+If you didn't request this, you can safely ignore this email.
+</div>
+</div>
+</body>
+</html>`;
+}
+
+/**
  * 19 Sept 2026, Steven: "using the branding like the welcome email we need
  * to have an email when people upgrade to the next tier explaining the
  * benefits and coin price etc, i will leave that up to you." Same
@@ -360,6 +506,71 @@ export const NotificationEvents = {
    * api/webhooks/stripe/route.ts once Stripe confirms a tier-upgrade
    * Checkout actually completed — never before payment clears.
    */
+  /**
+   * 19 Sept 2026 — sent by apps/web/app/api/auth/send-email-hook/route.ts
+   * in place of Supabase's own default "Confirm your signup" email, once
+   * that Send Email Hook is switched on in the Supabase dashboard (see
+   * INFRASTRUCTURE_TODO.md #22). Replaces (not supplements) the old
+   * separate `welcome` event above for a real signup — the hook also marks
+   * the profile's welcome_email_sent_at so sendWelcomeEmails.ts's periodic
+   * job doesn't send that one too. That worker job is left in place as a
+   * fallback for the rare case a profile somehow never goes through the
+   * hook (e.g. before Steven finishes the dashboard step).
+   */
+  confirmSignup: (to: string, displayName: string, confirmUrl: string) =>
+    sendNotificationEmail({
+      to,
+      subject: "Welcome to Flipsta — confirm your email 🎉",
+      body: [
+        `Hey ${(displayName || "there").trim().split(/\s+/)[0] || "there"},`,
+        "",
+        "You're in — welcome to Flipsta. One last step: confirm your email to activate your account.",
+        "",
+        confirmUrl,
+        "",
+        "Sell first, source after: no inventory, no risk. See you on flipsta.co.uk.",
+        "",
+        "If you didn't sign up for Flipsta, you can ignore this email.",
+      ].join("\n"),
+      html: renderWelcomeConfirmEmailHtml(displayName, confirmUrl),
+    }),
+  /** Sent by the same Send Email Hook for Supabase's "recovery" action (the /forgot-password flow). */
+  passwordReset: (to: string, confirmUrl: string) =>
+    sendNotificationEmail({
+      to,
+      subject: "Reset your Flipsta password",
+      body: `Click the link below to choose a new password. This link expires shortly for your security.\n\n${confirmUrl}\n\nIf you didn't request this, you can ignore this email.`,
+      html: renderSimpleAuthActionEmailHtml(
+        "Reset your password",
+        "Click below to choose a new password for your Flipsta account. This link expires shortly for your security.",
+        "RESET PASSWORD",
+        confirmUrl,
+      ),
+    }),
+  /** Sent by the Send Email Hook for Supabase's "magiclink" action (not currently used by any Flipsta flow, but the hook would otherwise send nothing at all if this went unhandled). */
+  magicLink: (to: string, confirmUrl: string) =>
+    sendNotificationEmail({
+      to,
+      subject: "Your Flipsta sign-in link",
+      body: `Click the link below to sign in to Flipsta.\n\n${confirmUrl}\n\nIf you didn't request this, you can ignore this email.`,
+      html: renderSimpleAuthActionEmailHtml("Sign in to Flipsta", "Click below to sign in — this link expires shortly for your security.", "SIGN IN", confirmUrl),
+    }),
+  /** Sent by the Send Email Hook when a signed-in user changes their account email address. */
+  confirmEmailChange: (to: string, confirmUrl: string) =>
+    sendNotificationEmail({
+      to,
+      subject: "Confirm your new Flipsta email address",
+      body: `Click the link below to confirm this is your new email address for Flipsta.\n\n${confirmUrl}\n\nIf you didn't request this, you can ignore this email.`,
+      html: renderSimpleAuthActionEmailHtml("Confirm your new email", "Click below to confirm this is your new email address for your Flipsta account.", "CONFIRM EMAIL", confirmUrl),
+    }),
+  /** Sent by the Send Email Hook for a staff-issued invite (not currently used by any Flipsta flow, same "handle it anyway" reasoning as magicLink above). */
+  invite: (to: string, confirmUrl: string) =>
+    sendNotificationEmail({
+      to,
+      subject: "You've been invited to Flipsta",
+      body: `You've been invited to join Flipsta. Click below to accept.\n\n${confirmUrl}\n\nIf you weren't expecting this, you can ignore this email.`,
+      html: renderSimpleAuthActionEmailHtml("You're invited to Flipsta", "Click below to accept your invite and set up your account.", "ACCEPT INVITE", confirmUrl),
+    }),
   tierUpgrade: (to: string, displayName: string, tier: "standard" | "pro" | "elite") => {
     const t = TIER_EMAIL_CONTENT[tier];
     return sendNotificationEmail({

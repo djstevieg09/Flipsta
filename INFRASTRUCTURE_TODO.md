@@ -622,6 +622,50 @@ account, a separate verified domain there).
       subject+body broadcast (templates, segments, A/B, etc. — all things
       Resend's own Broadcasts tool would give for free).
 
+## 22. Custom confirmation/auth emails — Supabase Send Email Hook (19 Sept 2026)
+
+Steven: "the confirm email address on signing up is being sent from
+supabase and very confusing... make it so the welcome email we have has
+the link to confirm email address on it." Code is shipped and inert until
+you do the steps below — until then, Supabase keeps sending its own
+default emails exactly as it does today, so there's no rush and no risk in
+taking your time on this.
+
+- [ ] **Supabase dashboard → Authentication → Hooks.** Add a new hook, type
+      **Send Email**, HTTPS endpoint. Point it at
+      `https://flipsta-web.onrender.com/api/auth/send-email-hook` (or
+      `https://flipsta.co.uk/api/auth/send-email-hook` once the custom
+      domain is confirmed working).
+- [ ] Supabase will generate a **signing secret** starting `v1,whsec_...`
+      when you create the hook — copy it in full, including the `v1,whsec_`
+      prefix.
+- [ ] **Render.** Add `SUPABASE_AUTH_HOOK_SECRET` on `flipsta-web` (only
+      that service needs it — this route lives in the web app, not the
+      worker) with the exact value Supabase gave you. Save; Render
+      redeploys automatically.
+- [ ] **Test before relying on it:** sign up a brand-new test account and
+      confirm exactly one email arrives (the Flipsta-branded "Welcome to
+      Flipsta — confirm your email" one, with a working CONFIRM MY EMAIL
+      button) — not the old plain Supabase one, and not two emails. Also
+      worth testing **/forgot-password** once, since this same hook now
+      also covers password-reset emails (`NotificationEvents.passwordReset`
+      in `packages/shared/src/notifications.ts`) — those used to come from
+      Supabase directly too and would otherwise silently break if this hook
+      were misconfigured.
+- [ ] If anything looks wrong, you can simply **delete the hook** in the
+      Supabase dashboard at any time — Supabase immediately falls back to
+      sending its own default emails again, no code changes needed on this
+      end.
+- [x] Code side is done: `apps/web/app/api/auth/send-email-hook/route.ts`
+      verifies Supabase's signed payload (`standardwebhooks` — the same
+      library Supabase's own docs use), then sends the matching branded
+      email via the existing Resend integration for whichever auth action
+      it's for (signup confirmation, password reset, magic link, email
+      change, invite). The old separate `sendWelcomeEmails.ts` worker job
+      is left in place as a fallback and won't normally fire once this is
+      on, since the hook marks the same `welcome_email_sent_at` column
+      itself, moments after signup.
+
 ---
 
 **Suggested order:** 1 → 2 → 4 (deploy with the mock worker adapter and Stripe

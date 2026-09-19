@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/currentProfile";
-import { requireTier, TierGuardError } from "@/lib/tierGuard";
+import { requireTier, TierGuardError, isEarlyAccessLocked, earlyAccessRevealsAt } from "@/lib/tierGuard";
 import { autoListWonOpportunity } from "@/lib/autoListOpportunity";
 import { awardLoyaltyCredit } from "@/lib/loyalty";
 
@@ -34,6 +34,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const supabase = await createSupabaseServerClient();
+
+  // 19 Sept 2026 — cascading early access (see tierGuard.ts): a real,
+  // server-side check the client's greyed-out card is just a preview of —
+  // never trust the button being disabled client-side alone.
+  const { data: lockCheck } = await supabase.from("opportunities").select("created_at").eq("id", id).maybeSingle();
+  if (lockCheck && isEarlyAccessLocked(auth.profile.subscriptionTier, lockCheck.created_at)) {
+    const revealsAt = earlyAccessRevealsAt(auth.profile.subscriptionTier, lockCheck.created_at);
+    return NextResponse.json(
+      { error: `Still in early access for your tier — unlocks ${revealsAt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}, or upgrade to unlock now.`, revealsAt: revealsAt.toISOString() },
+      { status: 403 },
+    );
+  }
 
   const { data: result, error: rpcError } = await supabase.rpc("buy_deal_slot", {
     p_opportunity_id: id,

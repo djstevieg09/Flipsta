@@ -52,9 +52,35 @@ export async function createOrderForListing(
 
   const shippingGBP = params.shippingOverrideGBP ?? (params.courier === "dpd" ? 4.99 : 2.99);
 
+  /**
+   * 19 Sept 2026 — real bug found while wiring up commission collection
+   * (Steven: "also setup the commision as we will get this for
+   * marketplace purchases etc"): this used to pass the literal string
+   * "acct_not_yet_onboarded" as the Stripe Connect destination whenever a
+   * seller had no real stripe_connect_account_id — which is every seller
+   * today, since no route anywhere in this app actually creates one (grep
+   * confirms it: the column is written nowhere, only ever read here).
+   * Stripe would reject that as an unknown connected account, so this
+   * PaymentIntent call has likely been throwing on every real marketplace
+   * purchase since Stripe was actually configured, with no try/catch
+   * above it in api/orders/route.ts to turn it into a clean error.
+   *
+   * Fixed the same way shop_items purchases (which also have no connected
+   * seller — Flipsta itself is the seller there) already handle it:
+   * connectedAccountId is only passed when it's a REAL account, and the
+   * escrowed payment simply stays on Flipsta's own Stripe balance
+   * otherwise — same as any successful capture already does before a
+   * transfer. Flagged to Steven separately: seller payouts for real
+   * marketplace sales still need actual Connect onboarding (an "add your
+   * bank details" flow that creates the account and gets it verified) —
+   * this fix stops the crash and makes commission collection correct for
+   * once that exists, it doesn't build the onboarding flow itself.
+   */
+  const hasRealConnectedAccount = Boolean(sellerProfile?.stripe_connect_account_id);
   const paymentIntent = await createEscrowPaymentIntent({
     amountGBP: priceGBP + shippingGBP,
-    connectedAccountId: sellerProfile?.stripe_connect_account_id ?? "acct_not_yet_onboarded",
+    connectedAccountId: hasRealConnectedAccount ? sellerProfile.stripe_connect_account_id : undefined,
+    applicationFeeGBP: hasRealConnectedAccount ? commissionGBP : undefined,
     metadata: { listingId: params.listingId, buyerId: params.buyerId },
   });
 

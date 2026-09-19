@@ -28,6 +28,11 @@ type Opportunity = {
   fixed_price_coins?: number | null;
   slots_taken?: number;
   already_purchased_slot?: boolean;
+  // 19 Sept 2026 — cascading early access (see lib/tierGuard.ts): whether
+  // the CURRENT viewer's tier is still waiting this one out, and when it
+  // unlocks for them. Never used to hide a card — see LockOverlay below.
+  early_access_locked?: boolean;
+  early_access_reveals_at?: string | null;
 };
 
 /**
@@ -260,7 +265,7 @@ function OpportunityCard({
   // legacy 'auction' rows (or anything from before pricing_mode existed)
   // keep the bid/instant-win UI exactly as it was.
   if (o.pricing_mode === "fixed_price") {
-    return <FixedPriceDealCard o={o} urgencyColorClass={urgencyColorClass} onBuySlot={onBuySlot} />;
+    return <FixedPriceDealCard o={o} now={now} urgencyColorClass={urgencyColorClass} onBuySlot={onBuySlot} />;
   }
   const remainingSeconds = o.action_clock_expires_at
     ? Math.max(0, Math.round((new Date(o.action_clock_expires_at).getTime() - now) / 1000))
@@ -289,8 +294,12 @@ function OpportunityCard({
   // the middle, and the action column pinned to the right — the standard
   // "list view" shape for a feed like this, one row per opportunity, only
   // stacking back to vertical on small screens where a row can't fit.
+  const locked = Boolean(o.early_access_locked && o.early_access_reveals_at);
+
   return (
-    <div className="card flex flex-col md:flex-row md:items-center gap-4">
+    <div className="relative">
+      {locked && <LockOverlay revealsAt={o.early_access_reveals_at!} now={now} />}
+      <div className={`card flex flex-col md:flex-row md:items-center gap-4 ${locked ? "opacity-50 grayscale pointer-events-none" : ""}`}>
       <div className="md:w-40 shrink-0 space-y-1">
         <div className="flex items-center justify-between md:justify-start md:gap-2">
           <span className={`text-xs font-bold uppercase flex items-center gap-1 ${urgencyColorClass}`}>
@@ -382,6 +391,7 @@ function OpportunityCard({
           </button>
         </div>
       </div>
+      </div>
     </div>
   );
 }
@@ -398,10 +408,12 @@ function OpportunityCard({
  */
 function FixedPriceDealCard({
   o,
+  now,
   urgencyColorClass,
   onBuySlot,
 }: {
   o: Opportunity;
+  now: number;
   urgencyColorClass: string;
   onBuySlot: () => void;
 }) {
@@ -409,9 +421,12 @@ function FixedPriceDealCard({
   const slotsTotal = o.estimated_stock_units;
   const slotsLeft = Math.max(0, slotsTotal - slotsTaken);
   const soldOut = o.status === "sold_out" || slotsLeft <= 0;
+  const locked = Boolean(o.early_access_locked && o.early_access_reveals_at);
 
   return (
-    <div className="card flex flex-col md:flex-row md:items-center gap-4">
+    <div className="relative">
+      {locked && <LockOverlay revealsAt={o.early_access_reveals_at!} now={now} />}
+      <div className={`card flex flex-col md:flex-row md:items-center gap-4 ${locked ? "opacity-50 grayscale pointer-events-none" : ""}`}>
       <div className="md:w-40 shrink-0 space-y-1">
         <div className="flex items-center justify-between md:justify-start md:gap-2">
           <span className={`text-xs font-bold uppercase flex items-center gap-1 ${urgencyColorClass}`}>
@@ -465,8 +480,40 @@ function FixedPriceDealCard({
           </button>
         )}
       </div>
+      </div>
     </div>
   );
+}
+
+/**
+ * 19 Sept 2026, Steven: "lower tiers should see the full package but grey
+ * it out explaining an upgrade it required to unlock this service." Sits
+ * on top of the card (which stays in the DOM, greyed + non-interactive
+ * underneath) rather than replacing it, so the layout doesn't jump between
+ * a locked and unlocked view of the same opportunity as its countdown
+ * clears.
+ */
+function LockOverlay({ revealsAt, now }: { revealsAt: string; now: number }) {
+  const remainingSeconds = Math.max(0, Math.round((new Date(revealsAt).getTime() - now) / 1000));
+  return (
+    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-xl bg-bg/85 backdrop-blur-sm text-center px-4 py-3">
+      <span className="text-2xl" aria-hidden>🔒</span>
+      <div className="text-sm font-bold text-gold">Unlocks in {formatLockCountdown(remainingSeconds)}</div>
+      <div className="text-xs text-textDim max-w-xs">Higher tiers get first access to new opportunities.</div>
+      <a href="/upgrade" className="btn btn-primary text-xs px-4 py-1.5 mt-1">Upgrade to unlock now</a>
+    </div>
+  );
+}
+
+function formatLockCountdown(totalSeconds: number): string {
+  if (totalSeconds <= 0) return "moments";
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  if (totalMinutes >= 60) {
+    const h = Math.floor(totalMinutes / 60);
+    return `${h}h ${totalMinutes % 60}m`;
+  }
+  if (totalMinutes > 0) return `${totalMinutes}m ${totalSeconds % 60}s`;
+  return `${totalSeconds}s`;
 }
 
 /** Steven's ask, 26 Aug 2026: "also show total est returns" — the sum of

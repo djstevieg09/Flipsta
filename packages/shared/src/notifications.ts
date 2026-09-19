@@ -173,6 +173,128 @@ export function renderWelcomeEmailHtml(displayName: string): string {
   return WELCOME_EMAIL_HTML_TEMPLATE.split("{{FirstName}}").join(firstName);
 }
 
+/**
+ * 19 Sept 2026, Steven: "using the branding like the welcome email we need
+ * to have an email when people upgrade to the next tier explaining the
+ * benefits and coin price etc, i will leave that up to you." Same
+ * hero/mascot/gold-card look as WELCOME_EMAIL_HTML_TEMPLATE above — sent
+ * once a self-serve upgrade's Stripe Checkout actually completes (see
+ * api/webhooks/stripe/route.ts's checkout.session.completed handler for
+ * metadata.kind === "tier_upgrade"), never speculatively before payment
+ * clears.
+ *
+ * Content is a hand-kept duplicate of app/upgrade/page.tsx's TIERS array
+ * (display name, price, monthly coin allowance, headline perks) — that
+ * page is the source of truth since it's what the customer actually saw
+ * and bought, same "small human-verified duplicate, kept in sync by hand"
+ * pattern the welcome email's own coin-pricing table above already uses.
+ * Update both together if a tier's price or perks change.
+ */
+const TIER_EMAIL_CONTENT: Record<
+  "standard" | "pro" | "elite",
+  { displayName: string; priceLabel: string; coins: number; headlinePerks: string[] }
+> = {
+  standard: {
+    displayName: "Silver",
+    priceLabel: "£15/month",
+    coins: 20,
+    headlinePerks: [
+      "Full bidding on the live opportunity feed",
+      "One sector follow",
+      "Basic portfolio dashboard — profit/loss, win rate, streak",
+    ],
+  },
+  pro: {
+    displayName: "Gold",
+    priceLabel: "£45/month",
+    coins: 77,
+    headlinePerks: [
+      "15-minute early access on new opportunities, ahead of Bronze & Silver",
+      "Unlimited sector follows",
+      "AI “why” explainability on every opportunity",
+      "Sniper mode — automatic bidding within your own rules",
+      "One-click multi-platform listing (eBay/Depop/Etsy/Whatnot/StockX)",
+    ],
+  },
+  elite: {
+    displayName: "Platinum",
+    priceLabel: "£90/month",
+    coins: 200,
+    headlinePerks: [
+      "Another 15-minute early access ahead of Gold — first to see every new opportunity",
+      "Syndicate leadership — pool capital with other users on bigger opportunities",
+      "Highest sniper budget limits, with priority processing",
+      "Priority human support & dedicated account analytics",
+    ],
+  },
+};
+
+function renderTierUpgradeEmailHtml(displayName: string, tier: "standard" | "pro" | "elite"): string {
+  const firstName = (displayName || "there").trim().split(/\s+/)[0] || "there";
+  const t = TIER_EMAIL_CONTENT[tier];
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>You're on ${t.displayName} now</title>
+<style>
+body{margin:0;background:#0b0b0b;font-family:Arial,sans-serif;color:#fff;}
+.container{max-width:700px;margin:auto;background:#111;}
+.hero{background:linear-gradient(135deg,#111,#1a1a1a);padding:40px;text-align:center;}
+.logo{font-size:48px;font-weight:bold;color:#f5b400;}
+.tag{font-size:22px;color:#fff;margin-top:10px;}
+.mascot{width:280px;border-radius:20px;margin:20px auto;display:block;}
+.content{padding:35px;background:#fff;color:#222;}
+.gold{color:#f5b400;font-weight:bold;}
+.card{background:#f7f7f7;border-left:5px solid #f5b400;padding:15px;border-radius:8px;margin:15px 0;}
+.btn{display:inline-block;background:#f5b400;color:#111;padding:14px 28px;
+font-weight:bold;text-decoration:none;border-radius:10px;margin-top:20px;}
+.footer{background:#111;padding:25px;text-align:center;color:#aaa;}
+li{margin:6px 0;}
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="hero">
+<div class="logo">FLIPSTA</div>
+<div class="tag">Find It. Flip It. Profit.</div>
+<img class="mascot" src="https://flipsta.co.uk/email/flippy-welcome-mascot.jpg" width="280" alt="Flippy the Flipsta mascot">
+</div>
+
+<div class="content">
+<h2>You're on <span class="gold">${t.displayName}</span> now, ${firstName} 🎉</h2>
+
+<p>Your upgrade just went through — thanks for backing Flipsta. Here's exactly what ${t.displayName} gets you.</p>
+
+<div class="card">
+<strong>🪙 ${t.coins} Flippy Coins every month</strong><br>
+Credited automatically to your Wallet each billing cycle, on top of anything you top up yourself — spend them on live opportunities the moment they land.
+</div>
+
+<h3>What's included on ${t.displayName}</h3>
+<ul>
+${t.headlinePerks.map((p) => `<li>${p}</li>`).join("\n")}
+</ul>
+
+<p>Your plan renews at <strong>${t.priceLabel}</strong>. Manage or change your plan any time from the Plans &amp; Pricing page.</p>
+
+<center>
+<a class="btn" href="https://flipsta.co.uk/opportunities">SEE WHAT'S LIVE</a>
+</center>
+
+</div>
+
+<div class="footer">
+<strong>FLIPSTA</strong><br>
+Find It. Flip It. Profit.
+</div>
+
+</div>
+</body>
+</html>`;
+}
+
 /** Convenience wrappers for the event types Section 12.5 calls out by name. */
 export const NotificationEvents = {
   ticketUpdated: (to: string, ticketId: string, status: string) =>
@@ -232,6 +354,34 @@ export const NotificationEvents = {
       ].join("\n"),
       html: renderWelcomeEmailHtml(displayName),
     }),
+  /**
+   * 19 Sept 2026, Steven: "we need to have an email when people upgrade to
+   * the next tier explaining the benefits and coin price." Sent from
+   * api/webhooks/stripe/route.ts once Stripe confirms a tier-upgrade
+   * Checkout actually completed — never before payment clears.
+   */
+  tierUpgrade: (to: string, displayName: string, tier: "standard" | "pro" | "elite") => {
+    const t = TIER_EMAIL_CONTENT[tier];
+    return sendNotificationEmail({
+      to,
+      subject: `You're on ${t.displayName} now 🎉`,
+      body: [
+        `Hey ${(displayName || "there").trim().split(/\s+/)[0] || "there"},`,
+        "",
+        `Your upgrade to ${t.displayName} just went through — thanks for backing Flipsta.`,
+        "",
+        `${t.coins} Flippy Coins land in your Wallet every billing cycle from now on, on top of anything you top up yourself.`,
+        "",
+        `Also included on ${t.displayName}:`,
+        ...t.headlinePerks.map((p) => `- ${p}`),
+        "",
+        `Renews at ${t.priceLabel}. Manage or change your plan any time from the Plans & Pricing page.`,
+        "",
+        "See what's live: flipsta.co.uk/opportunities",
+      ].join("\n"),
+      html: renderTierUpgradeEmailHtml(displayName, tier),
+    });
+  },
 };
 
 /**

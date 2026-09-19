@@ -35,6 +35,18 @@ export function isStripeConfigured(): boolean {
 export async function createEscrowPaymentIntent(params: {
   amountGBP: number;
   connectedAccountId?: string;
+  /**
+   * 19 Sept 2026, Steven: "also setup the commision as we will get this for
+   * marketplace purchases etc." Stripe Connect's own mechanism for a
+   * platform to actually keep its cut of a destination-charge transfer —
+   * without this, the FULL amountGBP was flowing to connectedAccountId and
+   * Flipsta kept nothing, even though orderCreation.ts was already
+   * computing and storing commission_gbp on the order row the whole time
+   * (a real, silent gap: the number was recorded for bookkeeping but never
+   * actually collected). Only meaningful together with connectedAccountId —
+   * ignored otherwise.
+   */
+  applicationFeeGBP?: number;
   buyerStripeCustomerId?: string;
   metadata: Record<string, string>;
 }) {
@@ -50,6 +62,8 @@ export async function createEscrowPaymentIntent(params: {
     currency: "gbp",
     capture_method: "manual",
     transfer_data: params.connectedAccountId ? { destination: params.connectedAccountId } : undefined,
+    application_fee_amount:
+      params.connectedAccountId && params.applicationFeeGBP ? Math.round(params.applicationFeeGBP * 100) : undefined,
     customer: params.buyerStripeCustomerId,
     metadata: params.metadata,
   });
@@ -103,8 +117,11 @@ export async function createTierCheckoutSession(params: {
     customer: params.existingStripeCustomerId ?? undefined,
     customer_email: params.existingStripeCustomerId ? undefined : params.email,
     client_reference_id: params.profileId,
-    metadata: { profile_id: params.profileId, tier: params.tier },
-    subscription_data: { metadata: { profile_id: params.profileId, tier: params.tier } },
+    // 19 Sept 2026 — kind: "tier_upgrade" lets the webhook's
+    // checkout.session.completed handler tell this apart from a coin/merch/
+    // dropship purchase using the same event type (see webhooks/stripe/route.ts).
+    metadata: { kind: "tier_upgrade", profile_id: params.profileId, tier: params.tier },
+    subscription_data: { metadata: { kind: "tier_upgrade", profile_id: params.profileId, tier: params.tier } },
     success_url: params.successUrl,
     cancel_url: params.cancelUrl,
   });

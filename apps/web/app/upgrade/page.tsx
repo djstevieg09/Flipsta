@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MARKETPLACE_COMMISSION_RATE, SubscriptionTier } from "@flipsta/shared";
+import { MARKETPLACE_COMMISSION_RATE, TIER_MONTHLY_COIN_ALLOWANCE, SubscriptionTier } from "@flipsta/shared";
 
 /**
  * Section 7 — self-serve subscription tier upgrades. Previously the only
@@ -79,7 +79,7 @@ const TIERS: {
     price: "£15/mo",
     tagline: "Full access to bid, buy, and sell.",
     perks: [
-      "20 Flippy Coins every month",
+      `${TIER_MONTHLY_COIN_ALLOWANCE.standard} Flippy Coins every month`,
       "Full bidding on the live opportunity feed",
       "One sector follow",
       `Basic portfolio dashboard — profit/loss, win rate, streak`,
@@ -93,7 +93,7 @@ const TIERS: {
     tagline: "For active resellers who want the edge.",
     perks: [
       "Everything in Silver, plus:",
-      "77 Flippy Coins every month",
+      `${TIER_MONTHLY_COIN_ALLOWANCE.pro} Flippy Coins every month`,
       "15-minute early access on new opportunities — Bronze & Silver see them greyed out with a countdown until then (with an upgrade option to unlock right away)",
       "Unlimited sector follows",
       "AI \"why\" explainability on every opportunity",
@@ -110,7 +110,7 @@ const TIERS: {
     tagline: "Full syndicate power and priority everything.",
     perks: [
       "Everything in Gold, plus:",
-      "200 Flippy Coins every month",
+      `${TIER_MONTHLY_COIN_ALLOWANCE.elite} Flippy Coins every month`,
       "Another 15-minute early access ahead of Gold — first to see every new opportunity",
       "Syndicate leadership — pool capital with other users on bigger opportunities",
       "Highest sniper budget limits, with priority processing",

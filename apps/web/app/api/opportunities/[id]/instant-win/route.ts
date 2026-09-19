@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/currentProfile";
-import { requireTier, TierGuardError } from "@/lib/tierGuard";
+import { requireTier, TierGuardError, isEarlyAccessLocked, earlyAccessRevealsAt } from "@/lib/tierGuard";
 import { autoListWonOpportunity } from "@/lib/autoListOpportunity";
 import { awardLoyaltyCredit } from "@/lib/loyalty";
 import { calculateBuybackPremium, BUYBACK_PAYOUT_PCT } from "@flipsta/shared";
@@ -51,12 +51,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { data: opp, error } = await supabase
     .from("opportunities")
     .select(
-      "id, status, instant_win_price_gbp, category_id, categories(name), source_tier, source_retailer, source_price_gbp, expected_margin_gbp, confidence_score, product_name, image_url, estimated_stock_units, per_customer_cap",
+      "id, status, instant_win_price_gbp, category_id, categories(name), source_tier, source_retailer, source_price_gbp, expected_margin_gbp, confidence_score, product_name, image_url, estimated_stock_units, per_customer_cap, created_at",
     )
     .eq("id", id)
     .single();
   if (error || !opp) return NextResponse.json({ error: "Opportunity not found." }, { status: 404 });
   if (opp.status !== "live") return NextResponse.json({ error: "This opportunity is no longer live." }, { status: 409 });
+  if (isEarlyAccessLocked(auth.profile.subscriptionTier, opp.created_at)) {
+    const revealsAt = earlyAccessRevealsAt(auth.profile.subscriptionTier, opp.created_at);
+    return NextResponse.json(
+      { error: `Still in early access for your tier — unlocks ${revealsAt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}, or upgrade to unlock now.`, revealsAt: revealsAt.toISOString() },
+      { status: 403 },
+    );
+  }
   if (typeof opp.estimated_stock_units === "number" && quantity > opp.estimated_stock_units) {
     return NextResponse.json({ error: `Only ${opp.estimated_stock_units} unit(s) available.` }, { status: 400 });
   }

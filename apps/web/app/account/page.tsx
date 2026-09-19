@@ -59,6 +59,14 @@ export default function AccountPage() {
   const [nameSaving, setNameSaving] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
 
+  // 19 Sept 2026, Steven: "also need an option to upload a logo for the
+  // sellers to put on their accounts page." Loads from /api/me
+  // (profiles.logo_url) same as displayName above; uploads/removals go
+  // through /api/account/logo (Supabase Storage, migration 0039).
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [logoError, setLogoError] = useState<string | null>(null);
+
   function loadProfiles() {
     fetch("/api/account/shopper-profiles").then(async (r) => {
       if (r.status === 401) {
@@ -87,9 +95,37 @@ export default function AccountPage() {
           setDisplayName(d.profile.displayName);
           setNameInput(d.profile.displayName);
         }
+        setLogoUrl(d.profile?.logoUrl ?? null);
       })
       .catch(() => {});
   }, []);
+
+  async function uploadLogo(file: File) {
+    setLogoError(null);
+    setLogoUploading(true);
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch("/api/account/logo", { method: "POST", body: formData });
+    const data = await res.json();
+    setLogoUploading(false);
+    if (!res.ok) {
+      setLogoError(data.error ?? "Couldn't upload that logo.");
+      return;
+    }
+    setLogoUrl(data.logoUrl);
+  }
+
+  async function removeLogo() {
+    setLogoError(null);
+    setLogoUploading(true);
+    const res = await fetch("/api/account/logo", { method: "DELETE" });
+    setLogoUploading(false);
+    if (!res.ok) {
+      setLogoError("Couldn't remove your logo right now.");
+      return;
+    }
+    setLogoUrl(null);
+  }
 
   async function saveDisplayName() {
     const trimmed = nameInput.trim();
@@ -275,6 +311,45 @@ export default function AccountPage() {
             </div>
           )}
           {nameError && <p className="text-xs text-red">{nameError}</p>}
+        </div>
+      </section>
+
+      <section className="space-y-2">
+        <h2 className="font-bold text-lg">Your logo</h2>
+        <div className="card space-y-3">
+          <p className="text-sm text-textDim">Shown alongside your name on Flipsta. JPG, PNG or WebP, up to 2MB.</p>
+          <div className="flex items-center gap-4">
+            {logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={logoUrl} alt="Your logo" className="w-20 h-20 rounded-xl object-cover border border-border" />
+            ) : (
+              <div className="w-20 h-20 rounded-xl bg-surface2 border border-border flex items-center justify-center text-textFaint text-xs text-center">
+                No logo
+              </div>
+            )}
+            <div className="flex flex-col gap-2">
+              <label className="btn btn-primary disabled:opacity-50 cursor-pointer w-fit">
+                {logoUploading ? "Uploading…" : logoUrl ? "Replace logo" : "Upload logo"}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  disabled={logoUploading}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) uploadLogo(file);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+              {logoUrl && (
+                <button onClick={removeLogo} disabled={logoUploading} className="text-xs font-bold text-red hover:underline w-fit disabled:opacity-50">
+                  Remove logo
+                </button>
+              )}
+            </div>
+          </div>
+          {logoError && <p className="text-xs text-red">{logoError}</p>}
         </div>
       </section>
 

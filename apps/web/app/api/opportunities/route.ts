@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/currentProfile";
-import { TIER_ENTITLEMENTS } from "@/lib/tierGuard";
+import { TIER_ENTITLEMENTS, earlyAccessRevealsAt, isEarlyAccessLocked } from "@/lib/tierGuard";
 
 // Force-dynamic: every route here reads live application data (bids, wallet
 // balances, opportunities, order status) straight from Supabase. Without this,
@@ -37,8 +37,13 @@ function withEstimatedResale<T extends { estimated_resale_price_gbp?: number | n
 /**
  * GET /api/opportunities — the live feed (Section 2 step 4, Section 5 blind teaser).
  * - Redacts source_retailer / source_url / source_price_gbp unless the caller won it.
- * - Enforces the Pro/Elite early-access window (Section 7): Standard tier
- *   doesn't see an opportunity until pro_early_access_until has passed.
+ * - Every live/sold_out opportunity is always included (19 Sept 2026 change —
+ *   see tierGuard.ts's earlyAccessRevealsAt); each one carries
+ *   early_access_locked/early_access_reveals_at for the caller's own tier so
+ *   the frontend can grey out and countdown a still-locked one instead of
+ *   hiding it. Buying/bidding a still-locked one is also rejected server-side
+ *   (see the bid/instant-win/buy-slot routes) — the flag here is a UI hint,
+ *   not the enforcement.
  * - Strips ai_reasoning for tiers without AI explainability (Section 11.3 modal feature).
  *
  * GET /api/opportunities?won=true — a different mode entirely: the caller's
@@ -123,13 +128,19 @@ export async function GET(req: NextRequest) {
 
   const tier = auth?.profile.subscriptionTier ?? "free";
   const entitlements = TIER_ENTITLEMENTS[tier];
-  const now = Date.now();
 
-  const visible = (data ?? []).filter((o) => {
-    if (!o.pro_early_access_until) return true;
-    const stillInEarlyAccess = new Date(o.pro_early_access_until).getTime() > now;
-    return !stillInEarlyAccess || entitlements.earlyAccessSeconds > 0;
-  });
+  /**
+   * 19 Sept 2026, Steven: "lower tiers should see the full package but
+   * grey it out explaining an upgrade it required to unlock this service."
+   * Early access used to mean "hidden from the feed entirely" (and, since
+   * pro_early_access_until was never actually written by any code, meant
+   * NOTHING in practice — see tierGuard.ts). Now every live/sold_out
+   * opportunity is always included; each one just carries whether THIS
+   * caller's tier is still waiting it out, and when it unlocks for them —
+   * the frontend renders the still-locked ones greyed out with a countdown
+   * and an upgrade button instead of omitting them.
+   */
+  const visible = data ?? [];
 
   // Real slot counts for every fixed-price deal on this page, in one query
   // rather than one round-trip per card.
@@ -156,6 +167,7 @@ export async function GET(req: NextRequest) {
     // source guessable, same reasoning as the fields already here.
     const { source_retailer, source_url, source_price_gbp, product_name, image_url, ai_reasoning, ...teaser } = o;
     const revealFixedPriceDeal = o.pricing_mode === "fixed_price" && myPurchasedIds.has(o.id);
+    const locked = isEarlyAccessLocked(tier, o.created_at);
     return {
       ...teaser,
       slots_taken: slotsTakenById.get(o.id) ?? 0,
@@ -164,6 +176,8 @@ export async function GET(req: NextRequest) {
       ...(revealFixedPriceDeal ? { source_retailer, source_url, source_price_gbp, product_name, image_url } : {}),
       ...(wonByMe ? { source_retailer, source_url, source_price_gbp, product_name, image_url } : {}),
       ai_reasoning: entitlements.aiExplainability ? ai_reasoning : null,
+      early_access_locked: locked,
+      early_access_reveals_at: locked ? earlyAccessRevealsAt(tier, o.created_at).toISOString() : null,
     };
   });
 

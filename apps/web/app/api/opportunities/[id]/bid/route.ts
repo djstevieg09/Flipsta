@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/currentProfile";
-import { requireTier, TierGuardError } from "@/lib/tierGuard";
+import { requireTier, TierGuardError, isEarlyAccessLocked, earlyAccessRevealsAt } from "@/lib/tierGuard";
 
 /**
  * POST /api/opportunities/:id/bid — Section 11.5's core mechanic: a live
@@ -30,11 +30,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { data: opp, error: oppError } = await supabase
     .from("opportunities")
-    .select("id, status, starting_bid_gbp, action_clock_expires_at, action_clock_seconds")
+    .select("id, status, starting_bid_gbp, action_clock_expires_at, action_clock_seconds, created_at")
     .eq("id", id)
     .single();
   if (oppError || !opp) return NextResponse.json({ error: "Opportunity not found." }, { status: 404 });
   if (opp.status !== "live") return NextResponse.json({ error: "This opportunity is no longer live." }, { status: 409 });
+  if (isEarlyAccessLocked(auth.profile.subscriptionTier, opp.created_at)) {
+    const revealsAt = earlyAccessRevealsAt(auth.profile.subscriptionTier, opp.created_at);
+    return NextResponse.json(
+      { error: `Still in early access for your tier — unlocks ${revealsAt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}, or upgrade to unlock now.`, revealsAt: revealsAt.toISOString() },
+      { status: 403 },
+    );
+  }
 
   const { data: highBid } = await supabase
     .from("bids")

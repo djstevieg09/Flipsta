@@ -33,6 +33,7 @@ export async function getCurrentProfile(): Promise<{ userId: string; profile: Pr
       postcode: data.postcode ?? null,
       country: data.country ?? null,
       flippyCoinBalance: data.flippy_coin_balance ?? 0,
+      logoUrl: data.logo_url ?? null,
     },
   };
 }

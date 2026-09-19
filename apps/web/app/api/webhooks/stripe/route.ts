@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { createSupabaseServiceClient } from "@/lib/supabase/server";
+import { NotificationEvents, TIER_MONTHLY_COIN_ALLOWANCE, SubscriptionTier } from "@flipsta/shared";
 
 /**
  * POST /api/webhooks/stripe — Stripe Connect event handler.
@@ -86,6 +87,36 @@ export async function POST(req: NextRequest) {
             },
             { onConflict: "stripe_checkout_session_id", ignoreDuplicates: true },
           );
+      } else if (session.payment_status === "paid" && session.metadata?.kind === "tier_upgrade") {
+        // 19 Sept 2026, Steven: "after all this done we need to setup the
+        // self service upgrade" + "we need to have an email when people
+        // upgrade to the next tier explaining the benefits and coin price."
+        // This is the moment a self-serve upgrade actually becomes real —
+        // never trust the client, only a confirmed Stripe payment updates
+        // subscription_tier. Deliberately does NOT credit the tier's
+        // monthly Flippy Coin allowance here — Stripe fires
+        // invoice.payment_succeeded for this same first invoice a moment
+        // later (subscription-mode Checkout pays the first invoice as part
+        // of completing), so crediting there too would double-pay day one.
+        // Sole crediting path is invoice.payment_succeeded below, for both
+        // the first cycle and every renewal alike.
+        const profileId = session.metadata.profile_id as string;
+        const tier = session.metadata.tier as SubscriptionTier;
+        if (profileId && (tier === "standard" || tier === "pro" || tier === "elite")) {
+          await supabase
+            .from("profiles")
+            .update({ subscription_tier: tier, stripe_subscription_id: session.subscription ?? null })
+            .eq("id", profileId);
+
+          const [{ data: userRes }, { data: profileRow }] = await Promise.all([
+            supabase.auth.admin.getUserById(profileId),
+            supabase.from("profiles").select("display_name").eq("id", profileId).single(),
+          ]);
+          const email = userRes?.user?.email;
+          if (email) {
+            await NotificationEvents.tierUpgrade(email, profileRow?.display_name ?? "there", tier);
+          }
+        }
       } else if (session.payment_status === "paid" && session.metadata?.kind === "dropship_purchase") {
         // 18 Sept 2026, Steven: "add ali express products... when someone
         // orders it then a dropship order is created." Same reasoning as
@@ -111,6 +142,38 @@ export async function POST(req: NextRequest) {
             },
             { onConflict: "stripe_checkout_session_id", ignoreDuplicates: true },
           );
+      }
+      break;
+    }
+    // 19 Sept 2026, Steven: "for this you get 20 flippy coins... this gives
+    // them 77 coins... give them 200 coins." Fires once per PAID invoice on
+    // a tier subscription — the first one (part of the same Checkout that
+    // creates the subscription) and every monthly renewal alike — so this
+    // is the single place the monthly allowance is credited, never on
+    // checkout.session.completed (see that branch's comment above for why).
+    // credit_flippy_coins is idempotent per its p_stripe_checkout_session_id
+    // arg (coin_transactions' unique constraint) — reused here for the
+    // Stripe invoice id, which is just as good a redelivery-safe key even
+    // though it's not literally a Checkout Session id.
+    case "invoice.payment_succeeded": {
+      const invoice = event.data.object as any;
+      const subscriptionId = typeof invoice.subscription === "string" ? invoice.subscription : invoice.subscription?.id;
+      if (!subscriptionId) break; // not a subscription invoice — nothing to credit
+
+      const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+      if (subscription.metadata?.kind !== "tier_upgrade") break;
+
+      const profileId = subscription.metadata.profile_id as string | undefined;
+      const tier = subscription.metadata.tier as SubscriptionTier | undefined;
+      const coins = tier ? TIER_MONTHLY_COIN_ALLOWANCE[tier] : 0;
+      if (profileId && coins > 0) {
+        await supabase.rpc("credit_flippy_coins", {
+          p_profile_id: profileId,
+          p_amount: coins,
+          p_kind: "bonus",
+          p_stripe_checkout_session_id: `invoice_${invoice.id}`,
+          p_note: `Monthly ${tier} plan coin allowance`,
+        });
       }
       break;
     }

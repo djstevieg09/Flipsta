@@ -71,6 +71,11 @@ export interface Profile {
   // signup fields above: every account has a real value (default 0), but
   // Profile literals built before this date don't set it.
   flippyCoinBalance?: number;
+  // 19 Sept 2026, Steven: "need an option to upload a logo for the sellers
+  // to put on their accounts page" — see migration 0039_seller_logo_upload.sql
+  // and api/account/logo/route.ts. Optional for the same reason as the
+  // fields above: null until a seller uploads one.
+  logoUrl?: string | null;
 }
 
 /** Section 12.1 — Ultimate Admin Dashboard & Ticketing System */

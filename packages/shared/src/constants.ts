@@ -259,6 +259,23 @@ export function isValidCoinBundle(id: string): id is CoinBundleId {
 }
 
 /**
+ * 19 Sept 2026, Steven: "standard change to silver at £15 a month. for
+ * this you get 20 flippy coins. Pro change to gold and charge £45 a
+ * month, this gives them 77 coins... Elite change to Platinum and charge
+ * £90 and give them 200 coins." Coins credited automatically to a
+ * subscriber's Wallet every billing cycle (see api/webhooks/stripe/route.ts's
+ * invoice.payment_succeeded handler) — separate from, and on top of, any
+ * one-off COIN_BUNDLES top-up. free/Bronze gets none — it has no
+ * subscription to renew.
+ */
+export const TIER_MONTHLY_COIN_ALLOWANCE: Record<SubscriptionTier, number> = {
+  free: 0,
+  standard: 20,
+  pro: 77,
+  elite: 200,
+};
+
+/**
  * 18 Sept 2026, Steven: "need to add a merch tab on the main landing page
  * with tshirts, caps and other items that people can buy." Real money
  * here too, so — same reasoning as COIN_BUNDLES above — the item→price

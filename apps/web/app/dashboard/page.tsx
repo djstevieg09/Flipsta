@@ -17,11 +17,20 @@ export default async function DashboardPage() {
 
   const entitlements = TIER_ENTITLEMENTS[auth.profile.subscriptionTier];
 
+  // 19 Sept 2026 — early access is now a cascade (Platinum first, then
+  // Gold +15min, then Silver +30min, then everyone at +45min — see
+  // tierGuard.ts) rather than a flat Pro/Elite-only perk, so this reads
+  // the actual delay for the account's own tier instead of a fixed note.
+  const earlyAccessNote =
+    entitlements.earlyAccessDelayMinutes === 0
+      ? "You see every new opportunity first"
+      : `${entitlements.earlyAccessDelayMinutes} min after Platinum`;
+
   const features: { label: string; on: boolean; note?: string }[] = [
-    { label: "Bid on opportunities", on: entitlements.canBid },
+    { label: "Bid on opportunities", on: entitlements.canBid, note: auth.profile.subscriptionTier === "free" ? "spend Flippy Coins" : undefined },
     { label: "Sell on the marketplace", on: entitlements.canSell },
     { label: "Sniper mode (auto-bid)", on: entitlements.sniperMode, note: "Pro & Elite" },
-    { label: "Early access window", on: entitlements.earlyAccessSeconds > 0, note: "Pro & Elite" },
+    { label: "Early access on new opportunities", on: entitlements.earlyAccessDelayMinutes < 45, note: earlyAccessNote },
     { label: "AI reasoning on opportunities", on: entitlements.aiExplainability, note: "Pro & Elite" },
     { label: "Multi-platform listing (eBay/Depop/Etsy/Whatnot/StockX)", on: entitlements.multiPlatformListing, note: "Pro & Elite" },
     { label: "Syndicate leadership", on: entitlements.syndicateLeadership, note: "Elite only" },
